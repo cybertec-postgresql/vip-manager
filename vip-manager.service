@@ -1,0 +1,15 @@
+
+[Unit]
+Description=Manages Virtual IP for Patroni
+Before=patroni.service
+
+[Service]
+Type=simple
+
+EnvironmentFile=-/etc/patroni/vip.conf
+
+ExecStart=/bin/bash -c "/usr/bin/vip-manager -ip=\"${VIP_ADDRESS}\" -iface=\"${VIP_INTERFACE}\" -endpoint=\"${VIP_ETCD_ENDPOINT}\" -key=\"${VIP_KEY}\" -host=\"${VIP_HOST}\""
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
