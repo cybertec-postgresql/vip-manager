@@ -3,31 +3,14 @@ package main
 import (
 	"bufio"
 	"context"
-	"flag"
 	"fmt"
 	"log"
-	"net"
-	"os"
 	"os/exec"
-	"os/signal"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
-
-	"github.com/coreos/etcd/client"
-	//"github.com/milosgajdos83/tenus"
 )
-
-type IPConfiguration struct {
-	vip     net.IP
-	netmask net.IPMask
-	iface   string
-}
-
-func (c *IPConfiguration) GetCIDR() string {
-	return fmt.Sprintf("%s/%d", c.vip.String(), NetmaskSize(c.netmask))
-}
 
 type IPManager struct {
 	*IPConfiguration
@@ -185,136 +168,4 @@ func (m *IPManager) runAddressConfiguration(action string) bool {
 		return false
 	}
 	return true
-}
-
-type EtcdLeaderChecker struct {
-	key      string
-	nodename string
-	kapi     client.KeysAPI
-}
-
-func NetmaskSize(mask net.IPMask) int {
-	ones, bits := mask.Size()
-	if bits == 0 {
-		panic("Invalid mask")
-	}
-	return ones
-}
-
-func NewEtcdLeaderChecker(endpoint, key, nodename string) *EtcdLeaderChecker {
-	e := &EtcdLeaderChecker{key: key, nodename: nodename}
-
-	cfg := client.Config{
-		Endpoints:               []string{endpoint},
-		Transport:               client.DefaultTransport,
-		HeaderTimeoutPerRequest: time.Second,
-	}
-
-	c, err := client.New(cfg)
-
-	if err != nil {
-		panic(err)
-	}
-
-	e.kapi = client.NewKeysAPI(c)
-
-	return e
-}
-
-func (e *EtcdLeaderChecker) GetChangeNotificationStream(ctx context.Context, out chan<- bool) error {
-	resp, err := e.kapi.Get(ctx, e.key, &client.GetOptions{Quorum: true})
-	if err != nil {
-		panic(err)
-	}
-
-	state := resp.Node.Value == e.nodename
-	out <- state
-
-	after := resp.Node.ModifiedIndex
-
-	w := e.kapi.Watcher(e.key, &client.WatcherOptions{AfterIndex: after, Recursive: false})
-checkLoop:
-	for {
-		resp, err := w.Next(ctx)
-
-		if err != nil {
-			if ctx.Err() != nil {
-				break checkLoop
-			}
-			out <- false
-			log.Printf("etcd error: %s", err)
-			time.Sleep(1 * time.Second)
-			continue
-		}
-
-		state = resp.Node.Value == e.nodename
-
-		select {
-		case <-ctx.Done():
-			break checkLoop
-		case out <- state:
-			continue
-		}
-	}
-
-	return ctx.Err()
-}
-
-var ip = flag.String("ip", "none", "Virtual IP address to configure")
-var iface = flag.String("iface", "none", "Network interface to configure on")
-var etcdkey = flag.String("key", "none", "Etcd key to monitor, e.g. /service/batman/leader")
-var host = flag.String("host", "none", "Value to monitor for")
-var endpoint = flag.String("endpoint", "http://localhost:2379", "Etcd endpoint")
-
-func checkFlag(f *string, name string) {
-	if *f == "none" || *f == "" {
-		log.Fatalf("Setting %s is mandatory", name)
-	}
-}
-
-func main() {
-	flag.Parse()
-	checkFlag(ip, "IP")
-	checkFlag(iface, "network interface")
-	checkFlag(etcdkey, "etcd key")
-	checkFlag(host, "host name")
-
-	states := make(chan bool)
-	lc := NewEtcdLeaderChecker(*endpoint, *etcdkey, *host)
-
-	vip := net.ParseIP(*ip)
-	mask := vip.DefaultMask()
-
-	manager := NewIPManager(&IPConfiguration{
-		vip:     vip,
-		netmask: mask,
-		iface:   *iface,
-	}, states)
-
-	main_ctx, cancel := context.WithCancel(context.Background())
-
-	go func() {
-		c := make(chan os.Signal, 1)
-		signal.Notify(c, os.Interrupt)
-
-		<-c
-
-		log.Printf("Received exit signal")
-		cancel()
-	}()
-
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		lc.GetChangeNotificationStream(main_ctx, states)
-		wg.Done()
-	}()
-
-	wg.Add(1)
-	go func() {
-		manager.SyncStates(main_ctx, states)
-		wg.Done()
-	}()
-
-	wg.Wait()
 }
