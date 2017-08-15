@@ -15,33 +15,33 @@ import (
 type IPManager struct {
 	*IPConfiguration
 
-	states        <-chan bool
-	current_state bool
-	state_lock    sync.Mutex
-	recheck       *sync.Cond
+	states       <-chan bool
+	currentState bool
+	stateLock    sync.Mutex
+	recheck      *sync.Cond
 }
 
 func NewIPManager(config *IPConfiguration, states <-chan bool) *IPManager {
 	m := &IPManager{
 		IPConfiguration: config,
 		states:          states,
-		current_state:   false,
+		currentState:    false,
 	}
 
-	m.recheck = sync.NewCond(&m.state_lock)
+	m.recheck = sync.NewCond(&m.stateLock)
 
 	return m
 }
 
 func (m *IPManager) applyLoop(ctx context.Context) {
 	for {
-		actual_state := m.QueryAddress()
-		m.state_lock.Lock()
-		desired_state := m.current_state
-		log.Printf("IP address %s state is %t, desired %t", m.GetCIDR(), actual_state, desired_state)
-		if actual_state != desired_state {
-			m.state_lock.Unlock()
-			if desired_state {
+		actualState := m.QueryAddress()
+		m.stateLock.Lock()
+		desiredState := m.currentState
+		log.Printf("IP address %s state is %t, desired %t", m.GetCIDR(), actualState, desiredState)
+		if actualState != desiredState {
+			m.stateLock.Unlock()
+			if desiredState {
 				m.ConfigureAddress()
 			} else {
 				m.DeconfigureAddress()
@@ -50,7 +50,7 @@ func (m *IPManager) applyLoop(ctx context.Context) {
 			// Wait for notification
 			m.recheck.Wait()
 			// Want to query actual state anyway, so unlock
-			m.state_lock.Unlock()
+			m.stateLock.Unlock()
 
 			// Check if we should exit
 			select {
@@ -75,13 +75,13 @@ func (m *IPManager) SyncStates(ctx context.Context, states <-chan bool) {
 
 	for {
 		select {
-		case new_state := <-states:
-			m.state_lock.Lock()
-			if m.current_state != new_state {
-				m.current_state = new_state
+		case newState := <-states:
+			m.stateLock.Lock()
+			if m.currentState != newState {
+				m.currentState = newState
 				m.recheck.Broadcast()
 			}
-			m.state_lock.Unlock()
+			m.stateLock.Unlock()
 		case <-ticker.C:
 			m.recheck.Broadcast()
 		case <-ctx.Done():
