@@ -36,13 +36,16 @@ func main() {
 	vip := net.ParseIP(*ip)
 	mask := vip.DefaultMask()
 
-	manager := NewIPManager(&IPConfiguration{
-		vip:     vip,
-		netmask: mask,
-		iface:   *iface,
-	}, states)
+	manager := NewIPManager(
+		&IPConfiguration{
+			vip:     vip,
+			netmask: mask,
+			iface:   *iface,
+		},
+		states,
+	)
 
-	main_ctx, cancel := context.WithCancel(context.Background())
+	mainCtx, cancel := context.WithCancel(context.Background())
 
 	go func() {
 		c := make(chan os.Signal, 1)
@@ -57,13 +60,13 @@ func main() {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
-		lc.GetChangeNotificationStream(main_ctx, states)
+		lc.GetChangeNotificationStream(mainCtx, states)
 		wg.Done()
 	}()
 
 	wg.Add(1)
 	go func() {
-		manager.SyncStates(main_ctx, states)
+		manager.SyncStates(mainCtx, states)
 		wg.Done()
 	}()
 
