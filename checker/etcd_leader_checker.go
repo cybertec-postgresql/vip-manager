@@ -1,4 +1,4 @@
-package main
+package checker
 
 import (
 	"context"
@@ -14,7 +14,7 @@ type EtcdLeaderChecker struct {
 	kapi     client.KeysAPI
 }
 
-func NewEtcdLeaderChecker(endpoint, key, nodename string) *EtcdLeaderChecker {
+func NewEtcdLeaderChecker(endpoint, key, nodename string) (*EtcdLeaderChecker, error) {
 	e := &EtcdLeaderChecker{key: key, nodename: nodename}
 
 	cfg := client.Config{
@@ -26,18 +26,18 @@ func NewEtcdLeaderChecker(endpoint, key, nodename string) *EtcdLeaderChecker {
 	c, err := client.New(cfg)
 
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
 	e.kapi = client.NewKeysAPI(c)
 
-	return e
+	return e, nil
 }
 
 func (e *EtcdLeaderChecker) GetChangeNotificationStream(ctx context.Context, out chan<- bool) error {
 	resp, err := e.kapi.Get(ctx, e.key, &client.GetOptions{Quorum: true})
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	state := resp.Node.Value == e.nodename

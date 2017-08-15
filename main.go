@@ -8,14 +8,17 @@ import (
 	"os"
 	"os/signal"
 	"sync"
+
+	"github.com/cybertec-postgresql/vip-manager/checker"
 	//"github.com/milosgajdos83/tenus"
 )
 
 var ip = flag.String("ip", "none", "Virtual IP address to configure")
 var iface = flag.String("iface", "none", "Network interface to configure on")
-var etcdkey = flag.String("key", "none", "Etcd key to monitor, e.g. /service/batman/leader")
+var key = flag.String("key", "none", "key to monitor, e.g. /service/batman/leader")
 var host = flag.String("host", "none", "Value to monitor for")
-var endpoint = flag.String("endpoint", "http://localhost:2379", "Etcd endpoint")
+var endpointType = flag.String("type", "etcd", "type of endpoint used for key storage. Supported values: etcd, consul")
+var endpoint = flag.String("endpoint", "http://localhost:2379", "endpoint")
 
 func checkFlag(f *string, name string) {
 	if *f == "none" || *f == "" {
@@ -27,11 +30,14 @@ func main() {
 	flag.Parse()
 	checkFlag(ip, "IP")
 	checkFlag(iface, "network interface")
-	checkFlag(etcdkey, "etcd key")
+	checkFlag(key, "key")
 	checkFlag(host, "host name")
 
 	states := make(chan bool)
-	lc := NewEtcdLeaderChecker(*endpoint, *etcdkey, *host)
+	lc, err := checker.NewLeaderChecker(*endpointType, *endpoint, *key, *host)
+	if err != nil {
+		log.Fatalf("Failed to initialize leader checker: %s", err)
+	}
 
 	vip := net.ParseIP(*ip)
 	mask := vip.DefaultMask()
@@ -60,7 +66,10 @@ func main() {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
-		lc.GetChangeNotificationStream(mainCtx, states)
+		err := lc.GetChangeNotificationStream(mainCtx, states)
+		if err != nil {
+			log.Fatalf("Leader checker returned the following error: %s", err)
+		}
 		wg.Done()
 	}()
 
