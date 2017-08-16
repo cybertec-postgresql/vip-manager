@@ -1,7 +1,7 @@
 
 all: vip-manager
 
-vip-manager: main.go ip_manager.go ip_configuration.go checker/leader_checker.go checker/consul_leader_checker.go checker/etcd_leader_checker.go
+vip-manager: *.go */*.go
 	go build .
 
 install:
