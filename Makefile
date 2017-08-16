@@ -1,8 +1,8 @@
 
 all: vip-manager
 
-vip-manager: vip-manager.go
-	go build vip-manager.go
+vip-manager: *.go */*.go
+	go build .
 
 install:
 	install -d $(DESTDIR)/usr/bin
