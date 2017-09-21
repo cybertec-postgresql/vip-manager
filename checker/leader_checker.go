@@ -5,7 +5,6 @@ import (
 	"errors"
 )
 
-var ErrKeyDoesNotExist = errors.New("the configured key does not exist")
 var ErrUnsupportedEndpointType = errors.New("given endpoint type not supported")
 
 type LeaderChecker interface {

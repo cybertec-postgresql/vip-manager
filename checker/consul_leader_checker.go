@@ -45,40 +45,30 @@ func NewConsulLeaderChecker(endpoint, key, nodename string) (*ConsulLeaderChecke
 
 func (c *ConsulLeaderChecker) GetChangeNotificationStream(ctx context.Context, out chan<- bool) error {
 	kv := c.apiClient.KV()
-	resp, _, err := kv.Get(c.key, &api.QueryOptions{RequireConsistent: true})
-	if err != nil {
-		return err
+
+	queryOptions := &api.QueryOptions{
+		RequireConsistent: true,
 	}
-
-	if resp == nil {
-		return ErrKeyDoesNotExist
-	}
-
-	state := string(resp.Value) == c.nodename
-	out <- state
-
-	after := resp.ModifyIndex
 
 checkLoop:
 	for {
-		queryOptions := &api.QueryOptions{
-			RequireConsistent: true,
-			WaitIndex:         after,
-		}
-
 		resp, _, err := kv.Get(c.key, queryOptions)
 		if err != nil {
 			if ctx.Err() != nil {
 				break checkLoop
 			}
-			out <- false
 			log.Printf("consul error: %s", err)
 			time.Sleep(1 * time.Second)
 			continue
 		}
+		if resp == nil {
+			log.Printf("Cannot get variable for key %s. Will try again in a second.", c.key)
+			time.Sleep(1 * time.Second)
+			continue
+		}
 
-		after = resp.ModifyIndex
-		state = string(resp.Value) == c.nodename
+		state := string(resp.Value) == c.nodename
+		queryOptions.WaitIndex = resp.ModifyIndex
 
 		select {
 		case <-ctx.Done():
