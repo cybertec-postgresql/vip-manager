@@ -14,6 +14,7 @@ import (
 )
 
 var ip = flag.String("ip", "none", "Virtual IP address to configure")
+var mask = flag.Int("mask", -1, "The netmask used for the IP address. Defaults to -1 which assigns ipv4 default mask.")
 var iface = flag.String("iface", "none", "Network interface to configure on")
 var key = flag.String("key", "none", "key to monitor, e.g. /service/batman/leader")
 var host = flag.String("host", "none", "Value to monitor for")
@@ -24,6 +25,13 @@ func checkFlag(f *string, name string) {
 	if *f == "none" || *f == "" {
 		log.Fatalf("Setting %s is mandatory", name)
 	}
+}
+
+func getMask(vip net.IP, mask *int) net.IPMask {
+	if *mask > 0 || *mask < 33 {
+		return net.CIDRMask(*mask, 32)
+	}
+	return vip.DefaultMask()
 }
 
 func main() {
@@ -40,12 +48,11 @@ func main() {
 	}
 
 	vip := net.ParseIP(*ip)
-	mask := vip.DefaultMask()
-
+	vipMask := getMask(vip, mask)
 	manager := NewIPManager(
 		&IPConfiguration{
 			vip:     vip,
-			netmask: mask,
+			netmask: vipMask,
 			iface:   *iface,
 		},
 		states,
