@@ -35,32 +35,25 @@ func NewEtcdLeaderChecker(endpoint, key, nodename string) (*EtcdLeaderChecker, e
 }
 
 func (e *EtcdLeaderChecker) GetChangeNotificationStream(ctx context.Context, out chan<- bool) error {
-	resp, err := e.kapi.Get(ctx, e.key, &client.GetOptions{Quorum: true})
-	if err != nil {
-		return err
+	clientOptions := &client.GetOptions{
+		Quorum:    true,
+		Recursive: false,
 	}
 
-	state := resp.Node.Value == e.nodename
-	out <- state
-
-	after := resp.Node.ModifiedIndex
-
-	w := e.kapi.Watcher(e.key, &client.WatcherOptions{AfterIndex: after, Recursive: false})
 checkLoop:
 	for {
-		resp, err := w.Next(ctx)
+		resp, err := e.kapi.Get(ctx, e.key, clientOptions)
 
 		if err != nil {
 			if ctx.Err() != nil {
 				break checkLoop
 			}
-			out <- false
 			log.Printf("etcd error: %s", err)
 			time.Sleep(1 * time.Second)
 			continue
 		}
 
-		state = resp.Node.Value == e.nodename
+		state := resp.Node.Value == e.nodename
 
 		select {
 		case <-ctx.Done():
