@@ -5,11 +5,22 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net"
 	"os/exec"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
+
+	arp "github.com/mdlayher/arp"
+)
+
+const (
+	arpReplyOp = 2
+)
+
+var (
+	ethernetBroadcast = net.HardwareAddr{0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
 )
 
 type IPManager struct {
@@ -19,9 +30,10 @@ type IPManager struct {
 	currentState bool
 	stateLock    sync.Mutex
 	recheck      *sync.Cond
+	arpClient    *arp.Client
 }
 
-func NewIPManager(config *IPConfiguration, states <-chan bool) *IPManager {
+func NewIPManager(config *IPConfiguration, states <-chan bool) (*IPManager, error) {
 	m := &IPManager{
 		IPConfiguration: config,
 		states:          states,
@@ -29,8 +41,14 @@ func NewIPManager(config *IPConfiguration, states <-chan bool) *IPManager {
 	}
 
 	m.recheck = sync.NewCond(&m.stateLock)
+	arpClient, err := arp.Dial(&m.iface)
+	if err != nil {
+		log.Printf("Problems with producing the arp client: %s", err)
+		return nil, err
+	}
+	m.arpClient = arpClient
 
-	return m
+	return m, err
 }
 
 func (m *IPManager) applyLoop(ctx context.Context) {
@@ -43,6 +61,10 @@ func (m *IPManager) applyLoop(ctx context.Context) {
 			m.stateLock.Unlock()
 			if desiredState {
 				m.ConfigureAddress()
+				// For now it is save to say that also working even if a
+				// gratuitous arp message could not be send but logging an
+				// errror should be enough.
+				m.ARPSendGratuitous()
 			} else {
 				m.DeconfigureAddress()
 			}
@@ -87,6 +109,7 @@ func (m *IPManager) SyncStates(ctx context.Context, states <-chan bool) {
 		case <-ctx.Done():
 			m.recheck.Broadcast()
 			wg.Wait()
+			m.arpClient.Close()
 			return
 		}
 	}
@@ -101,6 +124,28 @@ func (m *IPManager) ARPQueryDuplicates() bool {
 		return false
 	}
 	return true
+}
+
+func (m *IPManager) ARPSendGratuitous() error {
+	gratuitousPackage, err := arp.NewPacket(
+		arpReplyOp,
+		m.iface.HardwareAddr,
+		m.vip,
+		ethernetBroadcast,
+		net.IPv4bcast,
+	)
+	if err != nil {
+		log.Printf("Gratuitous arp package is malformed: %s", err)
+		return err
+	}
+
+	err = m.arpClient.WriteTo(gratuitousPackage, ethernetBroadcast)
+	if err != nil {
+		log.Printf("Cannot send gratuitous arp message: %s", err)
+		return err
+	}
+
+	return nil
 }
 
 func (m *IPManager) QueryAddress() bool {

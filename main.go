@@ -58,7 +58,7 @@ func main() {
 	vip := net.ParseIP(*ip)
 	vipMask := getMask(vip, mask)
 	netIface := getNetIface(iface)
-	manager := NewIPManager(
+	manager, err := NewIPManager(
 		&IPConfiguration{
 			vip:     vip,
 			netmask: vipMask,
@@ -66,6 +66,9 @@ func main() {
 		},
 		states,
 	)
+	if err != nil {
+		log.Fatalf("Problems with generating the virtual ip manager: %s", err)
+	}
 
 	mainCtx, cancel := context.WithCancel(context.Background())
 
