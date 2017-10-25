@@ -115,17 +115,6 @@ func (m *IPManager) SyncStates(ctx context.Context, states <-chan bool) {
 	}
 }
 
-func (m *IPManager) ARPQueryDuplicates() bool {
-	c := exec.Command("arping",
-		"-D", "-c", "2", "-q", "-w", "3",
-		"-I", m.iface.Name, m.vip.String())
-	err := c.Run()
-	if err != nil {
-		return false
-	}
-	return true
-}
-
 func (m *IPManager) ARPSendGratuitous() error {
 	gratuitousPackage, err := arp.NewPacket(
 		arpReplyOp,
