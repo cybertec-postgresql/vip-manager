@@ -95,7 +95,7 @@ func (m *IPManager) SyncStates(ctx context.Context, states <-chan bool) {
 func (m *IPManager) ARPQueryDuplicates() bool {
 	c := exec.Command("arping",
 		"-D", "-c", "2", "-q", "-w", "3",
-		"-I", m.iface, m.vip.String())
+		"-I", m.iface.Name, m.vip.String())
 	err := c.Run()
 	if err != nil {
 		return false
@@ -104,7 +104,7 @@ func (m *IPManager) ARPQueryDuplicates() bool {
 }
 
 func (m *IPManager) QueryAddress() bool {
-	c := exec.Command("ip", "addr", "show", m.iface)
+	c := exec.Command("ip", "addr", "show", m.iface.Name)
 
 	lookup := fmt.Sprintf("inet %s", m.GetCIDR())
 	result := false
@@ -134,19 +134,19 @@ func (m *IPManager) QueryAddress() bool {
 }
 
 func (m *IPManager) ConfigureAddress() bool {
-	log.Printf("Configuring address %s on %s", m.GetCIDR(), m.iface)
+	log.Printf("Configuring address %s on %s", m.GetCIDR(), m.iface.Name)
 	return m.runAddressConfiguration("add")
 }
 
 func (m *IPManager) DeconfigureAddress() bool {
-	log.Printf("Removing address %s on %s", m.GetCIDR(), m.iface)
+	log.Printf("Removing address %s on %s", m.GetCIDR(), m.iface.Name)
 	return m.runAddressConfiguration("delete")
 }
 
 func (m *IPManager) runAddressConfiguration(action string) bool {
 	c := exec.Command("ip", "addr", action,
 		m.GetCIDR(),
-		"dev", m.iface)
+		"dev", m.iface.Name)
 	err := c.Run()
 
 	switch exit := err.(type) {
@@ -164,7 +164,7 @@ func (m *IPManager) runAddressConfiguration(action string) bool {
 	}
 	if err != nil {
 		log.Printf("Error running ip address %s %s on %s: %s",
-			action, m.vip, m.iface, err)
+			action, m.vip, m.iface.Name, err)
 		return false
 	}
 	return true
