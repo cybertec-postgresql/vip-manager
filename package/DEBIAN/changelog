@@ -1,3 +1,17 @@
+vip-maanger (0.3-0) unstable; urgency=low
+
+  * The vip-manager is sending a gratuitous arp if it takes over the vip
+  * It will be no longer checked if another server has the vip because it makes
+no difference as long as the new server sends a gratuitous arp message
+
+ -- David Leib <david.leib@barzahlen.de> Wed, 25 Oct 2017 14:25:44 +0300
+
+vip-manager (0.2-0) unstable; urgency=low
+
+  * The vip-manager is not failing anymore if the keystorage is not available
+
+ -- David Leib <david.leib@barzahlen.de> Thu, 21 Sep 2017 12:23:34 +0300
+
 vip-manager (0.1-1) unstable; urgency=low
 
   * Initial release
