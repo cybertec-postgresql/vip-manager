@@ -1,2 +1,3 @@
-vip-manager
+/vip-manager
 *.deb
+tmp/

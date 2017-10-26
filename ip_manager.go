@@ -5,11 +5,22 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net"
 	"os/exec"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
+
+	arp "github.com/mdlayher/arp"
+)
+
+const (
+	arpReplyOp = 2
+)
+
+var (
+	ethernetBroadcast = net.HardwareAddr{0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
 )
 
 type IPManager struct {
@@ -19,9 +30,10 @@ type IPManager struct {
 	currentState bool
 	stateLock    sync.Mutex
 	recheck      *sync.Cond
+	arpClient    *arp.Client
 }
 
-func NewIPManager(config *IPConfiguration, states <-chan bool) *IPManager {
+func NewIPManager(config *IPConfiguration, states <-chan bool) (*IPManager, error) {
 	m := &IPManager{
 		IPConfiguration: config,
 		states:          states,
@@ -29,8 +41,14 @@ func NewIPManager(config *IPConfiguration, states <-chan bool) *IPManager {
 	}
 
 	m.recheck = sync.NewCond(&m.stateLock)
+	arpClient, err := arp.Dial(&m.iface)
+	if err != nil {
+		log.Printf("Problems with producing the arp client: %s", err)
+		return nil, err
+	}
+	m.arpClient = arpClient
 
-	return m
+	return m, err
 }
 
 func (m *IPManager) applyLoop(ctx context.Context) {
@@ -43,6 +61,10 @@ func (m *IPManager) applyLoop(ctx context.Context) {
 			m.stateLock.Unlock()
 			if desiredState {
 				m.ConfigureAddress()
+				// For now it is save to say that also working even if a
+				// gratuitous arp message could not be send but logging an
+				// errror should be enough.
+				m.ARPSendGratuitous()
 			} else {
 				m.DeconfigureAddress()
 			}
@@ -87,24 +109,36 @@ func (m *IPManager) SyncStates(ctx context.Context, states <-chan bool) {
 		case <-ctx.Done():
 			m.recheck.Broadcast()
 			wg.Wait()
+			m.arpClient.Close()
 			return
 		}
 	}
 }
 
-func (m *IPManager) ARPQueryDuplicates() bool {
-	c := exec.Command("arping",
-		"-D", "-c", "2", "-q", "-w", "3",
-		"-I", m.iface, m.vip.String())
-	err := c.Run()
+func (m *IPManager) ARPSendGratuitous() error {
+	gratuitousPackage, err := arp.NewPacket(
+		arpReplyOp,
+		m.iface.HardwareAddr,
+		m.vip,
+		ethernetBroadcast,
+		net.IPv4bcast,
+	)
 	if err != nil {
-		return false
+		log.Printf("Gratuitous arp package is malformed: %s", err)
+		return err
 	}
-	return true
+
+	err = m.arpClient.WriteTo(gratuitousPackage, ethernetBroadcast)
+	if err != nil {
+		log.Printf("Cannot send gratuitous arp message: %s", err)
+		return err
+	}
+
+	return nil
 }
 
 func (m *IPManager) QueryAddress() bool {
-	c := exec.Command("ip", "addr", "show", m.iface)
+	c := exec.Command("ip", "addr", "show", m.iface.Name)
 
 	lookup := fmt.Sprintf("inet %s", m.GetCIDR())
 	result := false
@@ -134,19 +168,19 @@ func (m *IPManager) QueryAddress() bool {
 }
 
 func (m *IPManager) ConfigureAddress() bool {
-	log.Printf("Configuring address %s on %s", m.GetCIDR(), m.iface)
+	log.Printf("Configuring address %s on %s", m.GetCIDR(), m.iface.Name)
 	return m.runAddressConfiguration("add")
 }
 
 func (m *IPManager) DeconfigureAddress() bool {
-	log.Printf("Removing address %s on %s", m.GetCIDR(), m.iface)
+	log.Printf("Removing address %s on %s", m.GetCIDR(), m.iface.Name)
 	return m.runAddressConfiguration("delete")
 }
 
 func (m *IPManager) runAddressConfiguration(action string) bool {
 	c := exec.Command("ip", "addr", action,
 		m.GetCIDR(),
-		"dev", m.iface)
+		"dev", m.iface.Name)
 	err := c.Run()
 
 	switch exit := err.(type) {
@@ -164,7 +198,7 @@ func (m *IPManager) runAddressConfiguration(action string) bool {
 	}
 	if err != nil {
 		log.Printf("Error running ip address %s %s on %s: %s",
-			action, m.vip, m.iface, err)
+			action, m.vip, m.iface.Name, err)
 		return false
 	}
 	return true

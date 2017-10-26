@@ -34,6 +34,14 @@ func getMask(vip net.IP, mask *int) net.IPMask {
 	return vip.DefaultMask()
 }
 
+func getNetIface(iface *string) *net.Interface {
+	netIface, err := net.InterfaceByName(*iface)
+	if err != nil {
+		log.Fatalf("Obtaining the interface raised an error: %s", err)
+	}
+	return netIface
+}
+
 func main() {
 	flag.Parse()
 	checkFlag(ip, "IP")
@@ -49,14 +57,18 @@ func main() {
 
 	vip := net.ParseIP(*ip)
 	vipMask := getMask(vip, mask)
-	manager := NewIPManager(
+	netIface := getNetIface(iface)
+	manager, err := NewIPManager(
 		&IPConfiguration{
 			vip:     vip,
 			netmask: vipMask,
-			iface:   *iface,
+			iface:   *netIface,
 		},
 		states,
 	)
+	if err != nil {
+		log.Fatalf("Problems with generating the virtual ip manager: %s", err)
+	}
 
 	mainCtx, cancel := context.WithCancel(context.Background())
 

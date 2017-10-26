@@ -8,7 +8,7 @@ import (
 type IPConfiguration struct {
 	vip     net.IP
 	netmask net.IPMask
-	iface   string
+	iface   net.Interface
 }
 
 func (c *IPConfiguration) GetCIDR() string {

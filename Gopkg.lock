@@ -14,6 +14,12 @@
   version = "v0.2.0"
 
 [[projects]]
+  branch = "master"
+  name = "github.com/cybertec-postgresql/vip-manager"
+  packages = ["checker"]
+  revision = "1f6ef79dce5576223a6f87a4998248c305835804"
+
+[[projects]]
   name = "github.com/hashicorp/consul"
   packages = ["api"]
   revision = "75ca2cace08e38de8af1731ee8614d0533d5a4d4"
@@ -39,6 +45,24 @@
 
 [[projects]]
   branch = "master"
+  name = "github.com/mdlayher/arp"
+  packages = ["."]
+  revision = "43953fc6354aa71b6d6814755eceba262eae9246"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/mdlayher/ethernet"
+  packages = ["."]
+  revision = "e72cf8343052938936194daba1914fd1bb33d2fe"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/mdlayher/raw"
+  packages = ["."]
+  revision = "156e9b63ae185a43fd1726bbee88eb0109afe5f4"
+
+[[projects]]
+  branch = "master"
   name = "github.com/mitchellh/go-homedir"
   packages = ["."]
   revision = "b8bc1bf767474819792c23f32d8286a45736f1c6"
@@ -52,12 +76,18 @@
 [[projects]]
   branch = "master"
   name = "golang.org/x/net"
-  packages = ["context"]
+  packages = ["bpf","context"]
   revision = "1c05540f6879653db88113bc4a2b70aec4bd491f"
+
+[[projects]]
+  branch = "master"
+  name = "golang.org/x/sys"
+  packages = ["unix"]
+  revision = "92ac112afc6efd90284acda2b046fc0e351228f6"
 
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "ed99b0c9388800ecc49888141419aea2e824fdc682f28c1d6d66860087fe474d"
+  inputs-digest = "669c45c2c5a3d9cb3c1a64d28387a1dc43cf64b0b20f5b42942e56a500311799"
   solver-name = "gps-cdcl"
   solver-version = 1
