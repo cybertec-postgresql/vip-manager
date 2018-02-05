@@ -25,5 +25,5 @@ All configuration keys are currently mandatory.
 | VIP_IFACE | eth0     | Network interface to configure the IP address on. Usually the primary network interface. |
 | VIP_KEY   | /service/batman/leader | Key to monitor. Must match  scope from Patroni postgres.yml                |
 | VIP_HOST  | serverX  | Value to trigger on. Must match name from Patroni.                                       |
-| VIP_TYPE  | etcd     | Type of endpoint (etcd|consul)                                                           |
+| VIP_TYPE  | etcd     | Type of endpoint (etcd or consul)                                                        |
 | VIP_ENDPOINT | http://10.1.2.3:2379 | Location of endpoint (etcd or consul)                                     |
