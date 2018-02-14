@@ -86,7 +86,7 @@ func main() {
 	wg.Add(1)
 	go func() {
 		err := lc.GetChangeNotificationStream(mainCtx, states)
-		if err != nil {
+		if err != nil && err != context.Canceled {
 			log.Fatalf("Leader checker returned the following error: %s", err)
 		}
 		wg.Done()
