@@ -3,6 +3,7 @@ package checker
 import (
 	"context"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/coreos/etcd/client"
@@ -18,7 +19,7 @@ func NewEtcdLeaderChecker(endpoint, key, nodename string) (*EtcdLeaderChecker, e
 	e := &EtcdLeaderChecker{key: key, nodename: nodename}
 
 	cfg := client.Config{
-		Endpoints:               []string{endpoint},
+		Endpoints:               strings.Split(endpoint, ","),
 		Transport:               client.DefaultTransport,
 		HeaderTimeoutPerRequest: time.Second,
 	}

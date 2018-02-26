@@ -19,7 +19,7 @@ var iface = flag.String("iface", "none", "Network interface to configure on")
 var key = flag.String("key", "none", "key to monitor, e.g. /service/batman/leader")
 var host = flag.String("host", "none", "Value to monitor for")
 var endpointType = flag.String("type", "etcd", "type of endpoint used for key storage. Supported values: etcd, consul")
-var endpoint = flag.String("endpoint", "http://localhost:2379", "endpoint")
+var endpoint = flag.String("endpoint", "http://localhost:2379[,http://host:port,..]", "endpoint")
 
 func checkFlag(f *string, name string) {
 	if *f == "none" || *f == "" {
