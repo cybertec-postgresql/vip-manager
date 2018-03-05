@@ -35,7 +35,7 @@ func NewEtcdLeaderChecker(endpoint, key, nodename string) (*EtcdLeaderChecker, e
 	return e, nil
 }
 
-func (e *EtcdLeaderChecker) GetChangeNotificationStream(ctx context.Context, out chan<- bool) error {
+func (e *EtcdLeaderChecker) GetChangeNotificationStream(ctx context.Context, out chan<- bool, interval int) error {
 	clientOptions := &client.GetOptions{
 		Quorum:    true,
 		Recursive: false,
@@ -60,6 +60,7 @@ checkLoop:
 		case <-ctx.Done():
 			break checkLoop
 		case out <- state:
+			time.Sleep(time.Duration(interval) * time.Millisecond)
 			continue
 		}
 	}

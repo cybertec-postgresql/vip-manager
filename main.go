@@ -20,6 +20,7 @@ var key = flag.String("key", "none", "key to monitor, e.g. /service/batman/leade
 var host = flag.String("host", "none", "Value to monitor for")
 var endpointType = flag.String("type", "etcd", "type of endpoint used for key storage. Supported values: etcd, consul")
 var endpoint = flag.String("endpoint", "http://localhost:2379[,http://host:port,..]", "endpoint")
+var interval = flag.Int("interval", 50, "DCS leader change scan interval in milliseconds")
 
 func checkFlag(f *string, name string) {
 	if *f == "none" || *f == "" {
@@ -85,7 +86,7 @@ func main() {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
-		err := lc.GetChangeNotificationStream(mainCtx, states)
+		err := lc.GetChangeNotificationStream(mainCtx, states, *interval)
 		if err != nil && err != context.Canceled {
 			log.Fatalf("Leader checker returned the following error: %s", err)
 		}

@@ -43,7 +43,7 @@ func NewConsulLeaderChecker(endpoint, key, nodename string) (*ConsulLeaderChecke
 	return lc, nil
 }
 
-func (c *ConsulLeaderChecker) GetChangeNotificationStream(ctx context.Context, out chan<- bool) error {
+func (c *ConsulLeaderChecker) GetChangeNotificationStream(ctx context.Context, out chan<- bool, interval int) error {
 	kv := c.apiClient.KV()
 
 	queryOptions := &api.QueryOptions{
@@ -74,6 +74,7 @@ checkLoop:
 		case <-ctx.Done():
 			break checkLoop
 		case out <- state:
+			time.Sleep(time.Duration(interval) * time.Millisecond)
 			continue
 		}
 	}

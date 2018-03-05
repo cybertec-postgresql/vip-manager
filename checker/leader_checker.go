@@ -8,7 +8,7 @@ import (
 var ErrUnsupportedEndpointType = errors.New("given endpoint type not supported")
 
 type LeaderChecker interface {
-	GetChangeNotificationStream(ctx context.Context, out chan<- bool) error
+	GetChangeNotificationStream(ctx context.Context, out chan<- bool, interval int) error
 }
 
 func NewLeaderChecker(endpointType, endpoint, key, nodename string) (LeaderChecker, error) {
