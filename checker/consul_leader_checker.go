@@ -59,13 +59,13 @@ checkLoop:
 			}
 			log.Printf("consul error: %s", err)
 			out <- false
-			time.Sleep(1 * time.Second)
+			time.Sleep(time.Duration(interval) * time.Millisecond)
 			continue
 		}
 		if resp == nil {
 			log.Printf("Cannot get variable for key %s. Will try again in a second.", c.key)
 			out <- false
-			time.Sleep(1 * time.Second)
+			time.Sleep(time.Duration(interval) * time.Millisecond)
 			continue
 		}
 

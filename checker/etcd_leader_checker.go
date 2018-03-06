@@ -51,7 +51,7 @@ checkLoop:
 			}
 			log.Printf("etcd error: %s", err)
 			out <- false
-			time.Sleep(1 * time.Second)
+			time.Sleep(time.Duration(interval) * time.Millisecond)
 			continue
 		}
 
