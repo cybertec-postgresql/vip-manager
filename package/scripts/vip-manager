@@ -52,6 +52,10 @@ if [ -z "$VIP_ENDPOINT" ]; then
     VIP_OPTS="$VIP_OPTS -type=$VIP_ENDPOINT"
 fi
 
+if [ -z "$VIP_MASK" ]; then
+    VIP_OPTS="$VIP_OPTS -type=$VIP_MASK"
+fi
+
 if [ -z "$STDOUT" ]; then
     STDOUT=/dev/null
 fi
