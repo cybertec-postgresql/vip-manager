@@ -44,7 +44,6 @@ package: vip-manager
 	--deb-upstream-changelog package/DEBIAN/changelog \
 	--deb-no-default-config-files \
 	--deb-default package/config/vip-manager.default \
-	--deb-init package/scripts/vip-manager \
 	--deb-systemd package/scripts/vip-manager.service \
 	usr/bin usr/share/doc/
 
