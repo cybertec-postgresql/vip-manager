@@ -1,5 +1,5 @@
 NAME=vip-manager
-VERSION=0.3-0
+VERSION=0.4-1
 ARCH=amd64
 LICENSE="BSD 2-Clause License"
 MAINTAINER="Ants Aasma <ants@cybertec.at>"
