@@ -28,3 +28,7 @@ All configuration keys are currently mandatory.
 | VIP_HOST  | serverX  | Value to trigger on. Must match name from Patroni.                                       |
 | VIP_TYPE  | etcd     | Type of endpoint (etcd or consul)                                                        |
 | VIP_ENDPOINT | http://10.1.2.3:2379 | Location of endpoint (etcd or consul)                                     |
+
+## Author
+
+Cybertec Schönig & Schönig GmbH, https://www.cybertec-postgresql.com
