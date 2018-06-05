@@ -2,6 +2,9 @@
 
 #VIP_IP="10.1.2.3"
 
+# Netmask for IP address
+#VIP_MASK=24
+
 # Just use the normal interface name of the primary network interface
 #VIP_IFACE="eth0"
 
