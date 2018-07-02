@@ -42,6 +42,18 @@ func NewIPManager(hostingType string, config *IPConfiguration, states <-chan boo
 			return nil, err
 		}
 		m.configurer = c
+	case "hetzner":
+		c, err := NewHetznerConfigurer(config)
+		if err != nil {
+			return nil, err
+		}
+		m.configurer = c
+	default:
+		c, err := NewBasicConfigurer(config)
+		if err != nil {
+			return nil, err
+		}
+		m.configurer = c
 	}
 
 	return m, nil
