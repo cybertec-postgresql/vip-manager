@@ -35,6 +35,8 @@ func NewIPManager(hostingType string, config *IPConfiguration, states <-chan boo
 		currentState:    false,
 	}
 
+	m.recheck = sync.NewCond(&m.stateLock)
+
 	switch hostingType {
 	case "basic":
 		c, err := NewBasicConfigurer(config)

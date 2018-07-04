@@ -136,7 +136,7 @@ func (c *BasicConfigurer) runAddressConfiguration(action string) bool {
 }
 
 func (c *BasicConfigurer) GetCIDR() string {
-	return c.GetCIDR()
+	return fmt.Sprintf("%s/%d", c.vip.String(), NetmaskSize(c.netmask))
 }
 
 func (c *BasicConfigurer) cleanupArp() {
