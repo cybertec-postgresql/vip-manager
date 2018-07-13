@@ -5,14 +5,14 @@ Manages a virtual IP based on state kept in etcd or Consul. Monitors state in et
 ## Installing on debian
 
 * Install the debian package. Currently you will have to build the package yourself. Prebuilt packages are coming soon.
-* Edit `/etc/patroni/vip.conf`. See the configuration section for details.
+* Edit `/etc/default/vip-manager`. See the configuration section for details.
 * Start and enable vip-manager service with systemctl.
 
 ## Installing by hand
 
 * Build the vip-manager binary using go. 
 * Install service file from `package/scripts/vip-manager.service` to `/etc/systemd/system/`
-* Install configuration file from `package/config/vip-manager.default` to `/etc/patroni/vip.conf`
+* Install configuration file from `package/config/vip-manager.default` to `/etc/default/vip-manager`
 * Edit config and start the service.
 
 ## Configuration
