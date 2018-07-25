@@ -56,6 +56,10 @@ if [ -z "$VIP_MASK" ]; then
     VIP_OPTS="$VIP_OPTS -type=$VIP_MASK"
 fi
 
+if [ -z "$VIP_HOSTINGTYPE" ]; then
+    VIP_OPTS="$VIP_OPTS -hostingtype=$VIP_HOSTINGTYPE"
+fi
+
 if [ -z "$STDOUT" ]; then
     STDOUT=/dev/null
 fi
