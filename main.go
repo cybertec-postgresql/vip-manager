@@ -9,7 +9,7 @@ import (
 	"os/signal"
 	"sync"
 
-	"github.com/cybertec-postgresql/vip-manager/checker"
+	"./checker"
 	//"github.com/milosgajdos83/tenus"
 )
 
@@ -18,6 +18,8 @@ var mask = flag.Int("mask", -1, "The netmask used for the IP address. Defaults t
 var iface = flag.String("iface", "none", "Network interface to configure on")
 var key = flag.String("key", "none", "key to monitor, e.g. /service/batman/leader")
 var host = flag.String("host", "none", "Value to monitor for")
+var etcd_user = flag.String("etcd_user", "none", "username that can be used to access the key in etcd")
+var etcd_password = flag.String("etcd_password", "none", "password for the etcd_user")
 var endpointType = flag.String("type", "etcd", "type of endpoint used for key storage. Supported values: etcd, consul")
 var endpoint = flag.String("endpoint", "http://localhost:2379[,http://host:port,..]", "endpoint")
 var interval = flag.Int("interval", 1000, "DCS scan interval in milliseconds")
@@ -53,7 +55,7 @@ func main() {
 	checkFlag(host, "host name")
 
 	states := make(chan bool)
-	lc, err := checker.NewLeaderChecker(*endpointType, *endpoint, *key, *host)
+	lc, err := checker.NewLeaderChecker(*endpointType, *endpoint, *key, *host, *etcd_user, *etcd_password)
 	if err != nil {
 		log.Fatalf("Failed to initialize leader checker: %s", err)
 	}

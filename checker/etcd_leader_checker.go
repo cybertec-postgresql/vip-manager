@@ -15,13 +15,15 @@ type EtcdLeaderChecker struct {
 	kapi     client.KeysAPI
 }
 
-func NewEtcdLeaderChecker(endpoint, key, nodename string) (*EtcdLeaderChecker, error) {
+func NewEtcdLeaderChecker(endpoint, key, nodename string, etcd_user string, etcd_password string) (*EtcdLeaderChecker, error) {
 	e := &EtcdLeaderChecker{key: key, nodename: nodename}
 
 	cfg := client.Config{
 		Endpoints:               strings.Split(endpoint, ","),
 		Transport:               client.DefaultTransport,
 		HeaderTimeoutPerRequest: time.Second,
+		Username:				 etcd_user,
+		Password:				 etcd_password,
 	}
 
 	c, err := client.New(cfg)

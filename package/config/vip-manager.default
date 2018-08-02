@@ -21,3 +21,5 @@
 
 #not mandatory
 #VIP_HOSTINGTYPE="basic"
+#VIP_ETCD_USER
+#VIP_ETCD_PASSWORD
