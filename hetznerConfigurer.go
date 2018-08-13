@@ -136,11 +136,9 @@ func getActiveIpFromJson(str string) (net.IP, error){
 }
 
 func (c *HetznerConfigurer) QueryAddress() bool {
-	if (time.Since(c.lastAPICheck)/time.Second) > 80 {
+	if (time.Since(c.lastAPICheck)/time.Hour) > 1 {
 		/**We need to recheck the status!
-		 * check this every 80 seconds at max.
-		 * 100 requests per hour translates to one every 36seconds,
-		 * we're doing this potentially on two hosts, so 72 seconds. 
+		 * Don't check too often because of stupid API rate limits
 		 */
 		 log.Println("Cached state was too old.")
 		c.cachedState = UNKNOWN
@@ -159,6 +157,8 @@ func (c *HetznerConfigurer) QueryAddress() bool {
 	if err != nil {
 		//TODO
 		c.cachedState = UNKNOWN
+	} else {
+		c.lastAPICheck = time.Now()
 	}
 
 	currentFailoverDestinationIP, err:=getActiveIpFromJson(str)
@@ -167,7 +167,6 @@ func (c *HetznerConfigurer) QueryAddress() bool {
 		c.cachedState = UNKNOWN
 	}
 
-	c.lastAPICheck = time.Now()
 
 	if currentFailoverDestinationIP.Equal(getOutboundIP()) {
 		//We "are" the current failover destination.
