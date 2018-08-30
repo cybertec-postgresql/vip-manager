@@ -33,8 +33,9 @@ func NewHetznerConfigurer(config *IPConfiguration) (*HetznerConfigurer, error){
 
 func getOutboundIP() net.IP {
 	conn, err := net.Dial("udp", "8.8.8.8:80")
-	if err != nil {
+	if err != nil || conn == nil{
 		log.Println("error dialing 8.8.8.8 to retrieve preferred outbound IP", err)
+		return nil
 	}
 	defer conn.Close()
 
