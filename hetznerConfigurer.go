@@ -12,6 +12,13 @@ import(
 	"time"
 )
 
+/**
+ * The HetznerConfigurer can be used to enable vip-management on nodes
+ * rented in a Hetzner Datacenter.
+ * Since Hetzner provides an API that handles failover-ip routing,
+ * this API is used to manage the vip, whenever hostintype `hetzner` is set.
+ */
+
 
 const (
         UNKNOWN 	= iota  // c0 == 0
@@ -31,6 +38,10 @@ func NewHetznerConfigurer(config *IPConfiguration) (*HetznerConfigurer, error){
 	return c, nil
 }
 
+/**
+ * In order to tell the Hetzner API to route the failover-ip to
+ * this machine, we must attach our own IP address to the API request.
+ */
 func getOutboundIP() net.IP {
 	conn, err := net.Dial("udp", "8.8.8.8:80")
 	if err != nil || conn == nil{
@@ -44,7 +55,11 @@ func getOutboundIP() net.IP {
 	return localAddr.IP
 }
 
+
 func (c *HetznerConfigurer) curlQueryFailover(post bool) (string, error) {
+	/**
+	 * The credentials for the API are loaded from a file stored in /etc/hetzner .
+	 */
 	//TODO: make credentialsFile dynamically changeable?
 	credentialsFile  := "/etc/hetzner"
 	f, err := os.Open(credentialsFile)
@@ -54,6 +69,10 @@ func (c *HetznerConfigurer) curlQueryFailover(post bool) (string, error) {
 	}
 	defer f.Close()
 
+	/**
+	 * The retrieval of username and password from the file is rather static,
+	 * so the credentials file must conform to the offsets down below perfectly.
+	 */
 	var user string
 	var password string
 	scanner := bufio.NewScanner(f)
@@ -71,6 +90,15 @@ func (c *HetznerConfigurer) curlQueryFailover(post bool) (string, error) {
 		return "", errors.New("Couldn't retrieve username or password from file")
 	}
 
+	/**
+	 * As Hetzner API only allows IPv4 connections, we rely on curl
+	 * instead of GO's own http package,
+	 * as selecting IPv4 transport there doesn't seem trivial.
+	 *
+	 * If post is set to true, a failover will be triggered.
+	 * If it is set to false, the current state (i.e. route)
+	 * for the failover-ip will be retrieved.
+	 */
 	var cmd *exec.Cmd
 	if post == true {
 		my_own_ip := getOutboundIP()
@@ -96,6 +124,10 @@ func (c *HetznerConfigurer) curlQueryFailover(post bool) (string, error) {
 	return retStr, nil
 }
 
+/**
+ * This function is used to parse the response which comes from the
+ * curlQueryFailover function and in turn from the curl calls to the API.
+ */
 func getActiveIpFromJson(str string) (net.IP, error){
 	var f map[string]interface{}
 
@@ -228,6 +260,8 @@ func (c *HetznerConfigurer) GetCIDR() string {
 	return fmt.Sprintf("%s/%d", c.vip.String(), NetmaskSize(c.netmask))
 }
 
-func (c *HetznerConfigurer) cleanupArp() {
 
+func (c *HetznerConfigurer) cleanupArp() {
+	// dummy function as the usage of interfaces requires us to have this function.
+	// It is sufficient for the leader to tell Hetzner to switch the IP, no cleanup needed.
 }

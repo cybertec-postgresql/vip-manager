@@ -27,12 +27,15 @@ install:
 DESTDIR=tmp
 
 .PHONY: package
-package: vip-manager
+
+package: package-deb package-rpm
+
+package-deb: vip-manager
 	install -d $(DESTDIR)/usr/bin
 	install vip-manager $(DESTDIR)/usr/bin/vip-manager
 	install -d $(DESTDIR)/usr/share/doc/$(NAME)
 	install --mode=644 package/DEBIAN/copyright $(DESTDIR)/usr/share/doc/$(NAME)/copyright
-	fpm -s dir -t deb -n $(NAME) -v $(VERSION) -C $(DESTDIR) \
+	fpm -f -s dir -t deb -n $(NAME) -v $(VERSION) -C $(DESTDIR) \
 	-p $(NAME)_$(VERSION)_$(ARCH).deb \
 	--license $(LICENSE) \
 	--maintainer $(MAINTAINER) \
@@ -47,7 +50,13 @@ package: vip-manager
 	--deb-systemd package/scripts/vip-manager.service \
 	usr/bin usr/share/doc/
 
+package-rpm: package-deb
+	fpm -f -s deb -t rpm -n $(NAME) -v $(VERSION) -C $(DESTDIR) \
+	-p $(NAME)_$(VERSION)_$(ARCH).rpm \
+	$(NAME)_$(VERSION)_$(ARCH).deb
+
 clean:
 	rm -f vip-manager
 	rm -f vip-manager*.deb
+	rm -f vip-manager*.rpm
 	rm -fr $(DESTDIR)

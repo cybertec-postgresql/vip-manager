@@ -12,6 +12,16 @@ import(
 	arp "github.com/mdlayher/arp"
 )
 
+/**
+ * The BasicConfigurer can be used to enable vip-management on nodes
+ * that handle their own network connection, in setups where it is
+ * sufficient to add the virtual ip using `ip addr add ...` .
+ * After adding the virtual ip to the specified interface,
+ * a gratuitous ARP package is sent out to update the tables of
+ * nearby routers and other devices.
+ */
+
+
 const (
 	arpReplyOp = 2
 )
