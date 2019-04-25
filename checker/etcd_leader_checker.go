@@ -3,10 +3,10 @@ package checker
 import (
 	"context"
 	"log"
-	"strings"
 	"time"
 
 	"github.com/coreos/etcd/client"
+	"github.com/cybertec-postgresql/vip-manager/vipconfig"
 )
 
 type EtcdLeaderChecker struct {
@@ -15,15 +15,20 @@ type EtcdLeaderChecker struct {
 	kapi     client.KeysAPI
 }
 
-func NewEtcdLeaderChecker(endpoint, key, nodename string, etcd_user string, etcd_password string) (*EtcdLeaderChecker, error) {
-	e := &EtcdLeaderChecker{key: key, nodename: nodename}
+//naming this c_conf to avoid conflict with conf in etcd_leader_checker.go
+var e_conf vipconfig.Config
+
+//func NewEtcdLeaderChecker(endpoint, key, nodename string, etcd_user string, etcd_password string) (*EtcdLeaderChecker, error) {
+func NewEtcdLeaderChecker(con vipconfig.Config) (*EtcdLeaderChecker, error) {
+	e_conf = con
+	e := &EtcdLeaderChecker{key: e_conf.Key, nodename: e_conf.Nodename}
 
 	cfg := client.Config{
-		Endpoints:               strings.Split(endpoint, ","),
+		Endpoints:               e_conf.Endpoints,
 		Transport:               client.DefaultTransport,
 		HeaderTimeoutPerRequest: time.Second,
-		Username:				 etcd_user,
-		Password:				 etcd_password,
+		Username:                e_conf.Etcd_user,
+		Password:                e_conf.Etcd_password,
 	}
 
 	c, err := client.New(cfg)
@@ -37,7 +42,7 @@ func NewEtcdLeaderChecker(endpoint, key, nodename string, etcd_user string, etcd
 	return e, nil
 }
 
-func (e *EtcdLeaderChecker) GetChangeNotificationStream(ctx context.Context, out chan<- bool, interval int) error {
+func (e *EtcdLeaderChecker) GetChangeNotificationStream(ctx context.Context, out chan<- bool) error {
 	clientOptions := &client.GetOptions{
 		Quorum:    true,
 		Recursive: false,
@@ -53,7 +58,7 @@ checkLoop:
 			}
 			log.Printf("etcd error: %s", err)
 			out <- false
-			time.Sleep(time.Duration(interval) * time.Millisecond)
+			time.Sleep(time.Duration(e_conf.Interval) * time.Millisecond)
 			continue
 		}
 
@@ -63,7 +68,7 @@ checkLoop:
 		case <-ctx.Done():
 			break checkLoop
 		case out <- state:
-			time.Sleep(time.Duration(interval) * time.Millisecond)
+			time.Sleep(time.Duration(e_conf.Interval) * time.Millisecond)
 			continue
 		}
 	}

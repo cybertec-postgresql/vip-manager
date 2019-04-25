@@ -1,6 +1,6 @@
 package main
 
-import(
+import (
 	"bufio"
 	"fmt"
 	"log"
@@ -21,18 +21,17 @@ import(
  * nearby routers and other devices.
  */
 
-
 const (
 	arpReplyOp = 2
 )
 
 type BasicConfigurer struct {
 	*IPConfiguration
-	arpClient    *arp.Client
+	arpClient *arp.Client
 }
 
-func NewBasicConfigurer(config *IPConfiguration) (*BasicConfigurer, error){
-	c := &BasicConfigurer{IPConfiguration : config}
+func NewBasicConfigurer(config *IPConfiguration) (*BasicConfigurer, error) {
+	c := &BasicConfigurer{IPConfiguration: config}
 
 	arpClient, err := arp.Dial(&c.iface)
 	if err != nil {
@@ -43,7 +42,6 @@ func NewBasicConfigurer(config *IPConfiguration) (*BasicConfigurer, error){
 
 	return c, nil
 }
-
 
 func (c *BasicConfigurer) ARPSendGratuitous() error {
 	gratuitousPackage, err := arp.NewPacket(
@@ -101,9 +99,9 @@ func (c *BasicConfigurer) QueryAddress() bool {
 func (c *BasicConfigurer) ConfigureAddress() bool {
 	log.Printf("Configuring address %s on %s", c.GetCIDR(), c.iface.Name)
 
-	result:= c.runAddressConfiguration("add")
+	result := c.runAddressConfiguration("add")
 
-	if(result == true){
+	if result == true {
 		// For now it is save to say that also working even if a
 		// gratuitous arp message could not be send but logging an
 		// errror should be enough.

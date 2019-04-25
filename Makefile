@@ -1,5 +1,5 @@
 NAME=vip-manager
-VERSION=0.5-1
+VERSION=0.6-1
 ARCH=amd64
 LICENSE="BSD 2-Clause License"
 MAINTAINER="Ants Aasma <ants@cybertec.at>"
@@ -22,7 +22,7 @@ install:
 	install -d $(DESTDIR)/etc/init.d/
 	install package/scripts/init-systemv.sh $(DESTDIR)/etc/init.d/vip-manager
 	install -d $(DESTDIR)/etc/default
-	install package/scripts/vip-manager.default $(DESTDIR)/etc/default/vip-manager
+	install package/config/vip-manager_default.yml $(DESTDIR)/etc/default/vip-manager_default.yml
 
 DESTDIR=tmp
 
@@ -46,7 +46,7 @@ package-deb: vip-manager
 	--deb-field 'Vcs-Browser: $(GITBROWSER)' \
 	--deb-upstream-changelog package/DEBIAN/changelog \
 	--deb-no-default-config-files \
-	--deb-default package/config/vip-manager.default \
+	--deb-default package/config/vip-manager_default.yml \
 	--deb-systemd package/scripts/vip-manager.service \
 	usr/bin usr/share/doc/
 

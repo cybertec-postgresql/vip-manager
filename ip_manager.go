@@ -31,8 +31,8 @@ type IPManager struct {
 
 func NewIPManager(hostingType string, config *IPConfiguration, states <-chan bool) (*IPManager, error) {
 	m := &IPManager{
-		states:          states,
-		currentState:    false,
+		states:       states,
+		currentState: false,
 	}
 
 	m.recheck = sync.NewCond(&m.stateLock)

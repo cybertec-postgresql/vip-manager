@@ -1,3 +1,11 @@
+vip-manager (0.6-1) unstable; urgency=low
+
+  * switched to yaml file for config, still supporting all command line options from previous releases.
+  * Introduced unified config management in the vipconfig source directory
+  * Enabled consul_leader_checker to use tokens
+
+ -- Julian Markwort <julian.markwort@cybertec.at> Tue, 04 Sep 2018 14:40:00 +0300
+
 vip-manager (0.5-1) unstable; urgency=low
 
   * Support Hetzner API for failover-ip configuration.

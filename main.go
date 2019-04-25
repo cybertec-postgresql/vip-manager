@@ -3,16 +3,25 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
+	"io/ioutil"
 	"log"
 	"net"
 	"os"
 	"os/signal"
 	"sync"
 
-	"./checker"
+	"gopkg.in/yaml.v2"
+
+	"github.com/cybertec-postgresql/vip-manager/checker"
+	"github.com/cybertec-postgresql/vip-manager/vipconfig"
 	//"github.com/milosgajdos83/tenus"
 )
 
+var configFile = flag.String("config", "", "Location of the configuration file.")
+var versionHint = flag.Bool("version", false, "Show the version number.")
+
+// deprecated flags below. add new parameters to the config struct and write them into vip-manager.yml
 var ip = flag.String("ip", "none", "Virtual IP address to configure")
 var mask = flag.Int("mask", -1, "The netmask used for the IP address. Defaults to -1 which assigns ipv4 default mask.")
 var iface = flag.String("iface", "none", "Network interface to configure on")
@@ -20,27 +29,30 @@ var key = flag.String("key", "none", "key to monitor, e.g. /service/batman/leade
 var host = flag.String("host", "none", "Value to monitor for")
 var etcd_user = flag.String("etcd_user", "none", "username that can be used to access the key in etcd")
 var etcd_password = flag.String("etcd_password", "none", "password for the etcd_user")
+
 var endpointType = flag.String("type", "etcd", "type of endpoint used for key storage. Supported values: etcd, consul")
 var endpoint = flag.String("endpoint", "http://localhost:2379[,http://host:port,..]", "endpoint")
 var interval = flag.Int("interval", 1000, "DCS scan interval in milliseconds")
 
 var hostingType = flag.String("hostingtype", "basic", "type of hosting. Supported values: self, hetzner")
 
-func checkFlag(f *string, name string) {
-	if *f == "none" || *f == "" {
+var conf vipconfig.Config
+
+func checkFlag(f string, name string) {
+	if f == "none" || f == "" {
 		log.Fatalf("Setting %s is mandatory", name)
 	}
 }
 
-func getMask(vip net.IP, mask *int) net.IPMask {
-	if *mask > 0 || *mask < 33 {
-		return net.CIDRMask(*mask, 32)
+func getMask(vip net.IP, mask int) net.IPMask {
+	if mask > 0 || mask < 33 {
+		return net.CIDRMask(mask, 32)
 	}
 	return vip.DefaultMask()
 }
 
-func getNetIface(iface *string) *net.Interface {
-	netIface, err := net.InterfaceByName(*iface)
+func getNetIface(iface string) *net.Interface {
+	netIface, err := net.InterfaceByName(iface)
 	if err != nil {
 		log.Fatalf("Obtaining the interface raised an error: %s", err)
 	}
@@ -49,20 +61,42 @@ func getNetIface(iface *string) *net.Interface {
 
 func main() {
 	flag.Parse()
-	checkFlag(ip, "IP")
-	checkFlag(iface, "network interface")
-	checkFlag(key, "key")
-	checkFlag(host, "host name")
+
+	if *versionHint == true {
+		fmt.Println("version 0.6.1")
+		return
+	}
+	//introduce parsed values into conf
+	conf = vipconfig.Config{Ip: *ip, Mask: *mask, Iface: *iface, HostingType: *hostingType,
+		Key: *key, Nodename: *host, Endpoint_type: *endpointType, Endpoints: []string{*endpoint},
+		Etcd_user: *etcd_user, Etcd_password: *etcd_password, Interval: *interval}
+
+	if *configFile != "" {
+		yamlFile, yamlErr := ioutil.ReadFile(*configFile)
+		if yamlErr != nil {
+			log.Fatal("couldn't open config File!", yamlErr)
+		}
+		yamlErr = yaml.Unmarshal(yamlFile, &conf)
+		if yamlErr != nil {
+			log.Fatalf("Unmarshal: %v", yamlErr)
+		}
+	}
+
+	checkFlag(conf.Ip, "IP")
+	checkFlag(conf.Iface, "network interface")
+	checkFlag(conf.Key, "key")
+	//check that at least one Endpoint is specified...
+	checkFlag(conf.Endpoints[0], "host name")
 
 	states := make(chan bool)
-	lc, err := checker.NewLeaderChecker(*endpointType, *endpoint, *key, *host, *etcd_user, *etcd_password)
+	lc, err := checker.NewLeaderChecker(conf)
 	if err != nil {
 		log.Fatalf("Failed to initialize leader checker: %s", err)
 	}
 
-	vip := net.ParseIP(*ip)
-	vipMask := getMask(vip, mask)
-	netIface := getNetIface(iface)
+	vip := net.ParseIP(conf.Ip)
+	vipMask := getMask(vip, conf.Mask)
+	netIface := getNetIface(conf.Iface)
 	manager, err := NewIPManager(
 		*hostingType,
 		&IPConfiguration{
@@ -91,7 +125,7 @@ func main() {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
-		err := lc.GetChangeNotificationStream(mainCtx, states, *interval)
+		err := lc.GetChangeNotificationStream(mainCtx, states)
 		if err != nil && err != context.Canceled {
 			log.Fatalf("Leader checker returned the following error: %s", err)
 		}

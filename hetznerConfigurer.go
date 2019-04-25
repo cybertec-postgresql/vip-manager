@@ -1,14 +1,14 @@
 package main
 
-import(
+import (
 	"bufio"
-	"log"
-	"fmt"
-	"net"
-	"os/exec"
-	"os"
-	"errors"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"log"
+	"net"
+	"os"
+	"os/exec"
 	"time"
 )
 
@@ -19,21 +19,20 @@ import(
  * this API is used to manage the vip, whenever hostintype `hetzner` is set.
  */
 
-
 const (
-        UNKNOWN 	= iota  // c0 == 0
-        CONFIGURED 	= iota  // c1 == 1
-        RELEASED 	= iota  // c2 == 2
+	UNKNOWN    = iota // c0 == 0
+	CONFIGURED = iota // c1 == 1
+	RELEASED   = iota // c2 == 2
 )
 
 type HetznerConfigurer struct {
 	*IPConfiguration
-	cachedState int
+	cachedState  int
 	lastAPICheck time.Time
 }
 
-func NewHetznerConfigurer(config *IPConfiguration) (*HetznerConfigurer, error){
-	c := &HetznerConfigurer{IPConfiguration : config, cachedState : UNKNOWN, lastAPICheck : time.Unix(0,0)}
+func NewHetznerConfigurer(config *IPConfiguration) (*HetznerConfigurer, error) {
+	c := &HetznerConfigurer{IPConfiguration: config, cachedState: UNKNOWN, lastAPICheck: time.Unix(0, 0)}
 
 	return c, nil
 }
@@ -44,7 +43,7 @@ func NewHetznerConfigurer(config *IPConfiguration) (*HetznerConfigurer, error){
  */
 func getOutboundIP() net.IP {
 	conn, err := net.Dial("udp", "8.8.8.8:80")
-	if err != nil || conn == nil{
+	if err != nil || conn == nil {
 		log.Println("error dialing 8.8.8.8 to retrieve preferred outbound IP", err)
 		return nil
 	}
@@ -55,13 +54,12 @@ func getOutboundIP() net.IP {
 	return localAddr.IP
 }
 
-
 func (c *HetznerConfigurer) curlQueryFailover(post bool) (string, error) {
 	/**
 	 * The credentials for the API are loaded from a file stored in /etc/hetzner .
 	 */
 	//TODO: make credentialsFile dynamically changeable?
-	credentialsFile  := "/etc/hetzner"
+	credentialsFile := "/etc/hetzner"
 	f, err := os.Open(credentialsFile)
 	if err != nil {
 		log.Println("can't open passwordfile", err)
@@ -128,7 +126,7 @@ func (c *HetznerConfigurer) curlQueryFailover(post bool) (string, error) {
  * This function is used to parse the response which comes from the
  * curlQueryFailover function and in turn from the curl calls to the API.
  */
-func getActiveIpFromJson(str string) (net.IP, error){
+func getActiveIpFromJson(str string) (net.IP, error) {
 	var f map[string]interface{}
 
 	err := json.Unmarshal([]byte(str), &f)
@@ -140,7 +138,7 @@ func getActiveIpFromJson(str string) (net.IP, error){
 	if f["error"] != nil {
 		errormap := f["error"].(map[string]interface{})
 
-		log.Printf("There was an error accessing the Hetzner API!\n status: %s\n code: %s\n message: %s\n", errormap["status"].(float64),	errormap["code"].(string), errormap["message"].(string))
+		log.Printf("There was an error accessing the Hetzner API!\n status: %s\n code: %s\n message: %s\n", errormap["status"].(float64), errormap["code"].(string), errormap["message"].(string))
 		return nil, errors.New("Hetzner API returned error response.")
 	}
 
@@ -169,24 +167,24 @@ func getActiveIpFromJson(str string) (net.IP, error){
 }
 
 func (c *HetznerConfigurer) QueryAddress() bool {
-	if (time.Since(c.lastAPICheck)/time.Hour) > 1 {
+	if (time.Since(c.lastAPICheck) / time.Hour) > 1 {
 		/**We need to recheck the status!
 		 * Don't check too often because of stupid API rate limits
 		 */
-		 log.Println("Cached state was too old.")
+		log.Println("Cached state was too old.")
 		c.cachedState = UNKNOWN
-	}else{
+	} else {
 		/** no need to check, we can use "cached" state if set.
 		 * if it is set to UNKOWN, a check will be done.
 		 */
 		if c.cachedState == CONFIGURED {
 			return true
-		}else if c.cachedState == RELEASED {
+		} else if c.cachedState == RELEASED {
 			return false
 		}
 	}
 
-	str, err:= c.curlQueryFailover(false)
+	str, err := c.curlQueryFailover(false)
 	if err != nil {
 		//TODO
 		c.cachedState = UNKNOWN
@@ -194,24 +192,22 @@ func (c *HetznerConfigurer) QueryAddress() bool {
 		c.lastAPICheck = time.Now()
 	}
 
-	currentFailoverDestinationIP, err:=getActiveIpFromJson(str)
+	currentFailoverDestinationIP, err := getActiveIpFromJson(str)
 	if err != nil {
 		//TODO
 		c.cachedState = UNKNOWN
 	}
 
-
 	if currentFailoverDestinationIP.Equal(getOutboundIP()) {
 		//We "are" the current failover destination.
 		c.cachedState = CONFIGURED
-		return true;
+		return true
 	} else {
 		c.cachedState = RELEASED
 	}
 
 	return false
 }
-
 
 func (c *HetznerConfigurer) ConfigureAddress() bool {
 	//log.Printf("Configuring address %s on %s", m.GetCIDR(), m.iface.Name)
@@ -227,13 +223,13 @@ func (c *HetznerConfigurer) DeconfigureAddress() bool {
 }
 
 func (c *HetznerConfigurer) runAddressConfiguration(action string) bool {
-	str, err:= c.curlQueryFailover(true)
+	str, err := c.curlQueryFailover(true)
 	if err != nil {
 		log.Printf("Error while configuring Hetzner failover-ip! errormessage: %s", err)
 		c.cachedState = UNKNOWN
 		return false
 	}
-	currentFailoverDestinationIP, err:=getActiveIpFromJson(str)
+	currentFailoverDestinationIP, err := getActiveIpFromJson(str)
 	if err != nil {
 		c.cachedState = UNKNOWN
 		return false
@@ -245,12 +241,12 @@ func (c *HetznerConfigurer) runAddressConfiguration(action string) bool {
 		//We "are" the current failover destination.
 		log.Printf("Failover was successfully executed!")
 		c.cachedState = CONFIGURED
-		return true;
-	}else{
+		return true
+	} else {
 		log.Printf("The failover command was issued, but the current Failover destination (%s) is different from what it should be (%s).", currentFailoverDestinationIP.String(), getOutboundIP().String)
 		//Something must have gone wrong while trying to switch IP's...
 		c.cachedState = UNKNOWN
-		return false;
+		return false
 	}
 
 	return true
@@ -259,7 +255,6 @@ func (c *HetznerConfigurer) runAddressConfiguration(action string) bool {
 func (c *HetznerConfigurer) GetCIDR() string {
 	return fmt.Sprintf("%s/%d", c.vip.String(), NetmaskSize(c.netmask))
 }
-
 
 func (c *HetznerConfigurer) cleanupArp() {
 	// dummy function as the usage of interfaces requires us to have this function.

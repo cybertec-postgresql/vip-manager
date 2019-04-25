@@ -2,92 +2,163 @@
 
 
 [[projects]]
-  name = "github.com/coreos/etcd"
-  packages = ["client","pkg/pathutil","pkg/srv","pkg/types","version"]
-  revision = "d0d1a87aa96ae14914751d42264262cb69eda170"
-  version = "v3.2.5"
+  branch = "master"
+  digest = "1:48623e1300c36eda92593503d485e3b8e55f2b81343f51f39a61c1e64040236e"
+  name = "github.com/armon/go-metrics"
+  packages = ["."]
+  pruneopts = ""
+  revision = "2801d9688273d5b516966851b9a0863b9e6b0652"
 
 [[projects]]
+  digest = "1:0bc9fe59e23786a6d5f5b65d2676904d29aafcc79fa9fca4472fe0d15ee15656"
+  name = "github.com/coreos/etcd"
+  packages = [
+    "client",
+    "pkg/pathutil",
+    "pkg/srv",
+    "pkg/types",
+    "version",
+  ]
+  pruneopts = ""
+  revision = "d57e8b8d97adfc4a6c224fe116714bf1a1f3beb9"
+  version = "v3.3.12"
+
+[[projects]]
+  digest = "1:8495649476b2da658de5f993fa2758f342114ce057b6c559d26cf380447eaed8"
   name = "github.com/coreos/go-semver"
   packages = ["semver"]
-  revision = "8ab6407b697782a06568d4b7f1db25550ec2e4c6"
-  version = "v0.2.0"
+  pruneopts = ""
+  revision = "e214231b295a8ea9479f11b70b35d5acf3556d9b"
+  version = "v0.3.0"
 
 [[projects]]
-  branch = "master"
-  name = "github.com/cybertec-postgresql/vip-manager"
-  packages = ["checker"]
-  revision = "1f6ef79dce5576223a6f87a4998248c305835804"
-
-[[projects]]
+  digest = "1:407d8e835f05c358958f8f8e142ca086131c3d90da4c2aa66e4f93c76585a131"
   name = "github.com/hashicorp/consul"
   packages = ["api"]
-  revision = "75ca2cace08e38de8af1731ee8614d0533d5a4d4"
-  version = "v0.9.2"
+  pruneopts = ""
+  revision = "ea5210a30e154f4da9a4c8e729b45b8ce7b9b92c"
+  version = "v1.4.4"
 
 [[projects]]
-  branch = "master"
+  digest = "1:984b627a3c838daa9f4c949ec8e6f049a7021b1156eb4db0337c3a5afe07aada"
   name = "github.com/hashicorp/go-cleanhttp"
   packages = ["."]
-  revision = "3573b8b52aa7b37b9358d966a898feb387f62437"
+  pruneopts = ""
+  revision = "eda1e5db218aad1db63ca4642c8906b26bcf2744"
+  version = "v0.5.1"
 
 [[projects]]
-  branch = "master"
+  digest = "1:c5466dfad4c14bf8e52a34b0eb98f1301acc1e304e0f0ff2c51c356ca1b86747"
+  name = "github.com/hashicorp/go-immutable-radix"
+  packages = ["."]
+  pruneopts = ""
+  revision = "27df80928bb34bb1b0d6d0e01b9e679902e7a6b5"
+  version = "v1.0.0"
+
+[[projects]]
+  digest = "1:c25fc9af3d03f56e1d8827e6d823dcc3318be2902d8182601cf7538834bb346f"
   name = "github.com/hashicorp/go-rootcerts"
   packages = ["."]
-  revision = "6bb64b370b90e7ef1fa532be9e591a81c3493e00"
+  pruneopts = ""
+  revision = "63503fb4e1eca22f9ae0f90b49c5d5538a0e87eb"
+  version = "v1.0.0"
 
 [[projects]]
+  digest = "1:85f8f8d390a03287a563e215ea6bd0610c858042731a8b42062435a0dcbc485f"
+  name = "github.com/hashicorp/golang-lru"
+  packages = ["simplelru"]
+  pruneopts = ""
+  revision = "7087cb70de9f7a8bc0a10c375cb0d2280a8edf9c"
+  version = "v0.5.1"
+
+[[projects]]
+  digest = "1:4d298692efc058ff814677015c8db92b1ac63baffa8e238382babd77e1c5fcd4"
   name = "github.com/hashicorp/serf"
   packages = ["coordinate"]
-  revision = "d6574a5bb1226678d7010325fb6c985db20ee458"
-  version = "v0.8.1"
+  pruneopts = ""
+  revision = "15cfd05de3dffb3664aa37b06e91f970b825e380"
+  version = "v0.8.3"
 
 [[projects]]
   branch = "master"
+  digest = "1:cfbb09a39d42b0bbc48e51fc2e226221cabfbf8eb100422f50be221d0d145707"
   name = "github.com/mdlayher/arp"
   packages = ["."]
-  revision = "43953fc6354aa71b6d6814755eceba262eae9246"
+  pruneopts = ""
+  revision = "98a83c8a27177c5179d02d41ad50b0cce8e59338"
 
 [[projects]]
   branch = "master"
+  digest = "1:9bb01a2146c568825b6bc2f692a4b75d048de5595bc87f53df15bf6b30ad71af"
   name = "github.com/mdlayher/ethernet"
   packages = ["."]
-  revision = "e72cf8343052938936194daba1914fd1bb33d2fe"
+  pruneopts = ""
+  revision = "5b5fc417d966b71d3781b0d5860413e9fae947c1"
 
 [[projects]]
   branch = "master"
+  digest = "1:aa60262e8baf1a86ddbd002760eee5fccf74a23aae8ce01804d59d9ea799a0bc"
   name = "github.com/mdlayher/raw"
   packages = ["."]
-  revision = "156e9b63ae185a43fd1726bbee88eb0109afe5f4"
+  pruneopts = ""
+  revision = "64193704e47285d33feb098cd01306301cdeba4b"
 
 [[projects]]
-  branch = "master"
+  digest = "1:6dbb0eb72090871f2e58d1e37973fe3cb8c0f45f49459398d3fc740cb30e13bd"
   name = "github.com/mitchellh/go-homedir"
   packages = ["."]
-  revision = "b8bc1bf767474819792c23f32d8286a45736f1c6"
+  pruneopts = ""
+  revision = "af06845cf3004701891bf4fdb884bfe4920b3727"
+  version = "v1.1.0"
 
 [[projects]]
-  branch = "master"
+  digest = "1:bcc46a0fbd9e933087bef394871256b5c60269575bb661935874729c65bbbf60"
+  name = "github.com/mitchellh/mapstructure"
+  packages = ["."]
+  pruneopts = ""
+  revision = "3536a929edddb9a5b34bd6861dc4a9647cb459fe"
+  version = "v1.1.2"
+
+[[projects]]
+  digest = "1:2e7f653483e51243b6cd6de60ce39bde0d6927d10a3c24295ab0f82cb1efeae2"
   name = "github.com/ugorji/go"
   packages = ["codec"]
-  revision = "5efa3251c7f7d05e5d9704a69a984ec9f1386a40"
+  pruneopts = ""
+  revision = "b4c50a2b199d93b13dc15e78929cfb23bfdf21ab"
+  version = "v1.1.1"
 
 [[projects]]
   branch = "master"
+  digest = "1:368c063ff749ce9640ae6b8b7ce31b863f351b3ce24687ddd78d3c005b9fe248"
   name = "golang.org/x/net"
-  packages = ["bpf","context"]
-  revision = "1c05540f6879653db88113bc4a2b70aec4bd491f"
+  packages = ["bpf"]
+  pruneopts = ""
+  revision = "4829fb13d2c62012c17688fa7f629f371014946d"
 
 [[projects]]
   branch = "master"
+  digest = "1:8c1099798d7c86cf3b800ee83f46aa4bf5acd7667ae569e968d42a22cf10a8a3"
   name = "golang.org/x/sys"
   packages = ["unix"]
-  revision = "92ac112afc6efd90284acda2b046fc0e351228f6"
+  pruneopts = ""
+  revision = "4347357a82bcaabf9afd9ab1ff230b5c31f54961"
+
+[[projects]]
+  digest = "1:cedccf16b71e86db87a24f8d4c70b0a855872eb967cb906a66b95de56aefbd0d"
+  name = "gopkg.in/yaml.v2"
+  packages = ["."]
+  pruneopts = ""
+  revision = "51d6538a90f86fe93ac480b35f37b2be17fef232"
+  version = "v2.2.2"
 
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "669c45c2c5a3d9cb3c1a64d28387a1dc43cf64b0b20f5b42942e56a500311799"
+  input-imports = [
+    "github.com/coreos/etcd/client",
+    "github.com/hashicorp/consul/api",
+    "github.com/mdlayher/arp",
+    "gopkg.in/yaml.v2",
+  ]
   solver-name = "gps-cdcl"
   solver-version = 1
