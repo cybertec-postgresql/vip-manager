@@ -8,7 +8,7 @@ Then run `dep ensure` from this directory. This should read the `Gopkg.lock` fil
 
 Afterwards try building vip-manager, using `make` .
 
-To build your own .deb or .rpm, `npm` is required. Install it, add it to your path and try running `make package`, which will generate a .deb package and will also convert that into a matching .rpm file.
+To build your own .deb or .rpm, `fpm` is required. Install it, add it to your path and try running `make package`, which will generate a .deb package and will also convert that into a matching .rpm file.
 
 ## Installing on debian
 
