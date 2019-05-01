@@ -19,5 +19,8 @@ type Config struct {
 
 	Consul_token string `yaml:consul_token`
 
-	Interval int `yaml:interval` //seconds
+	Interval int`yaml:interval` //milliseconds 
+
+	Retry_after int `yaml:retry_after` //milliseconds 
+	Retry_num   int `yaml:retry_num`
 }
