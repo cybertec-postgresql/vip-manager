@@ -72,21 +72,42 @@ func main() {
 		Etcd_user: *etcd_user, Etcd_password: *etcd_password, Interval: *interval}
 
 	if *configFile != "" {
-		yamlFile, yamlErr := ioutil.ReadFile(*configFile)
-		if yamlErr != nil {
-			log.Fatal("couldn't open config File!", yamlErr)
+		yamlFile, err := ioutil.ReadFile(*configFile)
+		if err != nil {
+			log.Fatal("couldn't open config File!", err)
 		}
-		yamlErr = yaml.Unmarshal(yamlFile, &conf)
-		if yamlErr != nil {
-			log.Fatalf("Unmarshal: %v", yamlErr)
+		log.Printf("reading config from %s", *configFile)
+		err = yaml.Unmarshal(yamlFile, &conf)
+		if err != nil {
+			log.Fatalf("Error while reading config file: %v", err)
 		}
+	} else {
+		log.Printf("No config file specified, using arguments only.")
 	}
 
 	checkFlag(conf.Ip, "IP")
 	checkFlag(conf.Iface, "network interface")
 	checkFlag(conf.Key, "key")
-	//check that at least one Endpoint is specified...
-	checkFlag(conf.Endpoints[0], "host name")
+
+	if len(conf.Endpoints) == 0 {
+		log.Print("No etcd/consul endpoints specified, trying to use localhost with standard ports!")
+		switch conf.Endpoint_type {
+		case "consul":
+			conf.Endpoints[0] = "http://127.0.0.1:2379"
+		case "etcd":
+			conf.Endpoints[0] = "http://127.0.0.1:8500"
+		}
+	}
+
+	if conf.Nodename == "" {
+		nodename, err := os.Hostname()
+		if err != nil {
+			log.Fatalf("No nodename specified, hostname could not be retrieved: %s", err)
+		} else {
+			log.Printf("No nodename specified, instead using hostname: %v", nodename)
+			conf.Nodename = nodename
+		}
+	}
 
 	states := make(chan bool)
 	lc, err := checker.NewLeaderChecker(conf)
@@ -100,9 +121,11 @@ func main() {
 	manager, err := NewIPManager(
 		*hostingType,
 		&IPConfiguration{
-			vip:     vip,
-			netmask: vipMask,
-			iface:   *netIface,
+			vip:         vip,
+			netmask:     vipMask,
+			iface:       *netIface,
+			Retry_num:   conf.Retry_num,
+			Retry_after: conf.Retry_after,
 		},
 		states,
 	)

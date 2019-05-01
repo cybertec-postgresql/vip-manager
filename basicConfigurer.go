@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"strings"
 	"syscall"
+	"time"
 
 	arp "github.com/mdlayher/arp"
 )
@@ -32,15 +33,31 @@ type BasicConfigurer struct {
 
 func NewBasicConfigurer(config *IPConfiguration) (*BasicConfigurer, error) {
 	c := &BasicConfigurer{IPConfiguration: config}
-
-	arpClient, err := arp.Dial(&c.iface)
+	err := c.createArpClient()
 	if err != nil {
-		log.Printf("Problems with producing the arp client: %s", err)
-		return nil, err
+		log.Fatalf("Couldn't create an Arp client: %s", err)
+	}
+	return c, nil
+}
+
+func (c *BasicConfigurer) createArpClient() error {
+	var err error
+	var arpClient *arp.Client
+	for i := 0; i < c.Retry_num; i++ {
+		arpClient, err = arp.Dial(&c.iface)
+		if err != nil {
+			log.Printf("Problems with producing the arp client: %s", err)
+		} else {
+			break
+		}
+		time.Sleep(time.Duration(c.Retry_after) * time.Millisecond)
+	}
+	if err != nil {
+		log.Print("too many retries")
+		return err
 	}
 	c.arpClient = arpClient
-
-	return c, nil
+	return nil
 }
 
 func (c *BasicConfigurer) ARPSendGratuitous() error {
@@ -57,9 +74,19 @@ func (c *BasicConfigurer) ARPSendGratuitous() error {
 		return err
 	}
 
-	err = c.arpClient.WriteTo(gratuitousPackage, ethernetBroadcast)
+	for i := 0; i < c.Retry_num; i++ {
+		err = c.arpClient.WriteTo(gratuitousPackage, ethernetBroadcast)
+		if err != nil {
+			log.Printf("Couldn't write to the arpClient: %s", err)
+
+			err = c.createArpClient()
+		} else {
+			break
+		}
+		time.Sleep(time.Duration(c.Retry_after) * time.Millisecond)
+	}
 	if err != nil {
-		log.Printf("Cannot send gratuitous arp message: %s", err)
+		log.Print("too many retries")
 		return err
 	}
 

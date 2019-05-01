@@ -3,12 +3,17 @@
 Manages a virtual IP based on state kept in etcd or Consul. Monitors state in etcd 
 
 ## building
-Please use go dep to install all dependencies. Install it, add it to your path...
-Then run `dep ensure` from this directory. This should read the `Gopkg.lock` file and download all dependencies.
+1. To make sure that internal includes (the vipconfig and the checker package) are satisfied, place the base directory of this project properly into your `$GOPATH`.
+    The resulting location should be `$GOPATH/src/github.com/cybertec-postgresql/vip-manager/`. The easiest way to do this is:
+    ```go get github.com/cybertec-postgresql/vip-manager```
 
-Afterwards try building vip-manager, using `make` .
+2. Please use go dep to install all dependencies. Install it, add it to your path...
+    Then run `dep ensure` from this directory. This should read the `Gopkg.lock` file and download all dependencies.
 
-To build your own .deb or .rpm, `npm` is required. Install it, add it to your path and try running `make package`, which will generate a .deb package and will also convert that into a matching .rpm file.
+3. Afterwards try building vip-manager, using `make` .
+
+4. To build your own .deb or .rpm, `npm` is required.
+    Install it, add it to your path and try running `make package`, which will generate a .deb package and will also convert that into a matching .rpm file.
 
 ## Installing on debian
 
@@ -24,8 +29,11 @@ To build your own .deb or .rpm, `npm` is required. Install it, add it to your pa
 * Edit config and start the service.
 
 ## Configuration
+The configuration can be passed to the executable through argument flags or through a YAML config file.
+> The location of the YAML config file can be specified with the -config flag.
+> An exemplary config file is installed into `/etc/default/vip-manager_default.yml` or is available in the vipconfig directory in the repository of the software.
 
-All configuration keys are currently mandatory.
+These configuration keys are currently mandatory:
 
 | Variable  | Example  | Description                                                                              |
 |-----------|----------|------------------------------------------------------------------------------------------|
@@ -36,6 +44,8 @@ All configuration keys are currently mandatory.
 | VIP_HOST  | serverX  | Value to trigger on. Must match name from Patroni.                                       |
 | VIP_TYPE  | etcd     | Type of endpoint (etcd or consul)                                                        |
 | VIP_ENDPOINT | http://10.1.2.3:2379 | Location of endpoint (etcd or consul)                                     |
+
+
 
 ## Author
 

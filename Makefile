@@ -22,7 +22,7 @@ install:
 	install -d $(DESTDIR)/etc/init.d/
 	install package/scripts/init-systemv.sh $(DESTDIR)/etc/init.d/vip-manager
 	install -d $(DESTDIR)/etc/default
-	install package/config/vip-manager_default.yml $(DESTDIR)/etc/default/vip-manager_default.yml
+	install vipconfig/vip-manager.yml $(DESTDIR)/etc/default/vip-manager.yml
 
 DESTDIR=tmp
 
@@ -46,7 +46,7 @@ package-deb: vip-manager
 	--deb-field 'Vcs-Browser: $(GITBROWSER)' \
 	--deb-upstream-changelog package/DEBIAN/changelog \
 	--deb-no-default-config-files \
-	--deb-default package/config/vip-manager_default.yml \
+	--deb-default vipconfig/vip-manager.yml \
 	--deb-systemd package/scripts/vip-manager.service \
 	usr/bin usr/share/doc/
 
