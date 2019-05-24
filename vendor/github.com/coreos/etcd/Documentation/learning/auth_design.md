@@ -1,4 +1,6 @@
-﻿# etcd v3 authentication design
+﻿---
+title: etcd v3 authentication design
+---
 
 ## Why not reuse the v2 auth system?
 
@@ -26,7 +28,7 @@ The metadata for auth should also be stored and managed in the storage controlle
 The authentication mechanism in the etcd v2 protocol has a tricky part because the metadata consistency should work as in the above, but does not: each permission check is processed by the etcd member that receives the client request (etcdserver/api/v2http/client.go), including follower members. Therefore, it's possible the check may be based on stale metadata.
 
 
-This staleness means that auth configuration cannot be reflected as soon as operators execute etcdctl. Therefore there is no way to know how long the stale metadata is active. Practically, the configuration change is reflected immediately after the command execution. However, in some cases of heavy load, the inconsistent state can be prolonged and it might result in counter-intuitive situations for users and developers. It requires a workaround like this: https://github.com/coreos/etcd/pull/4317#issuecomment-179037582
+This staleness means that auth configuration cannot be reflected as soon as operators execute etcdctl. Therefore there is no way to know how long the stale metadata is active. Practically, the configuration change is reflected immediately after the command execution. However, in some cases of heavy load, the inconsistent state can be prolonged and it might result in counter-intuitive situations for users and developers. It requires a workaround like this: https://github.com/etcd-io/etcd/pull/4317#issuecomment-179037582
 
 ### Inconsistent permissions are unsafe for linearized requests
 
@@ -38,7 +40,7 @@ Therefore, the permission checking logic should be added to the state machine of
 
 ### Authentication
 
-At first, a client must create a gRPC connection only to authenticate its user ID and password. An etcd server will respond with an authentication reply. The reponse will be an authentication token on success or an error on failure. The client can use its authentication token to present its credentials to etcd when making API requests.
+At first, a client must create a gRPC connection only to authenticate its user ID and password. An etcd server will respond with an authentication reply. The response will be an authentication token on success or an error on failure. The client can use its authentication token to present its credentials to etcd when making API requests.
 
 The client connection used to request the authentication token is typically thrown away; it cannot carry the new token's credentials. This is because gRPC doesn't provide a way for adding per RPC credential after creation of the connection (calling `grpc.Dial()`). Therefore, a client cannot assign a token to its connection that is obtained through the connection. The client needs a new connection for using the token.
 
@@ -60,7 +62,7 @@ For avoiding such a situation, the API layer performs *version number validation
 
 After authenticating with `Authenticate()`, a client can create a gRPC connection as it would without auth. In addition to the existing initialization process, the client must associate the token with the newly created connection. `grpc.WithPerRPCCredentials()` provides the functionality for this purpose.
 
-Every authenticated request from the client has a token. The token can be obtained with `grpc.metadata.FromContext()` in the server side. The server can obtain who is issuing the request and when the user was authorized. The information will be filled by the API layer in the header (`etcdserverpb.RequestHeader.Username` and `etcdserverpb.RequestHeader.AuthRevision`) of a raft log entry (`etcdserverpb.InternalRaftRequest`).
+Every authenticated request from the client has a token. The token can be obtained with `grpc.metadata.FromIncomingContext()` in the server side. The server can obtain who is issuing the request and when the user was authorized. The information will be filled by the API layer in the header (`etcdserverpb.RequestHeader.Username` and `etcdserverpb.RequestHeader.AuthRevision`) of a raft log entry (`etcdserverpb.InternalRaftRequest`).
 
 ### Checking permission in the state machine
 

@@ -16,6 +16,7 @@ package e2e
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 )
 
@@ -48,6 +49,29 @@ func TestCtlV3DelNoTLS(t *testing.T)     { testCtl(t, delTest, withCfg(configNoT
 func TestCtlV3DelClientTLS(t *testing.T) { testCtl(t, delTest, withCfg(configClientTLS)) }
 func TestCtlV3DelPeerTLS(t *testing.T)   { testCtl(t, delTest, withCfg(configPeerTLS)) }
 func TestCtlV3DelTimeout(t *testing.T)   { testCtl(t, delTest, withDialTimeout(0)) }
+
+func TestCtlV3GetRevokedCRL(t *testing.T) {
+	cfg := etcdProcessClusterConfig{
+		clusterSize:           1,
+		initialToken:          "new",
+		clientTLS:             clientTLS,
+		isClientCRL:           true,
+		clientCertAuthEnabled: true,
+	}
+	testCtl(t, testGetRevokedCRL, withCfg(cfg))
+}
+
+func testGetRevokedCRL(cx ctlCtx) {
+	// test reject
+	if err := ctlV3Put(cx, "k", "v", ""); err == nil || !strings.Contains(err.Error(), "Error:") {
+		cx.t.Fatalf("expected reset connection on put, got %v", err)
+	}
+	// test accept
+	cx.epc.cfg.isClientCRL = false
+	if err := ctlV3Put(cx, "k", "v", ""); err != nil {
+		cx.t.Fatal(err)
+	}
+}
 
 func putTest(cx ctlCtx) {
 	key, value := "foo", "bar"
@@ -198,21 +222,15 @@ func getRevTest(cx ctlCtx) {
 }
 
 func getKeysOnlyTest(cx ctlCtx) {
-	var (
-		kvs = []kv{{"key1", "val1"}}
-	)
-	for i := range kvs {
-		if err := ctlV3Put(cx, kvs[i].key, kvs[i].val, ""); err != nil {
-			cx.t.Fatalf("getKeysOnlyTest #%d: ctlV3Put error (%v)", i, err)
-		}
+	if err := ctlV3Put(cx, "key", "val", ""); err != nil {
+		cx.t.Fatal(err)
 	}
-
-	cmdArgs := append(cx.PrefixArgs(), "get")
-	cmdArgs = append(cmdArgs, []string{"--prefix", "--keys-only", "key"}...)
-
-	err := spawnWithExpects(cmdArgs, []string{"key1", ""}...)
-	if err != nil {
-		cx.t.Fatalf("getKeysOnlyTest : error (%v)", err)
+	cmdArgs := append(cx.PrefixArgs(), []string{"get", "--keys-only", "key"}...)
+	if err := spawnWithExpect(cmdArgs, "key"); err != nil {
+		cx.t.Fatal(err)
+	}
+	if err := spawnWithExpects(cmdArgs, "val"); err == nil {
+		cx.t.Fatalf("got value but passed --keys-only")
 	}
 }
 
