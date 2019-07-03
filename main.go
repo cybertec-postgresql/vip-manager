@@ -67,7 +67,7 @@ func main() {
 		return
 	}
 	//introduce parsed values into conf
-	conf = vipconfig.Config{Ip: *ip, Mask: *mask, Iface: *iface, HostingType: *hostingType,
+	conf = vipconfig.Config{Ip: *ip, Mask: *mask, Iface: *iface, Hosting_type: *hostingType,
 		Key: *key, Nodename: *host, Endpoint_type: *endpointType, Endpoints: []string{*endpoint},
 		Etcd_user: *etcd_user, Etcd_password: *etcd_password, Interval: *interval}
 
@@ -119,7 +119,7 @@ func main() {
 	vipMask := getMask(vip, conf.Mask)
 	netIface := getNetIface(conf.Iface)
 	manager, err := NewIPManager(
-		*hostingType,
+		conf.Hosting_type,
 		&IPConfiguration{
 			vip:         vip,
 			netmask:     vipMask,

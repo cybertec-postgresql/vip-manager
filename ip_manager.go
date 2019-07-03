@@ -44,6 +44,12 @@ func NewIPManager(hostingType string, config *IPConfiguration, states <-chan boo
 			return nil, err
 		}
 		m.configurer = c
+	case "windows":
+		c, err := NewWindowsConfigurer(config)
+		if err != nil {
+			return nil, err
+		}
+		m.configurer = c
 	case "basic":
 		fallthrough
 	default:

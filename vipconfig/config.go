@@ -7,7 +7,7 @@ type Config struct {
 	Mask  int    `yaml:mask`
 	Iface string `yaml:iface`
 
-	HostingType string `yaml:hosting_type`
+	Hosting_type string `yaml:hosting_type`
 
 	Key      string `yaml:key`
 	Nodename string `yaml:nodename` //hostname to trigger on. usually the name of the host where this vip-manager runs.
@@ -19,8 +19,8 @@ type Config struct {
 
 	Consul_token string `yaml:consul_token`
 
-	Interval int`yaml:interval` //milliseconds 
+	Interval int `yaml:interval` //milliseconds
 
-	Retry_after int `yaml:retry_after` //milliseconds 
+	Retry_after int `yaml:retry_after` //milliseconds
 	Retry_num   int `yaml:retry_num`
 }
