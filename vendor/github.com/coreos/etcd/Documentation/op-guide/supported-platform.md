@@ -1,12 +1,14 @@
-## Supported platforms
+---
+title: Supported systems
+---
 
-### Current support
+## Current support
 
-The following table lists etcd support status for common architectures and operating systems,
+The following table lists etcd support status for common architectures and operating systems:
 
 | Architecture | Operating System | Status       | Maintainers                 |
 | ------------ | ---------------- | ------------ | --------------------------- |
-| amd64        | Darwin           | Experimental | etcd maintainers            | 
+| amd64        | Darwin           | Experimental | etcd maintainers            |
 | amd64        | Linux            | Stable       | etcd maintainers            |
 | amd64        | Windows          | Experimental |                             |
 | arm64        | Linux            | Experimental | @glevand                    |
@@ -14,11 +16,11 @@ The following table lists etcd support status for common architectures and opera
 | 386          | Linux            | Unstable     |                             |
 | ppc64le      | Linux            | Stable       | etcd maintainers, @mkumatag |
 
-* etcd-maintainers are listed in https://github.com/coreos/etcd/blob/master/MAINTAINERS.
+* etcd-maintainers are listed in https://github.com/etcd-io/etcd/blob/master/MAINTAINERS.
 
 Experimental platforms appear to work in practice and have some platform specific code in etcd, but do not fully conform to the stable support policy. Unstable platforms have been lightly tested, but less than experimental. Unlisted architecture and operating system pairs are currently unsupported; caveat emptor.
 
-### Supporting a new platform
+## Supporting a new system platform
 
 For etcd to officially support a new platform as stable, a few requirements are necessary to ensure acceptable quality:
 
@@ -28,7 +30,7 @@ For etcd to officially support a new platform as stable, a few requirements are 
 4. Set up CI (TravisCI, SemaphoreCI or Jenkins) for running integration tests; etcd must pass intensive tests.
 5. (Optional) Set up a functional testing cluster; an etcd cluster should survive stress testing.
 
-### 32-bit and other unsupported systems
+## 32-bit and other unsupported systems
 
 etcd has known issues on 32-bit systems due to a bug in the Go runtime. See the [Go issue][go-issue] and [atomic package][go-atomic] for more information.
 

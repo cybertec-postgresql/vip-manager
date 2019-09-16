@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/cybertec-postgresql/vip-manager/vipconfig"
 	"github.com/hashicorp/consul/api"
 )
 
@@ -15,13 +16,19 @@ type ConsulLeaderChecker struct {
 	apiClient *api.Client
 }
 
-func NewConsulLeaderChecker(endpoint, key, nodename string) (*ConsulLeaderChecker, error) {
+//naming this c_conf to avoid conflict with conf in etcd_leader_checker.go
+var c_conf vipconfig.Config
+
+//func NewConsulLeaderChecker(endpoint, key, nodename string) (*ConsulLeaderChecker, error) {
+func NewConsulLeaderChecker(con vipconfig.Config) (*ConsulLeaderChecker, error) {
+	c_conf = con
+
 	lc := &ConsulLeaderChecker{
-		key:      key,
-		nodename: nodename,
+		key:      c_conf.Key,
+		nodename: c_conf.Nodename,
 	}
 
-	url, err := url.Parse(endpoint)
+	url, err := url.Parse(c_conf.Endpoints[0])
 	if err != nil {
 		return nil, err
 	}
@@ -31,6 +38,10 @@ func NewConsulLeaderChecker(endpoint, key, nodename string) (*ConsulLeaderChecke
 		Address:  address,
 		Scheme:   url.Scheme,
 		WaitTime: time.Second,
+	}
+
+	if c_conf.Consul_token != ""{
+		config.Token = c_conf.Consul_token
 	}
 
 	apiClient, err := api.NewClient(config)
@@ -43,7 +54,7 @@ func NewConsulLeaderChecker(endpoint, key, nodename string) (*ConsulLeaderChecke
 	return lc, nil
 }
 
-func (c *ConsulLeaderChecker) GetChangeNotificationStream(ctx context.Context, out chan<- bool, interval int) error {
+func (c *ConsulLeaderChecker) GetChangeNotificationStream(ctx context.Context, out chan<- bool) error {
 	kv := c.apiClient.KV()
 
 	queryOptions := &api.QueryOptions{
@@ -59,13 +70,13 @@ checkLoop:
 			}
 			log.Printf("consul error: %s", err)
 			out <- false
-			time.Sleep(time.Duration(interval) * time.Millisecond)
+			time.Sleep(time.Duration(c_conf.Interval) * time.Millisecond)
 			continue
 		}
 		if resp == nil {
 			log.Printf("Cannot get variable for key %s. Will try again in a second.", c.key)
 			out <- false
-			time.Sleep(time.Duration(interval) * time.Millisecond)
+			time.Sleep(time.Duration(c_conf.Interval) * time.Millisecond)
 			continue
 		}
 
@@ -76,7 +87,7 @@ checkLoop:
 		case <-ctx.Done():
 			break checkLoop
 		case out <- state:
-			time.Sleep(time.Duration(interval) * time.Millisecond)
+			time.Sleep(time.Duration(c_conf.Interval) * time.Millisecond)
 			continue
 		}
 	}

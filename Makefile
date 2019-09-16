@@ -1,5 +1,5 @@
 NAME=vip-manager
-VERSION=0.4-1
+VERSION=0.6-1
 ARCH=amd64
 LICENSE="BSD 2-Clause License"
 MAINTAINER="Ants Aasma <ants@cybertec.at>"
@@ -22,17 +22,20 @@ install:
 	install -d $(DESTDIR)/etc/init.d/
 	install package/scripts/init-systemv.sh $(DESTDIR)/etc/init.d/vip-manager
 	install -d $(DESTDIR)/etc/default
-	install package/scripts/vip-manager.default $(DESTDIR)/etc/default/vip-manager
+	install vipconfig/vip-manager.yml $(DESTDIR)/etc/default/vip-manager.yml
 
 DESTDIR=tmp
 
 .PHONY: package
-package: vip-manager
+
+package: package-deb package-rpm
+
+package-deb: vip-manager
 	install -d $(DESTDIR)/usr/bin
 	install vip-manager $(DESTDIR)/usr/bin/vip-manager
 	install -d $(DESTDIR)/usr/share/doc/$(NAME)
 	install --mode=644 package/DEBIAN/copyright $(DESTDIR)/usr/share/doc/$(NAME)/copyright
-	fpm -s dir -t deb -n $(NAME) -v $(VERSION) -C $(DESTDIR) \
+	fpm -f -s dir -t deb -n $(NAME) -v $(VERSION) -C $(DESTDIR) \
 	-p $(NAME)_$(VERSION)_$(ARCH).deb \
 	--license $(LICENSE) \
 	--maintainer $(MAINTAINER) \
@@ -43,11 +46,17 @@ package: vip-manager
 	--deb-field 'Vcs-Browser: $(GITBROWSER)' \
 	--deb-upstream-changelog package/DEBIAN/changelog \
 	--deb-no-default-config-files \
-	--deb-default package/config/vip-manager.default \
+	--deb-default vipconfig/vip-manager.yml \
 	--deb-systemd package/scripts/vip-manager.service \
 	usr/bin usr/share/doc/
+
+package-rpm: package-deb
+	fpm -f -s deb -t rpm -n $(NAME) -v $(VERSION) -C $(DESTDIR) \
+	-p $(NAME)_$(VERSION)_$(ARCH).rpm \
+	$(NAME)_$(VERSION)_$(ARCH).deb
 
 clean:
 	rm -f vip-manager
 	rm -f vip-manager*.deb
+	rm -f vip-manager*.rpm
 	rm -fr $(DESTDIR)

@@ -1,4 +1,6 @@
-## Upgrade etcd from 3.0 to 3.1
+---
+title: Upgrade etcd from 3.0 to 3.1
+---
 
 In the general case, upgrading from etcd 3.0 to 3.1 can be a zero-downtime, rolling upgrade:
  - one by one, stop the etcd v3.0 processes and replace them with etcd v3.1 processes
@@ -7,6 +9,17 @@ In the general case, upgrading from etcd 3.0 to 3.1 can be a zero-downtime, roll
 Before [starting an upgrade](#upgrade-procedure), read through the rest of this guide to prepare.
 
 ### Upgrade checklists
+
+**NOTE:** When [migrating from v2 with no v3 data](https://github.com/etcd-io/etcd/issues/9480), etcd server v3.2+ panics when etcd restores from existing snapshots but no v3 `ETCD_DATA_DIR/member/snap/db` file. This happens when the server had migrated from v2 with no previous v3 data. This also prevents accidental v3 data loss (e.g. `db` file might have been moved). etcd requires that post v3 migration can only happen with v3 data. Do not upgrade to newer v3 versions until v3.0 server contains v3 data.
+
+#### Monitoring
+
+Following metrics from v3.0.x have been deprecated in favor of [go-grpc-prometheus](https://github.com/grpc-ecosystem/go-grpc-prometheus):
+
+- `etcd_grpc_requests_total`
+- `etcd_grpc_requests_failed_total`
+- `etcd_grpc_active_streams`
+- `etcd_grpc_unary_requests_duration_seconds`
 
 #### Upgrade requirements
 

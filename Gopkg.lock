@@ -2,92 +2,150 @@
 
 
 [[projects]]
+  digest = "1:c24b0a8a58ed35844fcff6d3a816bb529492cf9a2fefc80e275ad40de7ad1919"
   name = "github.com/coreos/etcd"
-  packages = ["client","pkg/pathutil","pkg/srv","pkg/types","version"]
-  revision = "d0d1a87aa96ae14914751d42264262cb69eda170"
-  version = "v3.2.5"
+  packages = [
+    "client",
+    "pkg/pathutil",
+    "pkg/srv",
+    "pkg/types",
+    "version",
+  ]
+  pruneopts = ""
+  revision = "98d308426819d892e149fe45f6fd542464cb1f9d"
+  version = "v3.3.13"
 
 [[projects]]
+  digest = "1:3c3f68ebab415344aef64363d23471e953a4715645115604aaf57923ae904f5e"
   name = "github.com/coreos/go-semver"
   packages = ["semver"]
+  pruneopts = ""
   revision = "8ab6407b697782a06568d4b7f1db25550ec2e4c6"
   version = "v0.2.0"
 
 [[projects]]
-  branch = "master"
-  name = "github.com/cybertec-postgresql/vip-manager"
-  packages = ["checker"]
-  revision = "1f6ef79dce5576223a6f87a4998248c305835804"
-
-[[projects]]
+  digest = "1:3f152ddf1c7cae3fcb0d6a81c4f2e2b16a532bad08a5759320635c0bc1ee77b1"
   name = "github.com/hashicorp/consul"
   packages = ["api"]
+  pruneopts = ""
   revision = "75ca2cace08e38de8af1731ee8614d0533d5a4d4"
   version = "v0.9.2"
 
 [[projects]]
   branch = "master"
+  digest = "1:ae263e6b149fb7aadfc0f2284a8891cc3b9d2700e58b9a613fecf70fcc6e495d"
   name = "github.com/hashicorp/go-cleanhttp"
   packages = ["."]
+  pruneopts = ""
   revision = "3573b8b52aa7b37b9358d966a898feb387f62437"
 
 [[projects]]
   branch = "master"
+  digest = "1:ff65bf6fc4d1116f94ac305342725c21b55c16819c2606adc8f527755716937f"
   name = "github.com/hashicorp/go-rootcerts"
   packages = ["."]
+  pruneopts = ""
   revision = "6bb64b370b90e7ef1fa532be9e591a81c3493e00"
 
 [[projects]]
+  digest = "1:f72168ea995f398bab88e84bd1ff58a983466ba162fb8d50d47420666cd57fad"
   name = "github.com/hashicorp/serf"
   packages = ["coordinate"]
+  pruneopts = ""
   revision = "d6574a5bb1226678d7010325fb6c985db20ee458"
   version = "v0.8.1"
 
 [[projects]]
+  digest = "1:12d3de2c11e54ea37d7f00daf85088ad5e61ec4e8a1f828d6c8b657976856be7"
+  name = "github.com/json-iterator/go"
+  packages = ["."]
+  pruneopts = ""
+  revision = "0ff49de124c6f76f8494e194af75bde0f1a49a29"
+  version = "v1.1.6"
+
+[[projects]]
   branch = "master"
+  digest = "1:39509fc0baedf78b5d384abe8d01824ac2f58a14760bb57b8a962185deb0eb7b"
   name = "github.com/mdlayher/arp"
   packages = ["."]
+  pruneopts = ""
   revision = "43953fc6354aa71b6d6814755eceba262eae9246"
 
 [[projects]]
   branch = "master"
+  digest = "1:fdbcf8c617ed9a08bc82c19c577664e50698e402af7669a75224858442ba70a6"
   name = "github.com/mdlayher/ethernet"
   packages = ["."]
+  pruneopts = ""
   revision = "e72cf8343052938936194daba1914fd1bb33d2fe"
 
 [[projects]]
   branch = "master"
+  digest = "1:c0e8e4bb5e4b9db286aaa5e98d883a4d7e40a962091eff7549b74ee4a7230c71"
   name = "github.com/mdlayher/raw"
   packages = ["."]
+  pruneopts = ""
   revision = "156e9b63ae185a43fd1726bbee88eb0109afe5f4"
 
 [[projects]]
   branch = "master"
+  digest = "1:59d11e81d6fdd12a771321696bb22abdd9a94d26ac864787e98c9b419e428734"
   name = "github.com/mitchellh/go-homedir"
   packages = ["."]
+  pruneopts = ""
   revision = "b8bc1bf767474819792c23f32d8286a45736f1c6"
 
 [[projects]]
-  branch = "master"
-  name = "github.com/ugorji/go"
-  packages = ["codec"]
-  revision = "5efa3251c7f7d05e5d9704a69a984ec9f1386a40"
+  digest = "1:0c0ff2a89c1bb0d01887e1dac043ad7efbf3ec77482ef058ac423d13497e16fd"
+  name = "github.com/modern-go/concurrent"
+  packages = ["."]
+  pruneopts = ""
+  revision = "bacd9c7ef1dd9b15be4a9909b8ac7a4e313eec94"
+  version = "1.0.3"
+
+[[projects]]
+  digest = "1:e32bdbdb7c377a07a9a46378290059822efdce5c8d96fe71940d87cb4f918855"
+  name = "github.com/modern-go/reflect2"
+  packages = ["."]
+  pruneopts = ""
+  revision = "4b7aa43c6742a2c18fdef89dd197aaae7dac7ccd"
+  version = "1.0.1"
 
 [[projects]]
   branch = "master"
+  digest = "1:35171304d8332a0cfac5f3bd9222467f036732ddde75c65278b16f65216e03ed"
   name = "golang.org/x/net"
-  packages = ["bpf","context"]
+  packages = [
+    "bpf",
+    "context",
+  ]
+  pruneopts = ""
   revision = "1c05540f6879653db88113bc4a2b70aec4bd491f"
 
 [[projects]]
   branch = "master"
+  digest = "1:a67e20a897efd79402efc713c2c37af983af83ee6a80bdca40d602c12a347283"
   name = "golang.org/x/sys"
   packages = ["unix"]
+  pruneopts = ""
   revision = "92ac112afc6efd90284acda2b046fc0e351228f6"
+
+[[projects]]
+  digest = "1:cedccf16b71e86db87a24f8d4c70b0a855872eb967cb906a66b95de56aefbd0d"
+  name = "gopkg.in/yaml.v2"
+  packages = ["."]
+  pruneopts = ""
+  revision = "51d6538a90f86fe93ac480b35f37b2be17fef232"
+  version = "v2.2.2"
 
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "669c45c2c5a3d9cb3c1a64d28387a1dc43cf64b0b20f5b42942e56a500311799"
+  input-imports = [
+    "github.com/coreos/etcd/client",
+    "github.com/hashicorp/consul/api",
+    "github.com/mdlayher/arp",
+    "gopkg.in/yaml.v2",
+  ]
   solver-name = "gps-cdcl"
   solver-version = 1

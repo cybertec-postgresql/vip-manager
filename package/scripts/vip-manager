@@ -40,6 +40,14 @@ if [ -z "$VIP_KEY" ]; then
     VIP_OPTS="$VIP_OPTS -key=$VIP_KEY"
 fi
 
+if [ -z "$VIP_ETCD_USER" ]; then
+    VIP_OPTS="$VIP_OPTS -etcd_user=$VIP_ETCD_USER"
+fi
+
+if [ -z "$VIP_ETCD_PASSWORD" ]; then
+    VIP_OPTS="$VIP_OPTS -etcd_password=$VIP_ETCD_USER"
+fi
+
 if [ -z "$VIP_HOST" ]; then
     VIP_OPTS="$VIP_OPTS -host=$VIP_HOST"
 fi
@@ -54,6 +62,10 @@ fi
 
 if [ -z "$VIP_MASK" ]; then
     VIP_OPTS="$VIP_OPTS -type=$VIP_MASK"
+fi
+
+if [ -z "$VIP_HOSTINGTYPE" ]; then
+    VIP_OPTS="$VIP_OPTS -hostingtype=$VIP_HOSTINGTYPE"
 fi
 
 if [ -z "$STDOUT" ]; then

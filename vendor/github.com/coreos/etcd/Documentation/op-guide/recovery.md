@@ -1,4 +1,6 @@
-## Disaster recovery
+---
+title: Disaster recovery
+---
 
 etcd is designed to withstand machine failures. An etcd cluster automatically recovers from temporary failures (e.g., machine reboots) and tolerates up to *(N-1)/2* permanent failures for a cluster of N members. When a member permanently fails, whether due to hardware failure or disk corruption, it loses access to the cluster. If the cluster permanently loses more than *(N-1)/2* members then it disastrously fails, irrevocably losing quorum. Once quorum is lost, the cluster cannot reach consensus and therefore cannot continue accepting updates.
 
@@ -6,7 +8,7 @@ To recover from disastrous failure, etcd v3 provides snapshot and restore facili
 
 [v2_recover]: ../v2/admin_guide.md#disaster-recovery
 
-### Snapshotting the keyspace
+## Snapshotting the keyspace
 
 Recovering a cluster first needs a snapshot of the keyspace from an etcd member. A snapshot may either be taken from a live member with the `etcdctl snapshot save` command or by copying the `member/snap/db` file from an etcd data directory. For example, the following command snapshots the keyspace served by `$ENDPOINT` to the file `snapshot.db`:
 
@@ -14,7 +16,7 @@ Recovering a cluster first needs a snapshot of the keyspace from an etcd member.
 $ ETCDCTL_API=3 etcdctl --endpoints $ENDPOINT snapshot save snapshot.db
 ```
 
-### Restoring a cluster
+## Restoring a cluster
 
 To restore a cluster, all that is needed is a single snapshot "db" file. A cluster restore with `etcdctl snapshot restore` creates new etcd data directories; all members should restore using the same snapshot. Restoring overwrites some snapshot metadata (specifically, the member ID and cluster ID); the member loses its former identity. This metadata overwrite prevents the new member from inadvertently joining an existing cluster. Therefore in order to start a cluster from a snapshot, the restore must start a new logical cluster.
 
@@ -61,3 +63,9 @@ $ etcd \
 ```
 
 Now the restored etcd cluster should be available and serving the keyspace given by the snapshot.
+
+## Restoring a cluster from membership mis-reconfiguration with wrong URLs
+
+Previously, etcd panics on [membership mis-reconfiguration with wrong URLs](https://github.com/etcd-io/etcd/issues/9173) (v3.2.15 or later returns [error early in client-side](https://github.com/etcd-io/etcd/pull/9174) before etcd server panic).
+
+Recommended way is restore from [snapshot](#snapshotting-the-keyspace). `--force-new-cluster` can be used to overwrite cluster membership while keeping existing application data, but is strongly discouraged because it will panic if other members from previous cluster are still alive. Make sure to save snapshot periodically.

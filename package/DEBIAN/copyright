@@ -3,7 +3,7 @@ Upstream-Name: vip-manager
 Source: <http://github.com/cybertec-postgresql/vip-manager>
 
 Files: *
-Copyright: 2017 Ants Aasma <ants@cybertec.at>
+Copyright: 2017-2019 Ants Aasma <ants@cybertec.at>
 License: BSD-2-clause
  All rights reserved.
  .

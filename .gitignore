@@ -1,3 +1,4 @@
 /vip-manager
 *.deb
+*.rpm
 tmp/

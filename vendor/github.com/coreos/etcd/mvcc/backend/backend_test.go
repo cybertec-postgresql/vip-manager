@@ -22,7 +22,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/boltdb/bolt"
+	bolt "github.com/coreos/bbolt"
 )
 
 func TestBackendClose(t *testing.T) {
@@ -247,6 +247,56 @@ func TestBackendWriteback(t *testing.T) {
 		if !reflect.DeepEqual(tt.wkey, k) || !reflect.DeepEqual(tt.wval, v) {
 			t.Errorf("#%d: want k=%+v, v=%+v; got k=%+v, v=%+v", i, tt.wkey, tt.wval, k, v)
 		}
+	}
+}
+
+// TestBackendWritebackForEach checks that partially written / buffered
+// data is visited in the same order as fully committed data.
+func TestBackendWritebackForEach(t *testing.T) {
+	b, tmpPath := NewTmpBackend(time.Hour, 10000)
+	defer cleanup(b, tmpPath)
+
+	tx := b.BatchTx()
+	tx.Lock()
+	tx.UnsafeCreateBucket([]byte("key"))
+	for i := 0; i < 5; i++ {
+		k := []byte(fmt.Sprintf("%04d", i))
+		tx.UnsafePut([]byte("key"), k, []byte("bar"))
+	}
+	tx.Unlock()
+
+	// writeback
+	b.ForceCommit()
+
+	tx.Lock()
+	tx.UnsafeCreateBucket([]byte("key"))
+	for i := 5; i < 20; i++ {
+		k := []byte(fmt.Sprintf("%04d", i))
+		tx.UnsafePut([]byte("key"), k, []byte("bar"))
+	}
+	tx.Unlock()
+
+	seq := ""
+	getSeq := func(k, v []byte) error {
+		seq += string(k)
+		return nil
+	}
+	rtx := b.ReadTx()
+	rtx.Lock()
+	rtx.UnsafeForEach([]byte("key"), getSeq)
+	rtx.Unlock()
+
+	partialSeq := seq
+
+	seq = ""
+	b.ForceCommit()
+
+	tx.Lock()
+	tx.UnsafeForEach([]byte("key"), getSeq)
+	tx.Unlock()
+
+	if seq != partialSeq {
+		t.Fatalf("expected %q, got %q", seq, partialSeq)
 	}
 }
 

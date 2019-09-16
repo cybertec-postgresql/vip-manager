@@ -1,4 +1,6 @@
-# gRPC proxy
+---
+title: gRPC proxy
+---
 
 The gRPC proxy is a stateless etcd reverse proxy operating at the gRPC layer (L7). The proxy is designed to reduce the total processing load on the core etcd cluster. For horizontal scalability, it coalesces watch and lease API requests. To protect the cluster against abusive clients, it caches key range requests.
 
@@ -85,14 +87,14 @@ Start the etcd gRPC proxy to use these static endpoints with the command:
 $ etcd grpc-proxy start --endpoints=infra0.example.com,infra1.example.com,infra2.example.com --listen-addr=127.0.0.1:2379
 ```
 
-The etcd gRPC proxy starts and listens on port 8080. It forwards client requests to one of the three endpoints provided above.
+The etcd gRPC proxy starts and listens on port 2379. It forwards client requests to one of the three endpoints provided above.
 
 Sending requests through the proxy:
 
 ```bash
-$ ETCDCTL_API=3 ./etcdctl --endpoints=127.0.0.1:2379 put foo bar
+$ ETCDCTL_API=3 etcdctl --endpoints=127.0.0.1:2379 put foo bar
 OK
-$ ETCDCTL_API=3 ./etcdctl --endpoints=127.0.0.1:2379 get foo
+$ ETCDCTL_API=3 etcdctl --endpoints=127.0.0.1:2379 get foo
 foo
 bar
 ```
@@ -120,7 +122,7 @@ $ etcd grpc-proxy start --endpoints=localhost:2379 \
 The proxy will list all its members for member list:
 
 ```bash
-ETCDCTL_API=3 ./bin/etcdctl --endpoints=http://localhost:23790 member list --write-out table
+ETCDCTL_API=3 etcdctl --endpoints=http://localhost:23790 member list --write-out table
 
 +----+---------+--------------------------------+------------+-----------------+
 | ID | STATUS  |              NAME              | PEER ADDRS |  CLIENT ADDRS   |
@@ -155,10 +157,10 @@ $ etcd grpc-proxy start --endpoints=localhost:2379 \
   --advertise-client-url=127.0.0.1:23792
 ```
 
-the member list API to the grpc-proxy returns its own `advertise-client-url`:
+The member list API to the grpc-proxy returns its own `advertise-client-url`:
 
 ```bash
-ETCDCTL_API=3 ./bin/etcdctl --endpoints=http://localhost:23792 member list --write-out table
+ETCDCTL_API=3 etcdctl --endpoints=http://localhost:23792 member list --write-out table
 
 +----+---------+--------------------------------+------------+-----------------+
 | ID | STATUS  |              NAME              | PEER ADDRS |  CLIENT ADDRS   |
@@ -182,12 +184,69 @@ $ etcd grpc-proxy start --endpoints=localhost:2379 \
 Accesses to the proxy are now transparently prefixed on the etcd cluster:
 
 ```bash
-$ ETCDCTL_API=3 ./bin/etcdctl --endpoints=localhost:23790 put my-key abc
+$ ETCDCTL_API=3 etcdctl --endpoints=localhost:23790 put my-key abc
 # OK
-$ ETCDCTL_API=3 ./bin/etcdctl --endpoints=localhost:23790 get my-key
+$ ETCDCTL_API=3 etcdctl --endpoints=localhost:23790 get my-key
 # my-key
 # abc
-$ ETCDCTL_API=3 ./bin/etcdctl --endpoints=localhost:2379 get my-prefix/my-key
+$ ETCDCTL_API=3 etcdctl --endpoints=localhost:2379 get my-prefix/my-key
 # my-prefix/my-key
 # abc
+```
+
+## TLS termination
+
+Terminate TLS from a secure etcd cluster with the gRPC proxy by serving an unencrypted local endpoint.
+
+To try it out, start a single member etcd cluster with client https:
+
+```sh
+$ etcd --listen-client-urls https://localhost:2379 --advertise-client-urls https://localhost:2379 --cert-file=peer.crt --key-file=peer.key --trusted-ca-file=ca.crt --client-cert-auth
+```
+
+Confirm the client port is serving https:
+
+```sh
+# fails
+$ ETCDCTL_API=3 etcdctl --endpoints=http://localhost:2379 endpoint status
+# works
+$ ETCDCTL_API=3 etcdctl --endpoints=https://localhost:2379 --cert=client.crt --key=client.key --cacert=ca.crt endpoint status
+```
+
+Next, start a gRPC proxy on `localhost:12379` by connecting to the etcd endpoint `https://localhost:2379` using the client certificates:
+
+```sh
+$ etcd grpc-proxy start --endpoints=https://localhost:2379 --listen-addr localhost:12379 --cert client.crt --key client.key --cacert=ca.crt --insecure-skip-tls-verify &
+```
+
+Finally, test the TLS termination by putting a key into the proxy over http:
+
+```sh
+$ ETCDCTL_API=3 etcdctl --endpoints=http://localhost:12379 put abc def
+# OK
+```
+
+## Metrics and Health
+
+The gRPC proxy exposes `/health` and Prometheus `/metrics` endpoints for the etcd members defined by `--endpoints`. An alternative define an additional URL that will respond to both the `/metrics` and `/health` endpoints with the `--metrics-addr` flag.
+
+```bash
+$ etcd grpc-proxy start \
+  --endpoints https://localhost:2379 \
+  --metrics-addr https://0.0.0.0:4443 \
+  --listen-addr 127.0.0.1:23790 \
+  --key client.key \
+  --key-file proxy-server.key \
+  --cert client.crt \
+  --cert-file proxy-server.crt \
+  --cacert ca.pem \
+  --trusted-ca-file proxy-ca.pem
+ ```
+
+### Known issue
+
+The main interface of the proxy serves both HTTP2 and HTTP/1.1. If proxy is setup with TLS as show in the above example, when using a client such as cURL against the listening interface will require explicitly setting the protocol to HTTP/1.1 on the request to return `/metrics` or `/health`. By using the `--metrics-addr` flag the secondary interface will not have this requirement.
+
+```bash
+ $ curl --cacert proxy-ca.pem --key proxy-client.key --cert proxy-client.crt https://127.0.0.1:23790/metrics --http1.1
 ```

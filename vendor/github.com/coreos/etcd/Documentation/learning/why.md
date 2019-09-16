@@ -1,17 +1,19 @@
-# Why etcd
+---
+title: etcd versus other key-value stores
+---
 
-The name "etcd" originated from two ideas, the unix "/etc" folder and "d"istibuted systems. The "/etc" folder is a place to store configuration data for a single system whereas etcd stores configuration information for large scale distributed systems. Hence, a "d"istributed "/etc" is "etcd".
+The name "etcd" originated from two ideas, the unix "/etc" folder and "d"istributed systems. The "/etc" folder is a place to store configuration data for a single system whereas etcd stores configuration information for large scale distributed systems. Hence, a "d"istributed "/etc" is "etcd".
 
-etcd stores metadata in a consistent and fault-tolerant way. Distributed systems use etcd as a consistent key-value store for configuration management, service discovery, and coordinating distributed work. Common distributed patterns using etcd include [leader election][etcd-etcdctl-elect], [distributed locks][etcd-etcdctl-lock], and monitoring machine liveness.
+etcd is designed as a general substrate for large scale distributed systems. These are systems that will never tolerate split-brain operation and are willing to sacrifice availability to achieve this end. etcd stores metadata in a consistent and fault-tolerant way. An etcd cluster is meant to provide key-value storage with best of class stability, reliability, scalability and performance.
+
+Distributed systems use etcd as a consistent key-value store for configuration management, service discovery, and coordinating distributed work. Many [organizations][production-users] use etcd to implement production systems such as container schedulers, service discovery services, and distributed data storage. Common distributed patterns using etcd include [leader election][etcd-etcdctl-elect], [distributed locks][etcd-etcdctl-lock], and monitoring machine liveness.
 
 ## Use cases
 
-- Container Linux by CoreOS: Application running on [Container Linux][container-linux] gets automatic, zero-downtime Linux kernel updates. Container Linux uses [locksmith] to coordinate updates. locksmith implements a distributed semaphore over etcd to ensure only a subset of a cluster is rebooting at any given time.
+- Container Linux by CoreOS: Applications running on [Container Linux][container-linux] get automatic, zero-downtime Linux kernel updates. Container Linux uses [locksmith] to coordinate updates. Locksmith implements a distributed semaphore over etcd to ensure only a subset of a cluster is rebooting at any given time.
 - [Kubernetes][kubernetes] stores configuration data into etcd for service discovery and cluster management; etcd's consistency is crucial for correctly scheduling and operating services. The Kubernetes API server persists cluster state into etcd. It uses etcd's watch API to monitor the cluster and roll out critical configuration changes.
 
-## etcd versus other key-value stores
-
-When deciding whether to use etcd as a key-value store, it’s worth keeping in mind etcd’s main goal. Namely, etcd is designed as a general substrate for large scale distributed systems. These are systems that will never tolerate split-brain operation and are willing to sacrifice availability to achieve this end. An etcd cluster is meant to provide consistent key-value storage with best of class stability, reliability, scalability and performance. The upshot of this focus is many [organizations][production-users] already use etcd to implement production systems such as container schedulers, service discovery services, distributed data storage, and more.
+## Comparison chart
 
 Perhaps etcd already seems like a good fit, but as with all technological decisions, proceed with caution. Please note this documentation is written by the etcd team. Although the ideal is a disinterested comparison of technology and features, the authors’ expertise and biases obviously favor etcd. Use only as directed.
 
@@ -47,7 +49,7 @@ When considering features, support, and stability, new applications planning to 
 
 ### Consul
 
-Consul bills itself as an end-to-end service discovery framework. To wit, it includes services such as health checking, failure detection, and DNS. Incidentally, Consul also exposes a key value store with mediocre performance and an intricate API. As it stands in Consul 0.7, the storage system does not scales well; systems requiring millions of keys will suffer from high latencies and memory pressure. The key value API is missing, most notably, multi-version keys, conditional transactions, and reliable streaming watches.
+Consul is an end-to-end service discovery framework. It provides built-in health checking, failure detection, and DNS services. In addition, Consul exposes a key value store with RESTful HTTP APIs. [As it stands in Consul 1.0][dbtester-comparison-results], the storage system does not scale as well as other systems like etcd or Zookeeper in key-value operations; systems requiring millions of keys will suffer from high latencies and memory pressure. The key value API is missing, most notably, multi-version keys, conditional transactions, and reliable streaming watches.
 
 etcd and Consul solve different problems. If looking for a distributed consistent key value store, etcd is a better choice over Consul. If looking for end-to-end cluster service discovery, etcd will not have enough features; choose Kubernetes, Consul, or SmartStack.
 
@@ -76,18 +78,18 @@ In theory, it’s possible to build these primitives atop any storage systems pr
 For distributed coordination, choosing etcd can help prevent operational headaches and save engineering effort.
 
 [production-users]: ../production-users.md
-[grpc]: http://www.grpc.io
+[grpc]: https://www.grpc.io
 [consul-bulletproof]: https://www.consul.io/docs/internals/sessions.html
 [curator]: http://curator.apache.org/
 [cockroach]: https://github.com/cockroachdb/cockroach
 [spanner]: https://cloud.google.com/spanner/
 [tidb]: https://github.com/pingcap/tidb
-[etcd-v3lock]: https://godoc.org/github.com/coreos/etcd/etcdserver/api/v3lock/v3lockpb
-[etcd-v3election]: https://godoc.org/github.com/coreos/etcd/etcdserver/api/v3election/v3electionpb
-[etcd-etcdctl-lock]: ../../etcdctl/README.md#lock-lockname
+[etcd-v3lock]: https://godoc.org/github.com/etcd-io/etcd/etcdserver/api/v3lock/v3lockpb
+[etcd-v3election]: https://godoc.org/github.com/coreos/etcd-io/etcdserver/api/v3election/v3electionpb
+[etcd-etcdctl-lock]: ../../etcdctl/README.md#lock-lockname-command-arg1-arg2-
 [etcd-etcdctl-elect]: ../../etcdctl/README.md#elect-options-election-name-proposal
 [etcd-mvcc]: data_model.md
-[etcd-recipe]: https://godoc.org/github.com/coreos/etcd/contrib/recipes
+[etcd-recipe]: https://godoc.org/github.com/etcd-io/etcd/contrib/recipes
 [consul-lock]: https://www.consul.io/docs/commands/lock.html
 [newsql-leader]: http://dl.acm.org/citation.cfm?id=2960999
 [etcd-reconfig]: ../op-guide/runtime-configuration.md
@@ -107,10 +109,10 @@ For distributed coordination, choosing etcd can help prevent operational headach
 [etcd-rbac]: ../op-guide/authentication.md#working-with-roles
 [zk-acl]: https://zookeeper.apache.org/doc/r3.1.2/zookeeperProgrammers.html#sc_ZooKeeperAccessControl
 [consul-acl]: https://www.consul.io/docs/internals/acl.html
-[cockroach-grant]: https://www.cockroachlabs.com/docs/grant.html
+[cockroach-grant]: https://www.cockroachlabs.com/docs/stable/grant.html
 [spanner-roles]: https://cloud.google.com/spanner/docs/iam#roles
 [zk-bindings]: https://zookeeper.apache.org/doc/r3.1.2/zookeeperProgrammers.html#ch_bindings
 [container-linux]: https://coreos.com/why
 [locksmith]: https://github.com/coreos/locksmith
-[kubernetes]: http://kubernetes.io/docs/whatisk8s
-
+[kubernetes]: https://kubernetes.io/docs/concepts/overview/what-is-kubernetes/
+[dbtester-comparison-results]: https://github.com/coreos/dbtester/tree/master/test-results/2018Q1-02-etcd-zookeeper-consul
