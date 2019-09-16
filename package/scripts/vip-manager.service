@@ -7,6 +7,7 @@ Before=patroni.service
 Type=simple
 
 ExecStart=/usr/bin/vip-manager -config=/etc/default/vip-manager.yml
+
 Restart=on-failure
 
 [Install]
