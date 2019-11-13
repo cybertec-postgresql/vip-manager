@@ -2,7 +2,14 @@ package checker
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
+	"fmt"
+	"io/ioutil"
 	"log"
+	"net"
+	"net/http"
+	"os"
 	"time"
 
 	"github.com/coreos/etcd/client"
@@ -18,14 +25,53 @@ type EtcdLeaderChecker struct {
 //naming this c_conf to avoid conflict with conf in etcd_leader_checker.go
 var e_conf vipconfig.Config
 
+func getTransport() (client.CancelableTransport, error) {
+	if os.Getenv("ETCD_CLIENT_CERT_AUTH") != "true" {
+		return client.DefaultTransport, nil
+	}
+
+	cert, err := ioutil.ReadFile(os.Getenv("ETCD_TRUSTED_CA_FILE"))
+	if err != nil {
+		return nil, fmt.Errorf("cannot load CA file: %s", err)
+	}
+
+	caCertPool := x509.NewCertPool()
+	caCertPool.AppendCertsFromPEM(cert)
+
+	cer, err := tls.LoadX509KeyPair(os.Getenv("ETCD_CERT_FILE"), os.Getenv("ETCD_KEY_FILE"))
+	if err != nil {
+		return nil, fmt.Errorf("cannot load client cert or key file: %s", err)
+	}
+
+	tlsClientConfig := &tls.Config{
+		RootCAs:      caCertPool,
+		Certificates: []tls.Certificate{cer},
+	}
+
+	return &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+		Dial: (&net.Dialer{
+			Timeout:   30 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).Dial,
+		TLSClientConfig: tlsClientConfig,
+		TLSHandshakeTimeout: 10 * time.Second,
+	}, nil
+}
+
 //func NewEtcdLeaderChecker(endpoint, key, nodename string, etcd_user string, etcd_password string) (*EtcdLeaderChecker, error) {
 func NewEtcdLeaderChecker(con vipconfig.Config) (*EtcdLeaderChecker, error) {
 	e_conf = con
 	e := &EtcdLeaderChecker{key: e_conf.Key, nodename: e_conf.Nodename}
 
+	transport, err := getTransport()
+	if err != nil {
+		return nil, err
+	}
+
 	cfg := client.Config{
 		Endpoints:               e_conf.Endpoints,
-		Transport:               client.DefaultTransport,
+		Transport:               transport,
 		HeaderTimeoutPerRequest: time.Second,
 		Username:                e_conf.Etcd_user,
 		Password:                e_conf.Etcd_password,
