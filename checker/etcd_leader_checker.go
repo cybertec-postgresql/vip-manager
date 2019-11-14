@@ -16,6 +16,12 @@ import (
 	"github.com/cybertec-postgresql/vip-manager/vipconfig"
 )
 
+const (
+	envEtcdCaFile   = "ETCD_TRUSTED_CA_FILE"
+	envEtcdCertFile = "ETCD_CERT_FILE"
+	envEtcdKeyFile  = "ETCD_KEY_FILE"
+)
+
 type EtcdLeaderChecker struct {
 	key      string
 	nodename string
@@ -25,27 +31,51 @@ type EtcdLeaderChecker struct {
 //naming this c_conf to avoid conflict with conf in etcd_leader_checker.go
 var e_conf vipconfig.Config
 
-func getTransport() (client.CancelableTransport, error) {
-	if os.Getenv("ETCD_CLIENT_CERT_AUTH") != "true" {
-		return client.DefaultTransport, nil
+func getConfigParameter(conf string, env string) string {
+	if conf == "none" || conf == "" {
+		return os.Getenv(env)
 	}
 
-	cert, err := ioutil.ReadFile(os.Getenv("ETCD_TRUSTED_CA_FILE"))
-	if err != nil {
-		return nil, fmt.Errorf("cannot load CA file: %s", err)
+	return conf
+}
+
+func getTransport(conf vipconfig.Config) (client.CancelableTransport, error) {
+	var caCertPool *x509.CertPool
+
+	// create valid CertPool only if the ca certificate file exists
+	if caCertFile := getConfigParameter(conf.Etcd_ca_file, envEtcdCaFile); caCertFile != "" {
+		caCert, err := ioutil.ReadFile(caCertFile)
+		if err != nil {
+			return nil, fmt.Errorf("cannot load CA file: %s", err)
+		}
+
+		caCertPool = x509.NewCertPool()
+		caCertPool.AppendCertsFromPEM(caCert)
 	}
 
-	caCertPool := x509.NewCertPool()
-	caCertPool.AppendCertsFromPEM(cert)
+	certFile := getConfigParameter(conf.Etcd_cert_file, envEtcdCertFile)
 
-	cer, err := tls.LoadX509KeyPair(os.Getenv("ETCD_CERT_FILE"), os.Getenv("ETCD_KEY_FILE"))
-	if err != nil {
-		return nil, fmt.Errorf("cannot load client cert or key file: %s", err)
+	keyFile := getConfigParameter(conf.Etcd_key_file, envEtcdKeyFile)
+
+	var certificates []tls.Certificate
+
+	// create valid []Certificate only if the client cert and key files exists
+	if certFile != "" && keyFile != "" {
+		cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+		if err != nil {
+			return nil, fmt.Errorf("cannot load client cert or key file: %s", err)
+		}
+
+		certificates = []tls.Certificate{cert}
 	}
 
-	tlsClientConfig := &tls.Config{
-		RootCAs:      caCertPool,
-		Certificates: []tls.Certificate{cer},
+	var tlsClientConfig *tls.Config
+
+	if certificates != nil || caCertPool != nil {
+		tlsClientConfig = &tls.Config{
+			RootCAs:      caCertPool,
+			Certificates: certificates,
+		}
 	}
 
 	return &http.Transport{
@@ -54,7 +84,7 @@ func getTransport() (client.CancelableTransport, error) {
 			Timeout:   30 * time.Second,
 			KeepAlive: 30 * time.Second,
 		}).Dial,
-		TLSClientConfig: tlsClientConfig,
+		TLSClientConfig:     tlsClientConfig,
 		TLSHandshakeTimeout: 10 * time.Second,
 	}, nil
 }
@@ -64,7 +94,7 @@ func NewEtcdLeaderChecker(con vipconfig.Config) (*EtcdLeaderChecker, error) {
 	e_conf = con
 	e := &EtcdLeaderChecker{key: e_conf.Key, nodename: e_conf.Nodename}
 
-	transport, err := getTransport()
+	transport, err := getTransport(e_conf)
 	if err != nil {
 		return nil, err
 	}

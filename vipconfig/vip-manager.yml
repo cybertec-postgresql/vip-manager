@@ -26,6 +26,10 @@ endpoints:
 
 etcd_user: "patroni"
 etcd_password: "Julian's secret password"
+etcd_ca_file: "/path/to/etcd/trusted/ca/file"
+etcd_cert_file: "/path/to/etcd/client/cert/file"
+etcd_key_file: "/path/to/etcd/client/key/file"
+
 # don't worry about parameter with a prefix that doesn't match the endpoint_type. You can write anything there, I won't even look at it.
 consul_token: "Julian's secret token"
 

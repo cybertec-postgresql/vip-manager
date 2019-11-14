@@ -29,6 +29,9 @@ var key = flag.String("key", "none", "key to monitor, e.g. /service/batman/leade
 var host = flag.String("host", "none", "Value to monitor for")
 var etcd_user = flag.String("etcd_user", "none", "username that can be used to access the key in etcd")
 var etcd_password = flag.String("etcd_password", "none", "password for the etcd_user")
+var etcd_ca_file = flag.String("etcd_ca_file", "none", "trusted CA certificate for the etcd server")
+var etcd_cert_file = flag.String("etcd_cert_file", "none", "etcd client certificate")
+var etcd_key_file = flag.String("etcd_key_file", "none", "etcd client private key")
 
 var endpointType = flag.String("type", "etcd", "type of endpoint used for key storage. Supported values: etcd, consul")
 var endpoint = flag.String("endpoint", "http://localhost:2379[,http://host:port,..]", "endpoint")
@@ -69,7 +72,8 @@ func main() {
 	//introduce parsed values into conf
 	conf = vipconfig.Config{Ip: *ip, Mask: *mask, Iface: *iface, HostingType: *hostingType,
 		Key: *key, Nodename: *host, Endpoint_type: *endpointType, Endpoints: []string{*endpoint},
-		Etcd_user: *etcd_user, Etcd_password: *etcd_password, Interval: *interval}
+		Etcd_user: *etcd_user, Etcd_password: *etcd_password, Etcd_ca_file: *etcd_ca_file,
+		Etcd_cert_file: *etcd_cert_file, Etcd_key_file: *etcd_key_file, Interval: *interval}
 
 	if *configFile != "" {
 		yamlFile, err := ioutil.ReadFile(*configFile)
