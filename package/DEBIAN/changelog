@@ -1,3 +1,10 @@
+vip-manager (0.6.2-1) unstable; urgency=low
+
+  * enable TLS configuration from cli flags and from yaml file
+  * add TLS support for etcd connections
+
+ -- gandalfmagic <gandalfmagic@libero.it> Sun, 17 Nov 2019 23:52:12 +0100
+
 vip-manager (0.6-1) unstable; urgency=low
 
   * switched to yaml file for config, still supporting all command line options from previous releases.

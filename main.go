@@ -66,7 +66,7 @@ func main() {
 	flag.Parse()
 
 	if *versionHint == true {
-		fmt.Println("version 0.6.1")
+		fmt.Println("version 0.6.2")
 		return
 	}
 	//introduce parsed values into conf
