@@ -81,14 +81,14 @@ func (m *IPManager) applyLoop(ctx context.Context) {
 			m.recheck.Wait()
 			// Want to query actual state anyway, so unlock
 			m.stateLock.Unlock()
+		}
 
-			// Check if we should exit
-			select {
-			case <-ctx.Done():
-				m.configurer.DeconfigureAddress()
-				return
-			default:
-			}
+		// Check if we should exit
+		select {
+		case <-ctx.Done():
+			m.configurer.DeconfigureAddress()
+			return
+		default:
 		}
 	}
 }
