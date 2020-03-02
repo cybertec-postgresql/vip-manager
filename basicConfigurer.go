@@ -167,5 +167,7 @@ func (c *BasicConfigurer) GetCIDR() string {
 }
 
 func (c *BasicConfigurer) cleanupArp() {
-	c.arpClient.Close()
+	if c.arpClient != nil {
+		c.arpClient.Close()
+	}
 }
