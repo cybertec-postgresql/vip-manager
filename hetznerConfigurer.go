@@ -138,7 +138,7 @@ func getActiveIpFromJson(str string) (net.IP, error) {
 	if f["error"] != nil {
 		errormap := f["error"].(map[string]interface{})
 
-		log.Printf("There was an error accessing the Hetzner API!\n status: %s\n code: %s\n message: %s\n", errormap["status"].(float64), errormap["code"].(string), errormap["message"].(string))
+		log.Printf("There was an error accessing the Hetzner API!\n status: %f\n code: %s\n message: %s\n", errormap["status"].(float64), errormap["code"].(string), errormap["message"].(string))
 		return nil, errors.New("Hetzner API returned error response.")
 	}
 
@@ -243,7 +243,7 @@ func (c *HetznerConfigurer) runAddressConfiguration(action string) bool {
 		c.cachedState = CONFIGURED
 		return true
 	} else {
-		log.Printf("The failover command was issued, but the current Failover destination (%s) is different from what it should be (%s).", currentFailoverDestinationIP.String(), getOutboundIP().String)
+		log.Printf("The failover command was issued, but the current Failover destination (%s) is different from what it should be (%s).", currentFailoverDestinationIP.String(), getOutboundIP().String())
 		//Something must have gone wrong while trying to switch IP's...
 		c.cachedState = UNKNOWN
 		return false

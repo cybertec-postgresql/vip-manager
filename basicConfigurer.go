@@ -7,7 +7,6 @@ import (
 	"net"
 	"os/exec"
 	"strings"
-	"syscall"
 	"time"
 
 	arp "github.com/mdlayher/arp"
@@ -147,18 +146,11 @@ func (c *BasicConfigurer) runAddressConfiguration(action string) bool {
 	cmd := exec.Command("ip", "addr", action,
 		c.GetCIDR(),
 		"dev", c.iface.Name)
-	err := cmd.Run()
+	output, err := cmd.CombinedOutput()
 
-	switch exit := err.(type) {
+	switch err.(type) {
 	case *exec.ExitError:
-		if status, ok := exit.Sys().(syscall.WaitStatus); ok {
-			if status.ExitStatus() == 2 {
-				// Already exists
-				return true
-			} else {
-				log.Printf("Got error %s", status)
-			}
-		}
+		log.Printf("Got error %s", output)
 
 		return false
 	}
@@ -175,5 +167,7 @@ func (c *BasicConfigurer) GetCIDR() string {
 }
 
 func (c *BasicConfigurer) cleanupArp() {
-	c.arpClient.Close()
+	if c.arpClient != nil {
+		c.arpClient.Close()
+	}
 }
