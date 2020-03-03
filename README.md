@@ -33,13 +33,13 @@ These configuration keys are currently mandatory:
 
 | Variable  | Example  | Description                                                                              |
 |-----------|----------|------------------------------------------------------------------------------------------|
-| IP    | 10.1.2.3 | Virtual IP that is being managed                                                         |
-| MASK  | 24       | Netmask of the virtual IP                                                                |
-| IFACE | eth0     | Network interface to configure the IP address on. Usually the primary network interface. |
-| KEY   | /service/batman/leader | Key to monitor. Must match `<namespace>/<scope>/leader from Patroni.                |
-| HOST  | serverX  | Value to trigger on. Must match `<name>` from Patroni.                                       |
-| TYPE  | etcd     | Type of endpoint (etcd or consul)                                                        |
-| ENDPOINT | http://10.1.2.3:2379 | Location of endpoint (etcd or consul)                                     |
+| VIP_IP    | 10.1.2.3 | Virtual IP that is being managed                                                         |
+| VIP_MASK  | 24       | Netmask of the virtual IP                                                                |
+| VIP_IFACE | eth0     | Network interface to configure the IP address on. Usually the primary network interface. |
+| VIP_KEY   | /service/batman/leader | Key to monitor. Must match `<namespace>/<scope>/leader` from Patroni.                |
+| VIP_HOST  | serverX  | Value to trigger on. Must match `<name>` from Patroni.                                       |
+| VIP_TYPE  | etcd     | Type of endpoint (etcd or consul)                                                        |
+| VIP_ENDPOINT | http://10.1.2.3:2379 | Location of endpoint (etcd or consul)                                     |
 
 ### Configuration - Hetzner
 To use vip-manager with Hetzner Robot API you need a Credential file, set hosting_type to `hetzner` and your Floating-IP must be added on all Servers.
