@@ -36,8 +36,8 @@ These configuration keys are currently mandatory:
 | VIP_IP    | 10.1.2.3 | Virtual IP that is being managed                                                         |
 | VIP_MASK  | 24       | Netmask of the virtual IP                                                                |
 | VIP_IFACE | eth0     | Network interface to configure the IP address on. Usually the primary network interface. |
-| VIP_KEY   | /service/batman/leader | Key to monitor. Must match `<namespace>/<scope>/leader` from Patroni.                |
-| VIP_HOST  | serverX  | Value to trigger on. Must match `<name>` from Patroni.                                       |
+| VIP_KEY   | /service/batman/leader | Key to monitor. Must match `<namespace>/<scope>/leader` from Patroni.      |
+| VIP_HOST  | serverX  | Value to trigger on. Must match `<name>` from Patroni.                                   |
 | VIP_TYPE  | etcd     | Type of endpoint (etcd or consul)                                                        |
 | VIP_ENDPOINT | http://10.1.2.3:2379 | Location of endpoint (etcd or consul)                                     |
 
