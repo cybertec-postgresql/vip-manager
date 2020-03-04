@@ -38,6 +38,7 @@ var hostingType = flag.String("hostingtype", "basic", "type of hosting. Supporte
 
 var conf vipconfig.Config
 
+//We redefine logFatalf in tests so we can catch when it's called
 var logFatalf = log.Fatalf
 func checkFlag(f string, name string) {
 	if f == "none" || f == "" {

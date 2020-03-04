@@ -25,10 +25,13 @@ func TestMissingArguments(t *testing.T) {
 		panic(err)
 	}
 	os.Args = []string{"vip-manager"}
+	//We expect this to fail with message about missing IP option
 	assertPanic(t, main, "Setting [IP] is mandatory")
 	os.Args = []string{"vip-manager", "-ip", "0.0.0.0"}
+	//We expect this to fail with message about missing network interface option
 	assertPanic(t, main, "Setting [network interface] is mandatory")
 	os.Args = []string{"vip-manager", "-ip", "0.0.0.0", "-iface", "lo"}
+	//We expect this to fail with message about missing key option
 	assertPanic(t, main, "Setting [key] is mandatory")
 }
 
@@ -37,6 +40,7 @@ func assertPanic(t *testing.T, f func(), s string) {
         if r := recover(); r == nil {
             t.Errorf("The code did not panic")
         } else {
+		//Compare the panic message with what we expect
 		assert.Equal(t, s, r, "Panic message is not as expected")
         }
     }()
