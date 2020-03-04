@@ -23,7 +23,6 @@ func TestMissingArguments(t *testing.T) {
 			err = format
 		}
 		panic(err)
-		//fmt.Println(err)
 	}
 	os.Args = []string{"vip-manager"}
 	assertPanic(t, main, "Setting [IP] is mandatory")
