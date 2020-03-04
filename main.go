@@ -38,9 +38,10 @@ var hostingType = flag.String("hostingtype", "basic", "type of hosting. Supporte
 
 var conf vipconfig.Config
 
+var logFatalf = log.Fatalf
 func checkFlag(f string, name string) {
 	if f == "none" || f == "" {
-		log.Fatalf("Setting %s is mandatory", name)
+		logFatalf("Setting %s is mandatory", name)
 	}
 }
 
@@ -54,7 +55,7 @@ func getMask(vip net.IP, mask int) net.IPMask {
 func getNetIface(iface string) *net.Interface {
 	netIface, err := net.InterfaceByName(iface)
 	if err != nil {
-		log.Fatalf("Obtaining the interface raised an error: %s", err)
+		logFatalf("Obtaining the interface raised an error: %s", err)
 	}
 	return netIface
 }
@@ -79,7 +80,7 @@ func main() {
 		log.Printf("reading config from %s", *configFile)
 		err = yaml.Unmarshal(yamlFile, &conf)
 		if err != nil {
-			log.Fatalf("Error while reading config file: %v", err)
+			logFatalf("Error while reading config file: %v", err)
 		}
 	} else {
 		log.Printf("No config file specified, using arguments only.")
@@ -102,7 +103,7 @@ func main() {
 	if conf.Nodename == "" {
 		nodename, err := os.Hostname()
 		if err != nil {
-			log.Fatalf("No nodename specified, hostname could not be retrieved: %s", err)
+			logFatalf("No nodename specified, hostname could not be retrieved: %s", err)
 		} else {
 			log.Printf("No nodename specified, instead using hostname: %v", nodename)
 			conf.Nodename = nodename
@@ -112,7 +113,7 @@ func main() {
 	states := make(chan bool)
 	lc, err := checker.NewLeaderChecker(conf)
 	if err != nil {
-		log.Fatalf("Failed to initialize leader checker: %s", err)
+		logFatalf("Failed to initialize leader checker: %s", err)
 	}
 
 	vip := net.ParseIP(conf.Ip)
@@ -130,7 +131,7 @@ func main() {
 		states,
 	)
 	if err != nil {
-		log.Fatalf("Problems with generating the virtual ip manager: %s", err)
+		logFatalf("Problems with generating the virtual ip manager: %s", err)
 	}
 
 	mainCtx, cancel := context.WithCancel(context.Background())
@@ -150,7 +151,7 @@ func main() {
 	go func() {
 		err := lc.GetChangeNotificationStream(mainCtx, states)
 		if err != nil && err != context.Canceled {
-			log.Fatalf("Leader checker returned the following error: %s", err)
+			logFatalf("Leader checker returned the following error: %s", err)
 		}
 		wg.Done()
 	}()
