@@ -39,7 +39,7 @@ These configuration keys are currently mandatory:
 | VIP_KEY   | /service/batman/leader | Key to monitor. Must match `<namespace>/<scope>/leader` from Patroni.      |
 | VIP_HOST  | serverX  | Value to trigger on. Must match `<name>` from Patroni.                                   |
 | VIP_TYPE  | etcd     | Type of endpoint (etcd or consul)                                                        |
-| VIP_ENDPOINT | http://10.1.2.3:2379 | Location of endpoint (etcd or consul)                                     |
+| VIP_ENDPOINT | http://10.1.2.3:2379 | Location of one or more endpoints (etcd or consul). Separate multiple endpoints with commas |
 
 ### Configuration - Hetzner
 To use vip-manager with Hetzner Robot API you need a Credential file, set hosting_type to `hetzner` and your Floating-IP must be added on all Servers.
