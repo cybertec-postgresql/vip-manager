@@ -25,7 +25,8 @@ Manages a virtual IP based on state kept in etcd or Consul. Monitors state in et
 * Edit config and start the service.
 
 ## Configuration
-The configuration can be passed to the executable through argument flags or through a YAML config file.
+The configuration can be passed to the executable through argument flags or through a YAML config file. Run `vip-manager --help` to see the available flags.
+
 > The location of the YAML config file can be specified with the -config flag.
 > An exemplary config file is installed into `/etc/default/vip-manager_default.yml` or is available in the vipconfig directory in the repository of the software.
 
