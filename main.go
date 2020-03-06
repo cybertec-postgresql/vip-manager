@@ -109,6 +109,12 @@ func main() {
 		}
 	}
 
+	if conf.Retry_num == 0 {
+		log.Println("Number of retries (retry_num) was not set or set to 0. It needs to be set to something more than 0 for vip-manager to work. Will set it to 3 by default.")
+		conf.Retry_num = 3
+		conf.Retry_after = 250
+	}
+
 	states := make(chan bool)
 	lc, err := checker.NewLeaderChecker(conf)
 	if err != nil {
