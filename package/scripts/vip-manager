@@ -45,7 +45,7 @@ if [ -z "$VIP_ETCD_USER" ]; then
 fi
 
 if [ -z "$VIP_ETCD_PASSWORD" ]; then
-    VIP_OPTS="$VIP_OPTS -etcd_password=$VIP_ETCD_USER"
+    VIP_OPTS="$VIP_OPTS -etcd_password=$VIP_ETCD_PASSWORD"
 fi
 
 if [ -z "$VIP_HOST" ]; then
