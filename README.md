@@ -41,6 +41,14 @@ These configuration keys are currently mandatory:
 | VIP_TYPE  | etcd     | Type of endpoint (etcd or consul)                                                        |
 | VIP_ENDPOINT | http://10.1.2.3:2379 | Location of endpoint (etcd or consul)                                     |
 
+These configuration keys are optional:
+
+| Variable             | Example                     | Description                                                |
+|----------------------|-----------------------------|------------------------------------------------------------|
+| ETCD_TRUSTED_CA_FILE | /etc/etcd/ca.cert.pem       | see etcd documentation                                     |
+| ETCD_CERT_FILE       | /etc/etcd/10.1.2.3.cert.pem | dito                                                       |
+| ETCD_KEY_FILE        | /etc/etcd/10.1.2.3.key.pem  | dito                                                       |
+
 ### Configuration - Hetzner
 To use vip-manager with Hetzner Robot API you need a Credential file, set hosting_type to `hetzner` and your Floating-IP must be added on all Servers.
 The Floating-IP (VIP) will not be added or removed on the current Master node interface, Hetzner will route it to the current one.
