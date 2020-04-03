@@ -33,10 +33,22 @@ type BasicConfigurer struct {
 
 func NewBasicConfigurer(config *IPConfiguration) (*BasicConfigurer, error) {
 	c := &BasicConfigurer{IPConfiguration: config}
+
+	// //this should never error out, otherwise we have bigger problems
+	// local_hardware_addr, err := net.ParseMAC("00:00:00:00:00:00")
+	// if err != nil {
+	// 	log.Fatalf("Couldn't create a local hardware address: %s", err)
+	// }
+
 	err := c.createArpClient()
 	if err != nil {
 		log.Fatalf("Couldn't create an Arp client: %s", err)
 	}
+
+	if c.iface.HardwareAddr == nil || c.iface.HardwareAddr.String() == "00:00:00:00:00:00" {
+		log.Fatalf("Cannot run vip-manager on the loopback device as its hardware address is the local address (00:00:00:00:00:00), which prohibits sending of gratuitous ARP messages.")
+	}
+
 	return c, nil
 }
 
@@ -79,7 +91,7 @@ func (c *BasicConfigurer) ARPSendGratuitous() error {
 		return err
 	}
 
-	/* RFC 2002 specifies (in section 4.6) that a gratuitous ARP request 
+	/* RFC 2002 specifies (in section 4.6) that a gratuitous ARP request
 	 * should "not set" the target Hardware Address (THA).
 	 * Since the arp package offers no option to leave the THA out, we specify the Zero-MAC.
 	 * If parsing that fails for some reason, we'll just use the local interface's address.
