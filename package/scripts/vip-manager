@@ -57,11 +57,11 @@ if [ -z "$VIP_TYPE" ]; then
 fi
 
 if [ -z "$VIP_ENDPOINT" ]; then
-    VIP_OPTS="$VIP_OPTS -type=$VIP_ENDPOINT"
+    VIP_OPTS="$VIP_OPTS -endpoint=$VIP_ENDPOINT"
 fi
 
 if [ -z "$VIP_MASK" ]; then
-    VIP_OPTS="$VIP_OPTS -type=$VIP_MASK"
+    VIP_OPTS="$VIP_OPTS -mask=$VIP_MASK"
 fi
 
 if [ -z "$VIP_HOSTINGTYPE" ]; then
