@@ -1,4 +1,4 @@
-# All keys here are mandatory
+# The keys below are mandatory
 
 #VIP_IP="10.1.2.3"
 
@@ -19,7 +19,18 @@
 
 #VIP_ENDPOINT="http://10.1.2.3:2379"
 
-#not mandatory
+
+# The keys below are optional
+
 #VIP_HOSTINGTYPE="basic"
 #VIP_ETCD_USER
 #VIP_ETCD_PASSWORD
+
+# These keys are optional if VIP_TYPE="etcd" is chosen
+#
+# see `man 1 etcdctl` for the settings below
+#
+#ETCD_TRUSTED_CA_FILE="/etc/etcd/ca.cert.pem"
+#ETCD_CERT_FILE="/etc/etcd/host.cert.pem"
+#ETCD_KEY_FILE="/etc/etcd/host.key.pem"
+
