@@ -43,18 +43,51 @@ These configuration keys are currently mandatory:
 | VIP_ENDPOINT | http://10.1.2.3:2379 | Location of one or more endpoints (etcd or consul). Separate multiple endpoints with commas |
 
 ### Configuration - Hetzner
-To use vip-manager with Hetzner Robot API you need a Credential file, set hosting_type to `hetzner` and your Floating-IP must be added on all Servers.
-The Floating-IP (VIP) will not be added or removed on the current Master node interface, Hetzner will route it to the current one.
 
-Set `hosting_type` to `hetzner` in `/etc/default/vip-manager.yml`
+To use vip-manager with Hetzner Robot API you need to configure the
+`/etc/hetzner` credentials file.
 
-#### Credential File
-Add the File `/etc/hetzner` with your Username and Password
+Hetzner has two kinds of VIPs: the floating-IP and the failover-IP.
+
+For both kinds of VIPs you'll need to set up the failover-ip on all
+servers on the respective interface.
+
+vip-manager will **not** add or remove the VIP on the current master
+node interface, Hetzner will route it to the current one.
+
+#### FailoverIP
+
+[Hetzner failover-IP documentation](https://wiki.hetzner.de/index.php/Failover/en)
+[Hetzner Robot failover-IP API documentation](https://robot.your-server.de/doc/webservice/en.html#failover)
+
+* set `hosting_type` to `hetzner` in `/etc/default/vip-manager.yml`
+* configure credentials in `/etc/hetzner`:
+
 ```
 user="myUsername"
 pass="myPassword"
 ```
 
-## Author
+#### FloatingIP
 
-Cybertec Schönig & Schönig GmbH, https://www.cybertec-postgresql.com
+[Hetzner floating-IP documentation](https://wiki.hetzner.de/index.php/CloudServer/en#What_are_floating_IPs_and_how_do_they_work.3F)
+[Hetzner Cloud failover-IP API documentation](https://docs.hetzner.cloud/#floating-ips)
+
+* set `hosting_type` to `hetzner_floating_ip` in `/etc/default/vip-manager.yml`
+* configure credentials in `/etc/hetzner`:
+
+```
+# This is the API_TOKEN, that you need to get from console.hetzner.cloud -> project -> access
+tokn='DXuia61JJaLJ2Je2jZjrnQ4zm7VcLTYvoo9dV5hpNGwgvM8mI9790niVt1IbN0sE'
+# You can retrieve the IP ID with:
+# `curl -H "Authorization: Bearer $tokn" 'https://api.hetzner.cloud/v1/floating_ips'`
+ipid='123456'
+# You can retrieve the server ID with:
+# `curl -H "Authorization: Bearer $tokn" 'https://api.hetzner.cloud/v1/servers'`
+serv='7890123'
+```
+
+## Authors
+
+* Cybertec Schönig & Schönig GmbH, https://www.cybertec-postgresql.com
+* Tomáš Pospíšek @ Sourcepole.ch

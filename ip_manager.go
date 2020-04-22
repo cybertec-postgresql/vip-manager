@@ -44,6 +44,12 @@ func NewIPManager(hostingType string, config *IPConfiguration, states <-chan boo
 			return nil, err
 		}
 		m.configurer = c
+	case "hetzner_floating_ip":
+		c, err := NewHetznerFloatingIPConfigurer(config)
+		if err != nil {
+			return nil, err
+		}
+		m.configurer = c
 	case "basic":
 		fallthrough
 	default:
