@@ -33,7 +33,11 @@ type HetznerConfigurer struct {
 }
 
 func NewHetznerConfigurer(config *IPConfiguration, verbose_ bool) (*HetznerConfigurer, error) {
-	c := &HetznerConfigurer{IPConfiguration: config, cachedState: UNKNOWN, lastAPICheck: time.Unix(0, 0), verbose: verbose_}
+	c := &HetznerConfigurer{
+		IPConfiguration: config,
+		cachedState: UNKNOWN,
+		lastAPICheck: time.Unix(0, 0),
+		verbose: verbose_}
 
 	return c, nil
 }
@@ -107,25 +111,32 @@ func (c *HetznerConfigurer) curlQueryFailover(post bool) (string, error) {
 		}
 		log.Printf("my_own_ip: %s\n", my_own_ip.String())
 
-		cmd = exec.Command("curl", "--ipv4", "-u", user+":"+password, "https://robot-ws.your-server.de/failover/"+c.vip.String(), "-d", "active_server_ip="+my_own_ip.String())
+		cmd = exec.Command("curl",
+		                   "--ipv4",
+		                   "-u", user+":"+password,
+		                   "https://robot-ws.your-server.de/failover/"+c.vip.String(),
+		                   "-d", "active_server_ip="+my_own_ip.String())
 
 		if c.verbose {
 			log.Printf("%s %s %s '%s' %s %s %s",
-			                   "curl",
-			                   "--ipv4",
-			                   "-u", user+":XXXXXX",
-			                   "https://robot-ws.your-server.de/failover/"+c.vip.String(),
-			                   "-d", "active_server_ip="+my_own_ip.String())
+			           "curl",
+			           "--ipv4",
+			           "-u", user+":XXXXXX",
+			           "https://robot-ws.your-server.de/failover/"+c.vip.String(),
+			           "-d", "active_server_ip="+my_own_ip.String())
 		}
 	} else {
-		cmd = exec.Command("curl", "--ipv4", "-u", user+":"+password, "https://robot-ws.your-server.de/failover/"+c.vip.String())
+		cmd = exec.Command("curl",
+		                   "--ipv4",
+		                   "-u", user+":"+password,
+		                   "https://robot-ws.your-server.de/failover/"+c.vip.String())
 
 		if c.verbose {
 			log.Printf("%s %s %s %s %s",
-			                   "curl",
-			                   "--ipv4",
-			                   "-u", user+":XXXXXX",
-			                   "https://robot-ws.your-server.de/failover/"+c.vip.String())
+			           "curl",
+			           "--ipv4",
+			           "-u", user+":XXXXXX",
+			           "https://robot-ws.your-server.de/failover/"+c.vip.String())
 		}
 	}
 
@@ -160,7 +171,11 @@ func (c *HetznerConfigurer) getActiveIpFromJson(str string) (net.IP, error) {
 	if f["error"] != nil {
 		errormap := f["error"].(map[string]interface{})
 
-		log.Printf("There was an error accessing the Hetzner API!\n status: %f\n code: %s\n message: %s\n", errormap["status"].(float64), errormap["code"].(string), errormap["message"].(string))
+		log.Printf("There was an error accessing the Hetzner API!\n" +
+		           " status: %f\n code: %s\n message: %s\n",
+		           errormap["status"].(float64),
+		           errormap["code"].(string),
+		           errormap["message"].(string))
 		return nil, errors.New("Hetzner API returned error response.")
 	}
 
@@ -265,7 +280,9 @@ func (c *HetznerConfigurer) runAddressConfiguration(action string) bool {
 		c.cachedState = CONFIGURED
 		return true
 	} else {
-		log.Printf("The failover command was issued, but the current Failover destination (%s) is different from what it should be (%s).", currentFailoverDestinationIP.String(), getOutboundIP().String())
+		log.Printf("The failover command was issued, but the current Failover destination (%s) is different from what it should be (%s).",
+		           currentFailoverDestinationIP.String(),
+		           getOutboundIP().String())
 		//Something must have gone wrong while trying to switch IP's...
 		c.cachedState = UNKNOWN
 		return false
