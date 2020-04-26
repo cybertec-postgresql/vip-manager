@@ -43,10 +43,10 @@ These configuration keys are currently mandatory:
 | VIP_ENDPOINT | http://10.1.2.3:2379 | Location of one or more endpoints (etcd or consul). Separate multiple endpoints with commas |
 
 ### Configuration - Hetzner
-To use vip-manager with Hetzner Robot API you need a Credential file, set hosting_type to `hetzner` and your Floating-IP must be added on all Servers.
+To use vip-manager with Hetzner Robot API you need a Credential file, set hostingtype to `hetzner` and your Floating-IP must be added on all Servers.
 The Floating-IP (VIP) will not be added or removed on the current Master node interface, Hetzner will route it to the current one.
 
-Set `hosting_type` to `hetzner` in `/etc/default/vip-manager.yml`
+Set `hostingtype` to `hetzner` in `/etc/default/vip-manager.yml`
 
 #### Credential File
 Add the File `/etc/hetzner` with your Username and Password
