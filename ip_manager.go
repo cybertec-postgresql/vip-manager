@@ -29,7 +29,7 @@ type IPManager struct {
 	recheck      *sync.Cond
 }
 
-func NewIPManager(hostingType string, config *IPConfiguration, states <-chan bool) (*IPManager, error) {
+func NewIPManager(hostingType string, config *IPConfiguration, states <-chan bool, verbose bool) (*IPManager, error) {
 	m := &IPManager{
 		states:       states,
 		currentState: false,
@@ -39,7 +39,7 @@ func NewIPManager(hostingType string, config *IPConfiguration, states <-chan boo
 
 	switch hostingType {
 	case "hetzner":
-		c, err := NewHetznerConfigurer(config)
+		c, err := NewHetznerConfigurer(config, verbose)
 		if err != nil {
 			return nil, err
 		}

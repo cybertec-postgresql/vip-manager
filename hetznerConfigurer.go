@@ -29,10 +29,11 @@ type HetznerConfigurer struct {
 	*IPConfiguration
 	cachedState  int
 	lastAPICheck time.Time
+	verbose      bool
 }
 
-func NewHetznerConfigurer(config *IPConfiguration) (*HetznerConfigurer, error) {
-	c := &HetznerConfigurer{IPConfiguration: config, cachedState: UNKNOWN, lastAPICheck: time.Unix(0, 0)}
+func NewHetznerConfigurer(config *IPConfiguration, verbose_ bool) (*HetznerConfigurer, error) {
+	c := &HetznerConfigurer{IPConfiguration: config, cachedState: UNKNOWN, lastAPICheck: time.Unix(0, 0), verbose: verbose_}
 
 	return c, nil
 }
@@ -107,8 +108,25 @@ func (c *HetznerConfigurer) curlQueryFailover(post bool) (string, error) {
 		log.Printf("my_own_ip: %s\n", my_own_ip.String())
 
 		cmd = exec.Command("curl", "--ipv4", "-u", user+":"+password, "https://robot-ws.your-server.de/failover/"+c.vip.String(), "-d", "active_server_ip="+my_own_ip.String())
+
+		if c.verbose {
+			log.Printf("%s %s %s '%s' %s %s %s",
+			                   "curl",
+			                   "--ipv4",
+			                   "-u", user+":XXXXXX",
+			                   "https://robot-ws.your-server.de/failover/"+c.vip.String(),
+			                   "-d", "active_server_ip="+my_own_ip.String())
+		}
 	} else {
 		cmd = exec.Command("curl", "--ipv4", "-u", user+":"+password, "https://robot-ws.your-server.de/failover/"+c.vip.String())
+
+		if c.verbose {
+			log.Printf("%s %s %s %s %s",
+			                   "curl",
+			                   "--ipv4",
+			                   "-u", user+":XXXXXX",
+			                   "https://robot-ws.your-server.de/failover/"+c.vip.String())
+		}
 	}
 
 	out, err := cmd.Output()
@@ -126,8 +144,12 @@ func (c *HetznerConfigurer) curlQueryFailover(post bool) (string, error) {
  * This function is used to parse the response which comes from the
  * curlQueryFailover function and in turn from the curl calls to the API.
  */
-func getActiveIpFromJson(str string) (net.IP, error) {
+func (c *HetznerConfigurer) getActiveIpFromJson(str string) (net.IP, error) {
 	var f map[string]interface{}
+
+	if c.verbose {
+		log.Printf("JSON response: %s\n", str)
+	}
 
 	err := json.Unmarshal([]byte(str), &f)
 	if err != nil {
@@ -192,7 +214,7 @@ func (c *HetznerConfigurer) QueryAddress() bool {
 		c.lastAPICheck = time.Now()
 	}
 
-	currentFailoverDestinationIP, err := getActiveIpFromJson(str)
+	currentFailoverDestinationIP, err := c.getActiveIpFromJson(str)
 	if err != nil {
 		//TODO
 		c.cachedState = UNKNOWN
@@ -229,7 +251,7 @@ func (c *HetznerConfigurer) runAddressConfiguration(action string) bool {
 		c.cachedState = UNKNOWN
 		return false
 	}
-	currentFailoverDestinationIP, err := getActiveIpFromJson(str)
+	currentFailoverDestinationIP, err := c.getActiveIpFromJson(str)
 	if err != nil {
 		c.cachedState = UNKNOWN
 		return false

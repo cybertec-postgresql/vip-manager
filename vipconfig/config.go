@@ -23,4 +23,6 @@ type Config struct {
 
 	Retry_after int `yaml:retry_after` //milliseconds 
 	Retry_num   int `yaml:retry_num`
+
+	Verbose bool `yaml:verbose`
 }

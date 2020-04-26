@@ -3,6 +3,7 @@
 Manages a virtual IP based on state kept in etcd or Consul. Monitors state in etcd 
 
 ## building
+
 1. To make sure that internal includes (the vipconfig and the checker package) are satisfied, place the base directory of this project properly into your `$GOPATH`.
     The resulting location should be `$GOPATH/src/github.com/cybertec-postgresql/vip-manager/`. The easiest way to do this is:
     ```go get github.com/cybertec-postgresql/vip-manager```
@@ -25,6 +26,7 @@ Manages a virtual IP based on state kept in etcd or Consul. Monitors state in et
 * Edit config and start the service.
 
 ## Configuration
+
 The configuration can be passed to the executable through argument flags or through a YAML config file. Run `vip-manager --help` to see the available flags.
 
 > The location of the YAML config file can be specified with the -config flag.
@@ -54,6 +56,15 @@ Add the File `/etc/hetzner` with your Username and Password
 user="myUsername"
 pass="myPassword"
 ```
+
+## Debugging
+
+Either:
+
+* run `vip-manager` with `-verbose` flag or
+* set `verbose` to `true` in `/etc/default/vip-manager.yml`
+
+(currently only supported for `hetzner`)
 
 ## Author
 

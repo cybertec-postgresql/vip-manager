@@ -32,3 +32,6 @@ consul_token: "Julian's secret token"
 #how often things should be retried and how long to wait between retries. (currently only affects arpClient)
 retry_num: 2
 retry_after: 250  #in milliseconds
+
+# verbose logs (currently only supported for hetzner)
+verbose: false
