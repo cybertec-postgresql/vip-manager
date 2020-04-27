@@ -15,7 +15,7 @@ iface: enp0s3 #interface to which the virtual ip will be added
 # how the virtual ip should be managed. we currently support "ip addr add/remove" through shell commands or the Hetzner api
 hosting_type: basic # possible values: basic, hetzner .
 
-endpoint_type: etcd # etcd or consul
+endpoint_type: etcd # etcd, zookeper or consul
 # a list that contains all endpoints to which etcd could talk. 
 endpoints:
   - http://127.0.0.1:2379
