@@ -4,25 +4,23 @@ package raw
 
 import (
 	"bytes"
-	"errors"
 	"net"
-	"sync/atomic"
-	"syscall"
 	"testing"
 	"time"
-	"unsafe"
 
+	"github.com/google/go-cmp/cmp"
 	"golang.org/x/net/bpf"
+	"golang.org/x/sys/unix"
 )
 
 // Test to ensure that socket is bound with correct sockaddr_ll information
 
 type bindSocket struct {
-	bind syscall.Sockaddr
+	bind unix.Sockaddr
 	noopSocket
 }
 
-func (s *bindSocket) Bind(sa syscall.Sockaddr) error {
+func (s *bindSocket) Bind(sa unix.Sockaddr) error {
 	s.bind = sa
 	return nil
 }
@@ -39,13 +37,13 @@ func Test_newPacketConnBind(t *testing.T) {
 		},
 		s,
 		protocol,
-		&testSleeper{},
+		nil,
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	sall, ok := s.bind.(*syscall.SockaddrLinklayer)
+	sall, ok := s.bind.(*unix.SockaddrLinklayer)
 	if !ok {
 		t.Fatalf("bind sockaddr has incorrect type: %T", s.bind)
 	}
@@ -58,63 +56,14 @@ func Test_newPacketConnBind(t *testing.T) {
 	}
 }
 
-// Test for errors which occur after several retries while attempting to
-// recvfrom on a socket.
-
-type errRetryNRecvfromSocket struct {
-	n   int
-	try int
-	err error
-	noopSocket
-}
-
-func (s *errRetryNRecvfromSocket) Recvfrom(p []byte, flags int) (int, syscall.Sockaddr, error) {
-	if s.try == s.n {
-		return 0, nil, s.err
-	}
-
-	s.try++
-	return 0, nil, syscall.EAGAIN
-}
-
-func Test_packetConnReadFromRecvfromRetryNError(t *testing.T) {
-	fooErr := errors.New("foo")
-
-	ts := &testSleeper{}
-
-	const n = 5
-
-	p, err := newPacketConn(
-		&net.Interface{},
-		&errRetryNRecvfromSocket{
-			n:   n,
-			err: fooErr,
-		},
-		0,
-		ts,
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	_, _, err = p.ReadFrom(nil)
-	if want, got := fooErr, err; want != got {
-		t.Fatalf("unexpected error:\n- want: %v\n-  got: %v", want, got)
-	}
-
-	if want, got := n*(2*time.Millisecond), time.Duration(ts.slept); want != got {
-		t.Fatalf("unexpected mock sleep time:\n- want: %v\n-  got: %v", want, got)
-	}
-}
-
 // Test for incorrect sockaddr type after recvfrom on a socket.
 
 type addrRecvfromSocket struct {
-	addr syscall.Sockaddr
+	addr unix.Sockaddr
 	noopSocket
 }
 
-func (s *addrRecvfromSocket) Recvfrom(p []byte, flags int) (int, syscall.Sockaddr, error) {
+func (s *addrRecvfromSocket) Recvfrom(p []byte, flags int) (int, unix.Sockaddr, error) {
 	return 0, s.addr, nil
 }
 
@@ -122,17 +71,17 @@ func Test_packetConnReadFromRecvfromInvalidSockaddr(t *testing.T) {
 	p, err := newPacketConn(
 		&net.Interface{},
 		&addrRecvfromSocket{
-			addr: &syscall.SockaddrInet4{},
+			addr: &unix.SockaddrInet4{},
 		},
 		0,
-		&testSleeper{},
+		nil,
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	_, _, err = p.ReadFrom(nil)
-	if want, got := syscall.EINVAL, err; want != got {
+	if want, got := unix.EINVAL, err; want != got {
 		t.Fatalf("unexpected error:\n- want: %v\n-  got: %v", want, got)
 	}
 }
@@ -143,19 +92,17 @@ func Test_packetConnReadFromRecvfromInvalidHardwareAddr(t *testing.T) {
 	p, err := newPacketConn(
 		&net.Interface{},
 		&addrRecvfromSocket{
-			addr: &syscall.SockaddrLinklayer{
-				Halen: 5,
-			},
+			addr: nil,
 		},
 		0,
-		&testSleeper{},
+		nil,
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	_, _, err = p.ReadFrom(nil)
-	if want, got := syscall.EINVAL, err; want != got {
+	if want, got := unix.EINVAL, err; want != got {
 		t.Fatalf("unexpected error:\n- want: %v\n-  got: %v", want, got)
 	}
 }
@@ -165,11 +112,11 @@ func Test_packetConnReadFromRecvfromInvalidHardwareAddr(t *testing.T) {
 type recvfromSocket struct {
 	p     []byte
 	flags int
-	addr  syscall.Sockaddr
+	addr  unix.Sockaddr
 	noopSocket
 }
 
-func (s *recvfromSocket) Recvfrom(p []byte, flags int) (int, syscall.Sockaddr, error) {
+func (s *recvfromSocket) Recvfrom(p []byte, flags int) (int, unix.Sockaddr, error) {
 	copy(p, s.p)
 	s.flags = flags
 	return len(s.p), s.addr, nil
@@ -182,7 +129,7 @@ func Test_packetConnReadFromRecvfromOK(t *testing.T) {
 
 	s := &recvfromSocket{
 		p: data,
-		addr: &syscall.SockaddrLinklayer{
+		addr: &unix.SockaddrLinklayer{
 			Halen: 6,
 			Addr:  [8]byte{0xde, 0xad, 0xbe, 0xef, 0xde, 0xad, 0x00, 0x00},
 		},
@@ -192,7 +139,7 @@ func Test_packetConnReadFromRecvfromOK(t *testing.T) {
 		&net.Interface{},
 		s,
 		0,
-		&testSleeper{},
+		nil,
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -229,7 +176,7 @@ func Test_packetConnReadFromRecvfromOK(t *testing.T) {
 
 func Test_packetConnWriteToInvalidSockaddr(t *testing.T) {
 	_, err := (&packetConn{}).WriteTo(nil, &net.IPAddr{})
-	if want, got := syscall.EINVAL, err; want != got {
+	if want, got := unix.EINVAL, err; want != got {
 		t.Fatalf("unexpected error:\n- want: %v\n-  got: %v", want, got)
 	}
 }
@@ -237,11 +184,18 @@ func Test_packetConnWriteToInvalidSockaddr(t *testing.T) {
 // Test for malformed hardware address with WriteTo.
 
 func Test_packetConnWriteToInvalidHardwareAddr(t *testing.T) {
-	_, err := (&packetConn{}).WriteTo(nil, &Addr{
-		HardwareAddr: net.HardwareAddr{0xde, 0xad, 0xbe, 0xef, 0xde},
-	})
-	if want, got := syscall.EINVAL, err; want != got {
-		t.Fatalf("unexpected error:\n- want: %v\n-  got: %v", want, got)
+	addrs := []net.HardwareAddr{
+		// Explicitly nil.
+		nil,
+	}
+
+	for _, addr := range addrs {
+		_, err := (&packetConn{}).WriteTo(nil, &Addr{
+			HardwareAddr: addr,
+		})
+		if want, got := unix.EINVAL, err; want != got {
+			t.Fatalf("unexpected error:\n- want: %v\n-  got: %v", want, got)
+		}
 	}
 }
 
@@ -250,11 +204,11 @@ func Test_packetConnWriteToInvalidHardwareAddr(t *testing.T) {
 type sendtoSocket struct {
 	p     []byte
 	flags int
-	addr  syscall.Sockaddr
+	addr  unix.Sockaddr
 	noopSocket
 }
 
-func (s *sendtoSocket) Sendto(p []byte, flags int, to syscall.Sockaddr) error {
+func (s *sendtoSocket) Sendto(p []byte, flags int, to unix.Sockaddr) error {
 	copy(s.p, p)
 	s.flags = flags
 	s.addr = to
@@ -275,7 +229,7 @@ func Test_packetConnWriteToSendtoOK(t *testing.T) {
 		&net.Interface{},
 		s,
 		0,
-		&testSleeper{},
+		nil,
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -299,7 +253,7 @@ func Test_packetConnWriteToSendtoOK(t *testing.T) {
 		t.Fatalf("unexpected data:\n- want: %v\n-  got: %v", want, got)
 	}
 
-	sall, ok := s.addr.(*syscall.SockaddrLinklayer)
+	sall, ok := s.addr.(*unix.SockaddrLinklayer)
 	if !ok {
 		t.Fatalf("write sockaddr has incorrect type: %T", s.addr)
 	}
@@ -353,114 +307,15 @@ func Test_packetConnLocalAddr(t *testing.T) {
 	}
 }
 
-// Test to ensure that nonblocking mode appropriately toggles depending on
-// input, and that it remains toggled correctly for various inputs.
-
-type setNonblockSocket struct {
-	nonblocking bool
-	triggered   bool
-	noopSocket
-}
-
-func (s *setNonblockSocket) SetNonblock(nonblocking bool) error {
-	s.nonblocking = nonblocking
-	s.triggered = true
-	return nil
-}
-
-func Test_packetConnSetNonblock(t *testing.T) {
-	s := &setNonblockSocket{}
-
-	p, err := newPacketConn(
-		&net.Interface{},
-		s,
-		0,
-		&testSleeper{},
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Test 1: socket should remain blocking due to zero time, SetNonblock
-	// should never have been triggered
-	if err := p.SetDeadline(time.Time{}); err != nil {
-		t.Fatal(err)
-	}
-	if want, got := false, s.triggered; want != got {
-		t.Fatalf("unexpected triggered boolean:\n- want: %v\n-  got: %v", want, got)
-	}
-	if want, got := false, s.nonblocking; want != got {
-		t.Fatalf("unexpected nonblocking boolean:\n- want: %v\n-  got: %v", want, got)
-	}
-
-	// Reset trigger
-	s.triggered = false
-
-	// Test 2: socket should become nonblocking due to time after now
-	if err := p.SetDeadline(time.Now().Add(10 * time.Second)); err != nil {
-		t.Fatal(err)
-	}
-	if want, got := true, s.triggered; want != got {
-		t.Fatalf("unexpected triggered boolean:\n- want: %v\n-  got: %v", want, got)
-	}
-	if want, got := true, s.nonblocking; want != got {
-		t.Fatalf("unexpected nonblocking boolean:\n- want: %v\n-  got: %v", want, got)
-	}
-
-	// Reset trigger
-	s.triggered = false
-
-	// Test 3: socket should remain nonblocking due to time after now, but not
-	// trigger the system call again
-	if err := p.SetDeadline(time.Now().Add(10 * time.Second)); err != nil {
-		t.Fatal(err)
-	}
-	if want, got := false, s.triggered; want != got {
-		t.Fatalf("unexpected triggered boolean:\n- want: %v\n-  got: %v", want, got)
-	}
-	if want, got := true, s.nonblocking; want != got {
-		t.Fatalf("unexpected nonblocking boolean:\n- want: %v\n-  got: %v", want, got)
-	}
-
-	// Reset trigger
-	s.triggered = false
-
-	// Test 4: socket should become blocking due to zero time
-	if err := p.SetDeadline(time.Time{}); err != nil {
-		t.Fatal(err)
-	}
-	if want, got := true, s.triggered; want != got {
-		t.Fatalf("unexpected triggered boolean:\n- want: %v\n-  got: %v", want, got)
-	}
-	if want, got := false, s.nonblocking; want != got {
-		t.Fatalf("unexpected nonblocking boolean:\n- want: %v\n-  got: %v", want, got)
-	}
-
-	// Reset trigger
-	s.triggered = false
-
-	// Test 5: socket should remain blocking due to zero time, but not trigger
-	// the system call again
-	if err := p.SetDeadline(time.Time{}); err != nil {
-		t.Fatal(err)
-	}
-	if want, got := false, s.triggered; want != got {
-		t.Fatalf("unexpected triggered boolean:\n- want: %v\n-  got: %v", want, got)
-	}
-	if want, got := false, s.nonblocking; want != got {
-		t.Fatalf("unexpected nonblocking boolean:\n- want: %v\n-  got: %v", want, got)
-	}
-}
-
 // Test that BPF filter attachment works as intended.
 
 type setSockoptSocket struct {
-	setsockopt func(level, name int, v unsafe.Pointer, l uint32) error
+	setsockoptSockFprog func(level, name int, fprog *unix.SockFprog) error
 	noopSocket
 }
 
-func (s *setSockoptSocket) SetSockopt(level, name int, v unsafe.Pointer, l uint32) error {
-	return s.setsockopt(level, name, v, l)
+func (s *setSockoptSocket) SetSockoptSockFprog(level, name int, fprog *unix.SockFprog) error {
+	return s.setsockoptSockFprog(level, name, fprog)
 }
 
 func Test_packetConnSetBPF(t *testing.T) {
@@ -471,49 +326,107 @@ func Test_packetConnSetBPF(t *testing.T) {
 		t.Fatalf("failed to assemble filter: %v", err)
 	}
 
-	fn := func(level, name int, _ unsafe.Pointer, _ uint32) error {
+	count := 0
+	fn := func(level, name int, _ *unix.SockFprog) error {
 		// Though we can't check the filter itself, we can check the setsockopt
 		// level and name for correctness.
-		if want, got := syscall.SOL_SOCKET, level; want != got {
+		if want, got := unix.SOL_SOCKET, level; want != got {
 			t.Fatalf("unexpected setsockopt level:\n- want: %v\n-  got: %v", want, got)
 		}
-		if want, got := syscall.SO_ATTACH_FILTER, name; want != got {
+		if want, got := unix.SO_ATTACH_FILTER, name; want != got {
 			t.Fatalf("unexpected setsockopt name:\n- want: %v\n-  got: %v", want, got)
 		}
 
+		count++
 		return nil
 	}
 
 	s := &setSockoptSocket{
-		setsockopt: fn,
+		setsockoptSockFprog: fn,
 	}
-	p := &packetConn{
-		s: s,
+
+	p, err := newPacketConn(&net.Interface{}, s, 1, filter)
+	if err != nil {
+		t.Fatalf("failed to create connection with filter: %v", err)
+	}
+
+	if count != 1 {
+		t.Fatal("creating a socket with filter didn't install it")
 	}
 
 	if err := p.SetBPF(filter); err != nil {
 		t.Fatalf("failed to attach filter: %v", err)
 	}
+
+	if count != 2 {
+		t.Fatal("creating a socket with filter didn't install it")
+	}
 }
 
-// testSleeper is a sleeper implementation which atomically increments a
-// counter to indicate how long it has slept.
-type testSleeper struct {
-	slept int64
-}
+func Test_packetConn_handleStats(t *testing.T) {
+	tests := []struct {
+		name         string
+		noCumulative bool
+		stats        []unix.TpacketStats
+		out          []Stats
+	}{
+		{
+			name:         "no cumulative",
+			noCumulative: true,
+			stats: []unix.TpacketStats{
+				// Expect these exact outputs.
+				{Packets: 1, Drops: 1},
+				{Packets: 2, Drops: 2},
+			},
+			out: []Stats{
+				{Packets: 1, Drops: 1},
+				{Packets: 2, Drops: 2},
+			},
+		},
+		{
+			name: "cumulative",
+			stats: []unix.TpacketStats{
+				// Expect accumulation of structures.
+				{Packets: 1, Drops: 1},
+				{Packets: 2, Drops: 2},
+			},
+			out: []Stats{
+				{Packets: 1, Drops: 1},
+				{Packets: 3, Drops: 3},
+			},
+		},
+	}
 
-func (t *testSleeper) Sleep(d time.Duration) {
-	atomic.AddInt64(&t.slept, int64(d))
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := &packetConn{noCumulativeStats: tt.noCumulative}
+
+			if diff := cmp.Diff(len(tt.stats), len(tt.out)); diff != "" {
+				t.Fatalf("unexpected number of test cases (-want +got):\n%s", diff)
+			}
+
+			for i := 0; i < len(tt.stats); i++ {
+				out := *p.handleStats(&tt.stats[i])
+
+				if diff := cmp.Diff(tt.out[i], out); diff != "" {
+					t.Fatalf("unexpected Stats[%02d] (-want +got):\n%s", i, diff)
+				}
+			}
+		})
+	}
 }
 
 // noopSocket is a socket implementation which noops every operation.  It is
 // the basis for more specific socket implementations.
 type noopSocket struct{}
 
-func (noopSocket) Bind(sa syscall.Sockaddr) error                               { return nil }
-func (noopSocket) Close() error                                                 { return nil }
-func (noopSocket) FD() int                                                      { return 0 }
-func (noopSocket) Recvfrom(p []byte, flags int) (int, syscall.Sockaddr, error)  { return 0, nil, nil }
-func (noopSocket) Sendto(p []byte, flags int, to syscall.Sockaddr) error        { return nil }
-func (noopSocket) SetNonblock(nonblocking bool) error                           { return nil }
-func (noopSocket) SetSockopt(level, name int, v unsafe.Pointer, l uint32) error { return nil }
+func (noopSocket) Bind(sa unix.Sockaddr) error                                        { return nil }
+func (noopSocket) Close() error                                                       { return nil }
+func (noopSocket) GetSockoptTpacketStats(level, name int) (*unix.TpacketStats, error) { return nil, nil }
+func (noopSocket) Recvfrom(p []byte, flags int) (int, unix.Sockaddr, error)           { return 0, nil, nil }
+func (noopSocket) Sendto(p []byte, flags int, to unix.Sockaddr) error                 { return nil }
+func (noopSocket) SetSockoptPacketMreq(level, name int, mreq *unix.PacketMreq) error  { return nil }
+func (noopSocket) SetSockoptSockFprog(level, name int, fprog *unix.SockFprog) error   { return nil }
+func (noopSocket) SetDeadline(timeout time.Time) error                                { return nil }
+func (noopSocket) SetReadDeadline(timeout time.Time) error                            { return nil }
+func (noopSocket) SetWriteDeadline(timeout time.Time) error                           { return nil }

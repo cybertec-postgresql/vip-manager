@@ -10,22 +10,9 @@ import (
 	"golang.org/x/net/bpf"
 )
 
-const (
-	// ProtocolAoE specifies the ATA over Ethernet protocol (AoEr11).
-	ProtocolAoE Protocol = 0x88a2
-
-	// ProtocolARP specifies the Address Resolution Protocol (RFC 826).
-	ProtocolARP Protocol = 0x0806
-
-	// ProtocolWoL specifies the Wake-on-LAN protocol.
-	ProtocolWoL Protocol = 0x0842
-)
-
-var (
-	// ErrNotImplemented is returned when certain functionality is not yet
-	// implemented for the host operating system.
-	ErrNotImplemented = errors.New("raw: not implemented")
-)
+// ErrNotImplemented is returned when certain functionality is not yet
+// implemented for the host operating system.
+var ErrNotImplemented = errors.New("raw: not implemented")
 
 var _ net.Addr = &Addr{}
 
@@ -103,19 +90,42 @@ func (c *Conn) SetPromiscuous(b bool) error {
 	return c.p.SetPromiscuous(b)
 }
 
-// A Protocol is a network protocol constant which identifies the type of
-// traffic a raw socket should send and receive.
-type Protocol uint16
+// Stats contains statistics about a Conn.
+type Stats struct {
+	// The total number of packets received.
+	Packets uint64
+
+	// The number of packets dropped.
+	Drops uint64
+}
+
+// Stats retrieves statistics from the Conn.
+//
+// Only supported on Linux at this time.
+func (c *Conn) Stats() (*Stats, error) {
+	return c.p.Stats()
+}
 
 // ListenPacket creates a net.PacketConn which can be used to send and receive
 // data at the network interface device driver level.
 //
 // ifi specifies the network interface which will be used to send and receive
-// data.  proto specifies the protocol which should be captured and
-// transmitted.  proto, if needed, is automatically converted to network byte
-// order (big endian), akin to the htons() function in C.
-func ListenPacket(ifi *net.Interface, proto Protocol) (*Conn, error) {
-	p, err := listenPacket(ifi, proto)
+// data.
+//
+// proto specifies the protocol (usually the EtherType) which should be
+// captured and transmitted.  proto, if needed, is automatically converted to
+// network byte order (big endian), akin to the htons() function in C.
+//
+// cfg specifies optional configuration which may be operating system-specific.
+// A nil Config is equivalent to the default configuration: send and receive
+// data at the network interface device driver level (usually raw Ethernet frames).
+func ListenPacket(ifi *net.Interface, proto uint16, cfg *Config) (*Conn, error) {
+	// A nil config is an empty Config.
+	if cfg == nil {
+		cfg = &Config{}
+	}
+
+	p, err := listenPacket(ifi, proto, *cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -125,22 +135,25 @@ func ListenPacket(ifi *net.Interface, proto Protocol) (*Conn, error) {
 	}, nil
 }
 
-// htons converts a short (uint16) from host-to-network byte order.
-// Thanks to mikioh for this neat trick:
-// https://github.com/mikioh/-stdyng/blob/master/afpacket.go
-func htons(i uint16) uint16 {
-	return (i<<8)&0xff00 | i>>8
+// A Config can be used to specify additional options for a Conn.
+type Config struct {
+	// Linux only: call socket(7) with SOCK_DGRAM instead of SOCK_RAW.
+	// Has no effect on other operating systems.
+	LinuxSockDGRAM bool
+
+	// Linux only: do not accumulate packet socket statistic counters.  Packet
+	// socket statistics are reset on each call to retrieve them via getsockopt,
+	// but this package's default behavior is to continue accumulating the
+	// statistics internally per Conn.  To use the Linux default behavior of
+	// resetting statistics on each call to Stats, set this value to true.
+	NoCumulativeStats bool
+
+	// Linux only: initial filter to apply to the connection. This avoids
+	// capturing random packets before SetBPF is called.
+	Filter []bpf.RawInstruction
+
+	// BSD only: configure the BPF direction flag to allow selection of inbound
+	// only (0 - default) or bidirectional (1) packet processing.
+	// Has no effect on other operating systems.
+	BPFDirection int
 }
-
-// Copyright (c) 2012 The Go Authors. All rights reserved.
-// Source code in this file is based on src/net/interface_linux.go,
-// from the Go standard library.  The Go license can be found here:
-// https://golang.org/LICENSE.
-
-// Taken from:
-// https://github.com/golang/go/blob/master/src/net/net.go#L417-L421.
-type timeoutError struct{}
-
-func (e *timeoutError) Error() string   { return "i/o timeout" }
-func (e *timeoutError) Timeout() bool   { return true }
-func (e *timeoutError) Temporary() bool { return true }
