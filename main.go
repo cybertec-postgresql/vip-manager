@@ -2,20 +2,20 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
-
-	"gopkg.in/yaml.v2"
 
 	"github.com/cybertec-postgresql/vip-manager/checker"
 	"github.com/cybertec-postgresql/vip-manager/vipconfig"
-	//"github.com/milosgajdos83/tenus"
+	"github.com/spf13/pflag"
+	"github.com/spf13/viper"
 )
 
 var configFile = flag.String("config", "", "Location of the configuration file.")
@@ -31,17 +31,19 @@ var etcd_user = flag.String("etcd_user", "none", "username that can be used to a
 var etcd_password = flag.String("etcd_password", "none", "password for the etcd_user")
 
 var endpointType = flag.String("type", "etcd", "type of endpoint used for key storage. Supported values: etcd, consul")
-var endpoint = flag.String("endpoint", "http://localhost:2379[,http://host:port,..]", "endpoint")
+var endpoint = flag.String("endpoint", "none", "DCS endpoint")
 var interval = flag.Int("interval", 1000, "DCS scan interval in milliseconds")
 
 var hostingType = flag.String("hostingtype", "basic", "type of hosting. Supported values: self, hetzner")
 
 var conf vipconfig.Config
 
-func checkFlag(f string, name string) {
+func checkFlag(f string, name string) bool {
 	if f == "none" || f == "" {
-		log.Fatalf("Setting %s is mandatory", name)
+		log.Printf("Setting %s is mandatory", name)
+		return false
 	}
+	return true
 }
 
 func getMask(vip net.IP, mask int) net.IPMask {
@@ -59,66 +61,164 @@ func getNetIface(iface string) *net.Interface {
 	return netIface
 }
 
+func setDefaults() {
+	defaults := map[string]string{
+		"mask":         "-1",
+		"endpointType": "etcd",
+		"interval":     "1000",
+		"hostingtype":  "basic",
+		"retrynum":     "3",
+		"retryafter":   "250",
+	}
+
+	for k, v := range defaults {
+		viper.SetDefault(k, v)
+	}
+}
+
+func setAlias() {
+	aliases := map[string]string{
+		// "name that we'll use": "legacy name, e.g. in flag",
+		"hosting_type":  "hostingtype",
+		"endpoint_type": "type",
+		"interface":     "iface",
+		"node_name":     "nodename",
+	}
+
+	for k, v := range aliases {
+		viper.RegisterAlias(k, v)
+	}
+}
+
+func checkMandatory() {
+	mandatory := []string{
+		"ip",
+		"mask",
+		"iface",
+		"key",
+		"nodename",
+		"endpoints",
+	}
+
+	success := true
+	for _, v := range mandatory {
+		if v != "endpoints" {
+			success = checkFlag(viper.GetString(v), v) && success
+		} else {
+			success = checkFlag(viper.GetStringSlice(v)[0], v) && success
+		}
+	}
+	if success == false {
+		log.Fatal("one or more mandatory settings were not set.")
+	}
+}
+
+func populateConf() {
+
+}
+
 func main() {
-	flag.Parse()
+	//put existing flags into pflags:
+	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
+	pflag.Parse()
+	//import pflags into viper
+	viper.BindPFlags(pflag.CommandLine)
+
+	// make viper look for env variables that are prefixed VIP_...
+	// viper.getString("IP") will thus check env variable VIP_IP
+	viper.SetEnvPrefix("vip")
+	viper.AutomaticEnv()
+
+	// viper precedence order
+	// - explicit call to Set
+	// - flag
+	// - env
+	// - config
+	// - key/value store
+	// - default
+
+	setDefaults()
+	setAlias()
+
+	// if a configfile has been passed, make viper read it
+	if viper.IsSet("configfile") {
+		viper.SetConfigFile(viper.GetString("configfile"))
+
+		err := viper.ReadInConfig() // Find and read the config file
+		if err != nil {             // Handle errors reading the config file
+			panic(fmt.Errorf("Fatal error reading config file: %s \n", err))
+		}
+		fmt.Printf("Using config from file: %s\n", viper.ConfigFileUsed())
+	}
 
 	if *versionHint == true {
 		fmt.Println("version 0.6.1")
 		return
 	}
-	//introduce parsed values into conf
-	conf = vipconfig.Config{Ip: *ip, Mask: *mask, Iface: *iface, HostingType: *hostingType,
-		Key: *key, Nodename: *host, Endpoint_type: *endpointType, Endpoints: []string{*endpoint},
-		Etcd_user: *etcd_user, Etcd_password: *etcd_password, Interval: *interval}
 
-	if *configFile != "" {
-		yamlFile, err := ioutil.ReadFile(*configFile)
-		if err != nil {
-			log.Fatal("couldn't open config File!", err)
+	if viper.IsSet("endpoint") && !viper.IsSet("endpoints") {
+		endpoint := viper.GetString("endpoint")
+		var endpoints []string
+		if strings.Contains(endpoint, ",") {
+			endpoints = strings.Split(endpoint, ",")
+		} else {
+			endpoints[0] = endpoint
 		}
-		log.Printf("reading config from %s", *configFile)
-		err = yaml.Unmarshal(yamlFile, &conf)
-		if err != nil {
-			log.Fatalf("Error while reading config file: %v", err)
-		}
-	} else {
-		log.Printf("No config file specified, using arguments only.")
+		viper.Set("endpoints", endpoints)
 	}
 
-	checkFlag(conf.Ip, "IP")
-	checkFlag(conf.Iface, "network interface")
-	checkFlag(conf.Key, "key")
-
-	if len(conf.Endpoints) == 0 {
-		log.Print("No etcd/consul endpoints specified, trying to use localhost with standard ports!")
+	if !viper.IsSet("endpoints") {
+		log.Println("No etcd/consul endpoints specified, trying to use localhost with standard ports!")
 		switch conf.Endpoint_type {
 		case "consul":
-			conf.Endpoints[0] = "http://127.0.0.1:2379"
+			viper.Set("endpoints", []string{"http://127.0.0.1:8500"})
 		case "etcd":
-			conf.Endpoints[0] = "http://127.0.0.1:8500"
+			viper.Set("endpoints", []string{"http://127.0.0.1:2379"})
 		}
 	}
 
-	if conf.Nodename == "" {
-		nodename, err := os.Hostname()
+	if len(viper.GetString("node_name")) == 0 {
+		node_name, err := os.Hostname()
 		if err != nil {
-			log.Fatalf("No nodename specified, hostname could not be retrieved: %s", err)
+			log.Printf("No nodename specified, hostname could not be retrieved: %s\n", err)
 		} else {
-			log.Printf("No nodename specified, instead using hostname: %v", nodename)
-			conf.Nodename = nodename
+			log.Printf("No nodename specified, instead using hostname: %v\n", node_name)
+			viper.Set("node_name", node_name)
 		}
 	}
 
-	if conf.Retry_num == 0 {
-		log.Println("Number of retries (retry_num) was not set or set to 0. It needs to be set to something more than 0 for vip-manager to work. Will set it to 3 by default.")
-		conf.Retry_num = 3
-		conf.Retry_after = 250
+	checkMandatory()
+
+	conf = vipconfig.Config{
+		Ip:            viper.GetString("ip"),
+		Mask:          viper.GetInt("mask"),
+		Iface:         viper.GetString("iface"),
+		HostingType:   viper.GetString("hosting_type"),
+		Key:           viper.GetString("key"),
+		Nodename:      viper.GetString("node_name"),
+		Endpoint_type: viper.GetString("endpoint_type"),
+		Endpoints:     viper.GetStringSlice("endpoints"),
+		Etcd_user:     viper.GetString("etcd_user"),
+		Etcd_password: viper.GetString("etcd_password"),
+		Consul_token:  viper.GetString("consul_token"),
+		Interval:      viper.GetInt("interval"),
+		Retry_after:   viper.GetInt("retry_after"),
+		Retry_num:     viper.GetInt("retry_num"),
 	}
+
+	fmt.Printf("%+v\n", conf)
+
+	b, err := json.MarshalIndent(conf, "", "  ")
+	if err == nil {
+		fmt.Println(string(b))
+	}
+
+	return
 
 	states := make(chan bool)
 	lc, err := checker.NewLeaderChecker(conf)
 	if err != nil {
-		log.Fatalf("Failed to initialize leader checker: %s", err)
+		log.Fatalf("Failed to initialize leader checker: %s\n", err)
 	}
 
 	vip := net.ParseIP(conf.Ip)
@@ -136,7 +236,7 @@ func main() {
 		states,
 	)
 	if err != nil {
-		log.Fatalf("Problems with generating the virtual ip manager: %s", err)
+		log.Fatalf("Problems with generating the virtual ip manager: %s\n", err)
 	}
 
 	mainCtx, cancel := context.WithCancel(context.Background())
@@ -147,7 +247,7 @@ func main() {
 
 		<-c
 
-		log.Printf("Received exit signal")
+		log.Printf("Received exit signal\n")
 		cancel()
 	}()
 
@@ -156,7 +256,7 @@ func main() {
 	go func() {
 		err := lc.GetChangeNotificationStream(mainCtx, states)
 		if err != nil && err != context.Canceled {
-			log.Fatalf("Leader checker returned the following error: %s", err)
+			log.Fatalf("Leader checker returned the following error: %s\n", err)
 		}
 		wg.Done()
 	}()
