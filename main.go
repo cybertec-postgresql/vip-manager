@@ -53,7 +53,9 @@ func setDefaults() {
 	}
 
 	for k, v := range defaults {
-		viper.SetDefault(k, v)
+		if !viper.IsSet(k) {
+			viper.SetDefault(k, v)
+		}
 	}
 }
 
@@ -89,8 +91,9 @@ func defineFlags() {
 
 	pflag.String("dcs-type", "etcd", "type of endpoint used for key storage. Supported values: etcd, consul")
 	pflag.String("dcs-endpoints", "", "DCS endpoints")
-	pflag.String("dcs-user", "", "username for the DCS")
-	pflag.String("dcs-secret", "", "secret for the DCS")
+	pflag.String("etcd-user", "", "username for etcd DCS endpoints")
+	pflag.String("etcd-password", "", "password for etcd DCS endpoints")
+	pflag.String("consul-token", "", "token for consul DCS endpoints")
 
 	pflag.String("interval", "1000", "DCS scan interval in milliseconds")
 	pflag.String("manager-mode", "basic", "type of hosting. Supported values: basic, hetzner")
@@ -105,11 +108,13 @@ func defineFlags() {
 	pflag.String("type", "", "")
 	pflag.CommandLine.MarkDeprecated("type", "use --dcs-type instead")
 	pflag.String("etcd_password", "", "")
-	pflag.CommandLine.MarkDeprecated("etcd_password", "use --dcs-secret instead")
+	pflag.CommandLine.MarkDeprecated("etcd_password", "use --etcd-password instead")
 	pflag.String("etcd_user", "", "")
-	pflag.CommandLine.MarkDeprecated("etcd_user", "use --dcs-user instead")
-	pflag.String("host", "", "")
-	pflag.CommandLine.MarkDeprecated("host", "use --trigger-value instead")
+	pflag.CommandLine.MarkDeprecated("etcd_user", "use --etcd-user instead")
+	pflag.String("consul_token", "", "")
+	pflag.CommandLine.MarkDeprecated("consul_token", "use --consul-token instead")
+	pflag.String("nodename", "", "")
+	pflag.CommandLine.MarkDeprecated("nodename", "use --trigger-value instead")
 	pflag.String("key", "", "")
 	pflag.CommandLine.MarkDeprecated("key", "use --trigger-key instead")
 	pflag.String("iface", "", "")
@@ -124,21 +129,28 @@ func mapDeprecated() {
 		"mask":          "netmask",
 		"iface":         "interface",
 		"key":           "trigger-key",
-		"host":          "trigger-value",
-		"etcd_user":     "dcs-user",
-		"etcd_password": "dcs-secret",
+		"nodename":      "trigger-value",
+		"etcd_user":     "etcd-user",
+		"etcd_password": "etcd-password",
 		"type":          "dcs-type",
 		"endpoint":      "dcs-endpoints",
+		"endpoints":     "dcs-endpoints",
 		"hostingtype":   "manager-mode",
+		"hosting_type":  "manager-mode",
+		"endpoint_type": "dcs-type",
+		"retry_num":     "retry-num",
+		"retry_after":   "retry-after",
+		"consul_token":  "consul-token",
 	}
 
 	for k, v := range deprecated {
 		if viper.IsSet(k) {
+			log.Printf("Parameter \"%s\" has been deprecated, please use \"%s\" instead.", k, v)
 			if viper.IsSet(v) {
 				log.Printf("conflicting settings: %s and %s are both specified.", k, v)
 				log.Fatalf("values: %s and %s are both specified.", viper.GetString(k), viper.GetString(v))
 			} else {
-				viper.Set(v, viper.GetString(k))
+				viper.Set(v, viper.Get(k))
 			}
 		}
 	}
@@ -168,9 +180,6 @@ func main() {
 	// - key/value store
 	// - default
 
-	mapDeprecated()
-	setDefaults()
-
 	// if a configfile has been passed, make viper read it
 	if viper.IsSet("config") {
 		viper.SetConfigFile(viper.GetString("config"))
@@ -182,6 +191,10 @@ func main() {
 		fmt.Printf("Using config from file: %s\n", viper.ConfigFileUsed())
 	}
 
+	mapDeprecated()
+
+	setDefaults()
+
 	if viper.IsSet("version") {
 		fmt.Println("version 0.6.1")
 		return
@@ -192,14 +205,12 @@ func main() {
 		endpointsString := viper.GetString("dcs-endpoints")
 		if strings.Contains(endpointsString, ",") {
 			viper.Set("dcs-endpoints", strings.Split(endpointsString, ","))
-		} else {
-			viper.Set("dcs-endpoints", []string{endpointsString})
 		}
 	}
 
 	//apply defaults for endpoints
 	if !viper.IsSet("dcs-endpoints") {
-		log.Println("No etcd/consul endpoints specified, trying to use localhost with standard ports!")
+		log.Println("No dcs-endpoints specified, trying to use localhost with standard ports!")
 
 		switch viper.GetString("dcs-type") {
 		case "consul":
@@ -212,9 +223,9 @@ func main() {
 	if len(viper.GetString("trigger-value")) == 0 {
 		trigger_value, err := os.Hostname()
 		if err != nil {
-			log.Printf("No nodename specified, hostname could not be retrieved: %s\n", err)
+			log.Printf("No trigger-value specified, hostname could not be retrieved: %s\n", err)
 		} else {
-			log.Printf("No nodename specified, instead using hostname: %v\n", trigger_value)
+			log.Printf("No trigger-value specified, instead using hostname: %v\n", trigger_value)
 			viper.Set("trigger-value", trigger_value)
 		}
 	}
@@ -228,15 +239,13 @@ func main() {
 		Nodename:      viper.GetString("trigger-value"),
 		Endpoint_type: viper.GetString("dcs-type"),
 		Endpoints:     viper.GetStringSlice("dcs-endpoints"),
-		Etcd_user:     viper.GetString("dcs-user"),
-		Etcd_password: viper.GetString("dcs-secret"),
-		Consul_token:  viper.GetString("consul_token"),
+		Etcd_user:     viper.GetString("etcd-user"),
+		Etcd_password: viper.GetString("etcd-password"),
+		Consul_token:  viper.GetString("consul-token"),
 		Interval:      viper.GetInt("interval"),
 		Retry_after:   viper.GetInt("retry-after"),
 		Retry_num:     viper.GetInt("retry-num"),
 	}
-
-	fmt.Printf("%+v\n", conf)
 
 	b, err := json.MarshalIndent(conf, "", "  ")
 	if err == nil {
@@ -244,8 +253,6 @@ func main() {
 	}
 
 	checkMandatory()
-
-	return
 
 	states := make(chan bool)
 	lc, err := checker.NewLeaderChecker(conf)
