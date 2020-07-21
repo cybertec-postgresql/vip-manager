@@ -3,3 +3,4 @@
 *.rpm
 *.exe
 tmp/
+.vscode/
