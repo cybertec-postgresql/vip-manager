@@ -16,19 +16,19 @@ type EtcdLeaderChecker struct {
 }
 
 //naming this c_conf to avoid conflict with conf in etcd_leader_checker.go
-var e_conf vipconfig.Config
+var eConf vipconfig.Config
 
 //func NewEtcdLeaderChecker(endpoint, key, nodename string, etcd_user string, etcd_password string) (*EtcdLeaderChecker, error) {
 func NewEtcdLeaderChecker(con vipconfig.Config) (*EtcdLeaderChecker, error) {
-	e_conf = con
-	e := &EtcdLeaderChecker{key: e_conf.Key, nodename: e_conf.Nodename}
+	eConf = con
+	e := &EtcdLeaderChecker{key: eConf.Key, nodename: eConf.Nodename}
 
 	cfg := client.Config{
-		Endpoints:               e_conf.Endpoints,
+		Endpoints:               eConf.Endpoints,
 		Transport:               client.DefaultTransport,
 		HeaderTimeoutPerRequest: time.Second,
-		Username:                e_conf.Etcd_user,
-		Password:                e_conf.Etcd_password,
+		Username:                eConf.EtcdUser,
+		Password:                eConf.EtcdPassword,
 	}
 
 	c, err := client.New(cfg)
@@ -58,7 +58,7 @@ checkLoop:
 			}
 			log.Printf("etcd error: %s", err)
 			out <- false
-			time.Sleep(time.Duration(e_conf.Interval) * time.Millisecond)
+			time.Sleep(time.Duration(eConf.Interval) * time.Millisecond)
 			continue
 		}
 
@@ -68,7 +68,7 @@ checkLoop:
 		case <-ctx.Done():
 			break checkLoop
 		case out <- state:
-			time.Sleep(time.Duration(e_conf.Interval) * time.Millisecond)
+			time.Sleep(time.Duration(eConf.Interval) * time.Millisecond)
 			continue
 		}
 	}

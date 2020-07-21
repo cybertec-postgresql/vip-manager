@@ -6,11 +6,11 @@ import (
 )
 
 type IPConfiguration struct {
-	vip         net.IP
-	netmask     net.IPMask
-	iface       net.Interface
-	Retry_num   int
-	Retry_after int
+	vip        net.IP
+	netmask    net.IPMask
+	iface      net.Interface
+	RetryNum   int
+	RetryAfter int
 }
 
 func (c *IPConfiguration) GetCIDR() string {

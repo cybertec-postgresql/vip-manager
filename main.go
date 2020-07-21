@@ -4,12 +4,12 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"strings"
 	"io/ioutil"
 	"log"
 	"net"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 
 	"gopkg.in/yaml.v2"
@@ -28,8 +28,8 @@ var mask = flag.Int("mask", -1, "The netmask used for the IP address. Defaults t
 var iface = flag.String("iface", "none", "Network interface to configure on")
 var key = flag.String("key", "none", "key to monitor, e.g. /service/batman/leader")
 var host = flag.String("host", "none", "Value to monitor for")
-var etcd_user = flag.String("etcd_user", "none", "username that can be used to access the key in etcd")
-var etcd_password = flag.String("etcd_password", "none", "password for the etcd_user")
+var etcdUser = flag.String("etcd_user", "none", "username that can be used to access the key in etcd")
+var etcdPassword = flag.String("etcd_password", "none", "password for the etcd_user")
 
 var endpointType = flag.String("type", "etcd", "type of endpoint used for key storage. Supported values: etcd, consul")
 var endpoints = flag.String("endpoint", "http://localhost:2379[,http://host:port,..]", "endpoint")
@@ -63,7 +63,7 @@ func getNetIface(iface string) *net.Interface {
 func main() {
 	flag.Parse()
 
-	if *versionHint == true {
+	if *versionHint {
 		fmt.Println("version 0.6.1")
 		return
 	}
@@ -72,9 +72,9 @@ func main() {
 	endpointArray := strings.Split(*endpoints, ",")
 
 	//introduce parsed values into conf
-	conf = vipconfig.Config{Ip: *ip, Mask: *mask, Iface: *iface, HostingType: *hostingType,
-		Key: *key, Nodename: *host, Endpoint_type: *endpointType, Endpoints: endpointArray,
-		Etcd_user: *etcd_user, Etcd_password: *etcd_password, Interval: *interval}
+	conf = vipconfig.Config{IP: *ip, Mask: *mask, Iface: *iface, HostingType: *hostingType,
+		Key: *key, Nodename: *host, EndpointType: *endpointType, Endpoints: endpointArray,
+		EtcdUser: *etcdUser, EtcdPassword: *etcdPassword, Interval: *interval}
 
 	if *configFile != "" {
 		yamlFile, err := ioutil.ReadFile(*configFile)
@@ -90,13 +90,13 @@ func main() {
 		log.Printf("No config file specified, using arguments only.")
 	}
 
-	checkFlag(conf.Ip, "IP")
+	checkFlag(conf.IP, "IP")
 	checkFlag(conf.Iface, "network interface")
 	checkFlag(conf.Key, "key")
 
 	if len(conf.Endpoints) == 0 {
 		log.Print("No etcd/consul endpoints specified, trying to use localhost with standard ports!")
-		switch conf.Endpoint_type {
+		switch conf.EndpointType {
 		case "consul":
 			conf.Endpoints[0] = "http://127.0.0.1:2379"
 		case "etcd":
@@ -114,10 +114,10 @@ func main() {
 		}
 	}
 
-	if conf.Retry_num == 0 {
+	if conf.RetryNum == 0 {
 		log.Println("Number of retries (retry_num) was not set or set to 0. It needs to be set to something more than 0 for vip-manager to work. Will set it to 3 by default.")
-		conf.Retry_num = 3
-		conf.Retry_after = 250
+		conf.RetryNum = 3
+		conf.RetryAfter = 250
 	}
 
 	states := make(chan bool)
@@ -126,17 +126,17 @@ func main() {
 		log.Fatalf("Failed to initialize leader checker: %s", err)
 	}
 
-	vip := net.ParseIP(conf.Ip)
+	vip := net.ParseIP(conf.IP)
 	vipMask := getMask(vip, conf.Mask)
 	netIface := getNetIface(conf.Iface)
 	manager, err := NewIPManager(
 		*hostingType,
 		&IPConfiguration{
-			vip:         vip,
-			netmask:     vipMask,
-			iface:       *netIface,
-			Retry_num:   conf.Retry_num,
-			Retry_after: conf.Retry_after,
+			vip:        vip,
+			netmask:    vipMask,
+			iface:      *netIface,
+			RetryNum:   conf.RetryNum,
+			RetryAfter: conf.RetryAfter,
 		},
 		states,
 	)

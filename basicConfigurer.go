@@ -12,14 +12,12 @@ import (
 	arp "github.com/mdlayher/arp"
 )
 
-/**
- * The BasicConfigurer can be used to enable vip-management on nodes
- * that handle their own network connection, in setups where it is
- * sufficient to add the virtual ip using `ip addr add ...` .
- * After adding the virtual ip to the specified interface,
- * a gratuitous ARP package is sent out to update the tables of
- * nearby routers and other devices.
- */
+//  The BasicConfigurer can be used to enable vip-management on nodes
+//  that handle their own network connection, in setups where it is
+//  sufficient to add the virtual ip using `ip addr add ...` .
+//  After adding the virtual ip to the specified interface,
+//  a gratuitous ARP package is sent out to update the tables of
+//  nearby routers and other devices.
 
 const (
 	arpRequestOp = 1
@@ -55,14 +53,14 @@ func NewBasicConfigurer(config *IPConfiguration) (*BasicConfigurer, error) {
 func (c *BasicConfigurer) createArpClient() error {
 	var err error
 	var arpClient *arp.Client
-	for i := 0; i < c.Retry_num; i++ {
+	for i := 0; i < c.RetryNum; i++ {
 		arpClient, err = arp.Dial(&c.iface)
 		if err != nil {
 			log.Printf("Problems with producing the arp client: %s", err)
 		} else {
 			break
 		}
-		time.Sleep(time.Duration(c.Retry_after) * time.Millisecond)
+		time.Sleep(time.Duration(c.RetryAfter) * time.Millisecond)
 	}
 	if err != nil {
 		log.Print("too many retries")
@@ -115,7 +113,7 @@ func (c *BasicConfigurer) ARPSendGratuitous() error {
 		return err
 	}
 
-	for i := 0; i < c.Retry_num; i++ {
+	for i := 0; i < c.RetryNum; i++ {
 		errReply := c.arpClient.WriteTo(gratuitousReplyPackage, ethernetBroadcast)
 		if err != nil {
 			log.Printf("Couldn't write to the arpClient: %s", errReply)
@@ -139,7 +137,7 @@ func (c *BasicConfigurer) ARPSendGratuitous() error {
 			//TODO: think about whether to leave this out to achieve simple repeat sending of GARP packages
 			break
 		}
-		time.Sleep(time.Duration(c.Retry_after) * time.Millisecond)
+		time.Sleep(time.Duration(c.RetryAfter) * time.Millisecond)
 	}
 	if err != nil {
 		log.Print("too many retries")
@@ -174,7 +172,9 @@ func (c *BasicConfigurer) QueryAddress() bool {
 		}
 	}
 
-	cmd.Wait()
+	if cmd.Wait() != nil {
+		return false
+	}
 
 	return result
 }
@@ -184,11 +184,11 @@ func (c *BasicConfigurer) ConfigureAddress() bool {
 
 	result := c.runAddressConfiguration("add")
 
-	if result == true {
+	if result {
 		// For now it is save to say that also working even if a
 		// gratuitous arp message could not be send but logging an
 		// errror should be enough.
-		c.ARPSendGratuitous()
+		_ = c.ARPSendGratuitous()
 	}
 
 	return result

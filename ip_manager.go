@@ -72,13 +72,13 @@ func (m *IPManager) applyLoop(ctx context.Context) {
 			log.Printf("IP address %s state is %t, desired %t", m.configurer.GetCIDR(), actualState, desiredState)
 			if actualState != desiredState {
 				m.stateLock.Unlock()
-				var configureState bool = false
+				var configureState bool
 				if desiredState {
 					configureState = m.configurer.ConfigureAddress()
 				} else {
 					configureState = m.configurer.DeconfigureAddress()
 				}
-				if configureState != true {
+				if !configureState {
 					log.Printf("Error while acquiring virtual ip for this machine")
 					//Sleep a little bit to avoid busy waiting due to the for loop.
 					timeout = 10
