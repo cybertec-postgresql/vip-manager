@@ -130,7 +130,7 @@ func main() {
 	vipMask := getMask(vip, conf.Mask)
 	netIface := getNetIface(conf.Iface)
 	manager, err := NewIPManager(
-		conf.Hosting_type,
+		conf.HostingType,
 		&IPConfiguration{
 			vip:        vip,
 			netmask:    vipMask,

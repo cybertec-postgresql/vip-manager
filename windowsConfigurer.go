@@ -1,22 +1,19 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
 	"log"
+	"net"
 	"os/exec"
 	"strings"
-//	"syscall"
 )
 
-/**
- * The BasicConfigurer can be used to enable vip-management on nodes
- * that handle their own network connection, in setups where it is
- * sufficient to add the virtual ip using `ip addr add ...` .
- * After adding the virtual ip to the specified interface,
- * a gratuitous ARP package is sent out to update the tables of
- * nearby routers and other devices.
- */
+//  The BasicConfigurer can be used to enable vip-management on nodes
+//  that handle their own network connection, in setups where it is
+//  sufficient to add the virtual ip using `ip addr add ...` .
+//  After adding the virtual ip to the specified interface,
+//  a gratuitous ARP package is sent out to update the tables of
+//  nearby routers and other devices.
 
 type WindowsConfigurer struct {
 	*IPConfiguration
@@ -28,34 +25,16 @@ func NewWindowsConfigurer(config *IPConfiguration) (*WindowsConfigurer, error) {
 }
 
 func (c *WindowsConfigurer) QueryAddress() bool {
-	cmd := exec.Command("netsh", "interface", "ipv4", "show", "addresses", c.iface.Name)
-
-	//only looks for the virtual IP, doesn't check if the netmask is also correct with the linux version.
-	lookup := fmt.Sprintf("%s", c.vip.String())
-	result := false
-
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		panic(err)
-	}
-
-	err = cmd.Start()
-	if err != nil {
-		panic(err)
-	}
-
-	scn := bufio.NewScanner(stdout)
-
-	for scn.Scan() {
-		line := scn.Text()
-		if strings.Contains(line, lookup) {
-			result = true
+	lookup := c.vip.String()
+	addrs, err := net.InterfaceAddrs()
+	if err == nil {
+		for _, v := range addrs {
+			if strings.Contains(v.String(), lookup) {
+				return true
+			}
 		}
 	}
-
-	cmd.Wait()
-
-	return result
+	return false
 }
 
 func (c *WindowsConfigurer) ConfigureAddress() bool {
@@ -116,5 +95,4 @@ func (c *WindowsConfigurer) GetCIDR() string {
 }
 
 func (c *WindowsConfigurer) cleanupArp() {
-	return
 }
