@@ -64,36 +64,38 @@ func NewIPManager(hostingType string, config *IPConfiguration, states <-chan boo
 }
 
 func (m *IPManager) applyLoop(ctx context.Context) {
+	timeout := 0
 	for {
-		actualState := m.configurer.QueryAddress()
-		m.stateLock.Lock()
-		desiredState := m.currentState
-		log.Printf("IP address %s state is %t, desired %t", m.configurer.GetCIDR(), actualState, desiredState)
-		if actualState != desiredState {
-			m.stateLock.Unlock()
-			var configureState bool = false
-			if desiredState {
-				configureState = m.configurer.ConfigureAddress()
+		// Check if we should exit
+		select {
+		case <-ctx.Done():
+			m.configurer.DeconfigureAddress()
+			return
+		case <-time.After(time.Duration(timeout) * time.Second):
+			actualState := m.configurer.QueryAddress()
+			m.stateLock.Lock()
+			desiredState := m.currentState
+			log.Printf("IP address %s state is %t, desired %t", m.configurer.GetCIDR(), actualState, desiredState)
+			if actualState != desiredState {
+				m.stateLock.Unlock()
+				var configureState bool
+				if desiredState {
+					configureState = m.configurer.ConfigureAddress()
+				} else {
+					configureState = m.configurer.DeconfigureAddress()
+				}
+				if !configureState {
+					log.Printf("Error while acquiring virtual ip for this machine")
+					//Sleep a little bit to avoid busy waiting due to the for loop.
+					timeout = 10
+				} else {
+					timeout = 0
+				}
 			} else {
-				configureState = m.configurer.DeconfigureAddress()
-			}
-			if configureState != true {
-				log.Printf("Error while acquiring virtual ip for this machine")
-				//Sleep a little bit to avoid busy waiting due to the for loop.
-				time.Sleep(time.Duration(10) * time.Second)
-			}
-		} else {
-			// Wait for notification
-			m.recheck.Wait()
-			// Want to query actual state anyway, so unlock
-			m.stateLock.Unlock()
-
-			// Check if we should exit
-			select {
-			case <-ctx.Done():
-				m.configurer.DeconfigureAddress()
-				return
-			default:
+				// Wait for notification
+				m.recheck.Wait()
+				// Want to query actual state anyway, so unlock
+				m.stateLock.Unlock()
 			}
 		}
 	}
