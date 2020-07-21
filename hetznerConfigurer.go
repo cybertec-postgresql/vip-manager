@@ -12,12 +12,10 @@ import (
 	"time"
 )
 
-/**
- * The HetznerConfigurer can be used to enable vip-management on nodes
- * rented in a Hetzner Datacenter.
- * Since Hetzner provides an API that handles failover-ip routing,
- * this API is used to manage the vip, whenever hostintype `hetzner` is set.
- */
+//   The HetznerConfigurer can be used to enable vip-management on nodes
+//   rented in a Hetzner Datacenter.
+//   Since Hetzner provides an API that handles failover-ip routing,
+//   this API is used to manage the vip, whenever hostintype `hetzner` is set.
 
 const (
 	UNKNOWN    = iota // c0 == 0
@@ -248,8 +246,6 @@ func (c *HetznerConfigurer) runAddressConfiguration(action string) bool {
 		c.cachedState = UNKNOWN
 		return false
 	}
-
-	return true
 }
 
 func (c *HetznerConfigurer) GetCIDR() string {
