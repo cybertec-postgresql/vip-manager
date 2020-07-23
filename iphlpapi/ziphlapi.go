@@ -39,14 +39,20 @@ func errnoErr(e syscall.Errno) error {
 var (
 	modiphlpapi = windows.NewLazySystemDLL("iphlpapi.dll")
 
-	procAddIPAddress = modiphlpapi.NewProc("AddIPAddress")
+	procAddIPAddress    = modiphlpapi.NewProc("AddIPAddress")
+	procDeleteIPAddress = modiphlpapi.NewProc("DeleteIPAddress")
 )
-
-// function AddIPAddress(Address: IPAddr; IpMask: IPMask; IfIndex: DWORD;
-//   var NTEContext, NTEInstance: ULONG): DWORD; stdcall;
 
 func AddIPAddress(Address uint32, IpMask uint32, IfIndex uint32, NTEContext *uint32, NTEInstance *uint32) (errcode error) {
 	r0, _, _ := syscall.Syscall6(procAddIPAddress.Addr(), 5, uintptr(Address), uintptr(IpMask), uintptr(IfIndex), uintptr(unsafe.Pointer(NTEContext)), uintptr(unsafe.Pointer(NTEInstance)), 0)
+	if r0 != 0 {
+		errcode = syscall.Errno(r0)
+	}
+	return
+}
+
+func DeleteIPAddress(NTEContext uint32) (errcode error) {
+	r0, _, _ := syscall.Syscall(procDeleteIPAddress.Addr(), 1, uintptr(NTEContext), 0, 0)
 	if r0 != 0 {
 		errcode = syscall.Errno(r0)
 	}

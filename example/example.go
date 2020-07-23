@@ -4,6 +4,8 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
+	"os"
+	"strconv"
 	"syscall"
 
 	"github.com/cybertec-postgresql/vip-manager/iphlpapi"
@@ -21,7 +23,7 @@ func PrintIPs() {
 	}
 }
 
-func main() {
+func PrintIfaces() {
 	ifaces, err := net.Interfaces()
 	fmt.Println("\n====== Interfaces ===========")
 	if err == nil {
@@ -30,23 +32,34 @@ func main() {
 
 		}
 	}
+}
 
+func main() {
+	PrintIfaces()
 	PrintIPs()
-
-	ip := binary.BigEndian.Uint32([]byte{127, 0, 0, 42})
-	mask := binary.BigEndian.Uint32([]byte{255, 255, 255, 0})
 	var (
-		ntecontext  *uint32
-		nteinstance *uint32
+		ip          uint32 = binary.LittleEndian.Uint32(net.ParseIP(os.Args[1]).To4())
+		mask        uint32 = binary.LittleEndian.Uint32(net.IPMask(net.ParseIP(os.Args[2]).To4()))
+		ifaceidx    uint32 = func() uint32 { i, _ := strconv.Atoi(os.Args[3]); return uint32(i) }()
+		ntecontext  uint32 = 0
+		nteinstance uint32 = 0
 	)
-	iface, _ := net.InterfaceByIndex(1)
-	fmt.Printf("===== Add IP %d/%d to interface %+v =====\n", ip, mask, iface.Name)
-	err = iphlpapi.AddIPAddress(ip, mask, 1, ntecontext, nteinstance)
-	if err.(syscall.Errno) == windows.ERROR_INVALID_PARAMETER {
+	iface, _ := net.InterfaceByIndex(int(ifaceidx))
+	fmt.Printf("===== Add IP %x/%x to interface %+v =====\n", ip, mask, iface.Name)
+	err := iphlpapi.AddIPAddress(ip, mask, ifaceidx, &ntecontext, &nteinstance)
+	if err != nil && err.(syscall.Errno) == windows.ERROR_INVALID_PARAMETER {
 		fmt.Println("We've fucked up with an invalid parameter")
 		fmt.Println(err)
+		return
 	}
 	fmt.Printf("NTEContext: %d; NTEInstance: %d\n", ntecontext, nteinstance)
-
+	PrintIPs()
+	fmt.Printf("===== Delete IP %x/%x from interface %+v =====\n", ip, mask, iface.Name)
+	err = iphlpapi.DeleteIPAddress(ntecontext)
+	if err != nil {
+		fmt.Println("We've fucked up and cannot delete the IP address")
+		fmt.Println(err)
+		return
+	}
 	PrintIPs()
 }
