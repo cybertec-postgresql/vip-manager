@@ -1,11 +1,9 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
 	"log"
 	"net"
-	"os/exec"
 	"strings"
 	"time"
 
@@ -26,7 +24,8 @@ const (
 
 type BasicConfigurer struct {
 	*IPConfiguration
-	arpClient *arp.Client
+	arpClient  *arp.Client
+	ntecontext uint32 //used by Windows to delete IP address
 }
 
 func NewBasicConfigurer(config *IPConfiguration) (*BasicConfigurer, error) {
@@ -148,75 +147,20 @@ func (c *BasicConfigurer) ARPSendGratuitous() error {
 }
 
 func (c *BasicConfigurer) QueryAddress() bool {
-	cmd := exec.Command("ip", "addr", "show", c.iface.Name)
-
-	lookup := fmt.Sprintf("inet %s", c.GetCIDR())
-	result := false
-
-	stdout, err := cmd.StdoutPipe()
+	iface, err := net.InterfaceByName(c.iface.Name)
 	if err != nil {
-		panic(err)
+		return false
 	}
-
-	err = cmd.Start()
+	addresses, err := iface.Addrs()
 	if err != nil {
-		panic(err)
+		return false
 	}
-
-	scn := bufio.NewScanner(stdout)
-
-	for scn.Scan() {
-		line := scn.Text()
-		if strings.Contains(line, lookup) {
-			result = true
+	for _, address := range addresses {
+		if strings.Contains(address.String(), c.vip.String()) {
+			return true
 		}
 	}
-
-	if cmd.Wait() != nil {
-		return false
-	}
-
-	return result
-}
-
-func (c *BasicConfigurer) ConfigureAddress() bool {
-	log.Printf("Configuring address %s on %s", c.GetCIDR(), c.iface.Name)
-
-	result := c.runAddressConfiguration("add")
-
-	if result {
-		// For now it is save to say that also working even if a
-		// gratuitous arp message could not be send but logging an
-		// errror should be enough.
-		_ = c.ARPSendGratuitous()
-	}
-
-	return result
-}
-
-func (c *BasicConfigurer) DeconfigureAddress() bool {
-	log.Printf("Removing address %s on %s", c.GetCIDR(), c.iface.Name)
-	return c.runAddressConfiguration("delete")
-}
-
-func (c *BasicConfigurer) runAddressConfiguration(action string) bool {
-	cmd := exec.Command("ip", "addr", action,
-		c.GetCIDR(),
-		"dev", c.iface.Name)
-	output, err := cmd.CombinedOutput()
-
-	switch err.(type) {
-	case *exec.ExitError:
-		log.Printf("Got error %s", output)
-
-		return false
-	}
-	if err != nil {
-		log.Printf("Error running ip address %s %s on %s: %s",
-			action, c.vip, c.iface.Name, err)
-		return false
-	}
-	return true
+	return false
 }
 
 func (c *BasicConfigurer) GetCIDR() string {

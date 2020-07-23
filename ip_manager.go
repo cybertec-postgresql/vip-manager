@@ -29,38 +29,24 @@ type IPManager struct {
 	recheck      *sync.Cond
 }
 
-func NewIPManager(hostingType string, config *IPConfiguration, states <-chan bool) (*IPManager, error) {
-	m := &IPManager{
+func NewIPManager(hostingType string, config *IPConfiguration, states <-chan bool) (m *IPManager, err error) {
+	m = &IPManager{
 		states:       states,
 		currentState: false,
 	}
-
 	m.recheck = sync.NewCond(&m.stateLock)
-
 	switch hostingType {
 	case "hetzner":
-		c, err := NewHetznerConfigurer(config)
-		if err != nil {
-			return nil, err
-		}
-		m.configurer = c
-	case "windows":
-		c, err := NewWindowsConfigurer(config)
-		if err != nil {
-			return nil, err
-		}
-		m.configurer = c
+		m.configurer, err = NewHetznerConfigurer(config)
 	case "basic":
 		fallthrough
 	default:
-		c, err := NewBasicConfigurer(config)
-		if err != nil {
-			return nil, err
-		}
-		m.configurer = c
+		m.configurer, err = NewBasicConfigurer(config)
 	}
-
-	return m, nil
+	if err != nil {
+		m = nil
+	}
+	return
 }
 
 func (m *IPManager) applyLoop(ctx context.Context) {
