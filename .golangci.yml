@@ -2,7 +2,9 @@ linters:
   enable:
     - gocyclo
     - golint
-    - misspell  
+    - misspell
+  disable:
+    - unused
     
 linters-settings:
   gocyclo:
