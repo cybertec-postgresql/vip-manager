@@ -5,169 +5,147 @@ package raw
 import (
 	"net"
 	"os"
-	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 	"unsafe"
 
 	"golang.org/x/net/bpf"
-	"golang.org/x/net/context"
 	"golang.org/x/sys/unix"
 )
 
-var (
-	// Must implement net.PacketConn at compile-time.
-	_ net.PacketConn = &packetConn{}
-)
+// Must implement net.PacketConn at compile-time.
+var _ net.PacketConn = &packetConn{}
 
 // packetConn is the Linux-specific implementation of net.PacketConn for this
 // package.
 type packetConn struct {
 	ifi *net.Interface
 	s   socket
+	pbe uint16
 
-	// Sleep function implementation
-	sleeper sleeper
+	// Should stats be accumulated instead of reset on each call?
+	noCumulativeStats bool
 
-	// Timeouts set via Set{Read,}Deadline, guarded by mutex
-	timeoutMu   sync.RWMutex
-	nonblocking bool
-	rtimeout    time.Time
+	// Internal storage for cumulative stats.
+	stats Stats
 }
 
 // socket is an interface which enables swapping out socket syscalls for
 // testing.
 type socket interface {
-	Bind(syscall.Sockaddr) error
+	Bind(unix.Sockaddr) error
 	Close() error
-	FD() int
-	Recvfrom([]byte, int) (int, syscall.Sockaddr, error)
-	Sendto([]byte, int, syscall.Sockaddr) error
-	SetNonblock(bool) error
-	SetSockopt(level, name int, v unsafe.Pointer, l uint32) error
+	GetSockoptTpacketStats(level, name int) (*unix.TpacketStats, error)
+	Recvfrom([]byte, int) (int, unix.Sockaddr, error)
+	Sendto([]byte, int, unix.Sockaddr) error
+	SetSockoptPacketMreq(level, name int, mreq *unix.PacketMreq) error
+	SetSockoptSockFprog(level, name int, fprog *unix.SockFprog) error
+	SetDeadline(time.Time) error
+	SetReadDeadline(time.Time) error
+	SetWriteDeadline(time.Time) error
 }
 
-// sleeper is an interface which enables swapping out an actual time.Sleep
-// call for testing.
-type sleeper interface {
-	Sleep(time.Duration)
+// htons converts a short (uint16) from host-to-network byte order.
+// Thanks to mikioh for this neat trick:
+// https://github.com/mikioh/-stdyng/blob/master/afpacket.go
+func htons(i uint16) uint16 {
+	return (i<<8)&0xff00 | i>>8
 }
 
 // listenPacket creates a net.PacketConn which can be used to send and receive
 // data at the device driver level.
-//
-// ifi specifies the network interface which will be used to send and receive
-// data.  proto specifies the protocol which should be captured and
-// transmitted.  proto is automatically converted to network byte
-// order (big endian), akin to the htons() function in C.
-func listenPacket(ifi *net.Interface, proto Protocol) (*packetConn, error) {
-	// Convert proto to big endian
-	pbe := htons(uint16(proto))
+func listenPacket(ifi *net.Interface, proto uint16, cfg Config) (*packetConn, error) {
+	filename := "eth-packet-socket"
+	// Enabling overriding the socket type via config.
+	typ := unix.SOCK_RAW
+	if cfg.LinuxSockDGRAM {
+		filename = "packet-socket"
+		typ = unix.SOCK_DGRAM
+	}
 
-	// Open a packet socket using specified socket and protocol types
-	sock, err := syscall.Socket(syscall.AF_PACKET, syscall.SOCK_RAW, int(pbe))
+	// Open a packet socket using specified socket type. Do not specify
+	// a protocol to avoid capturing packets which to not match cfg.Filter.
+	// The later call to bind() will set up the correct protocol for us.
+	sock, err := unix.Socket(unix.AF_PACKET, typ, 0)
 	if err != nil {
 		return nil, err
 	}
 
-	// Wrap raw socket in socket interface, use actual time package sleeper
-	return newPacketConn(
-		ifi,
-		&sysSocket{
-			fd: sock,
-		},
-		pbe,
-		&timeSleeper{},
-	)
+	if err := unix.SetNonblock(sock, true); err != nil {
+		return nil, err
+	}
+
+	// When using Go 1.12+, the SetNonblock call we just did puts the file
+	// descriptor into non-blocking mode. In that case, os.NewFile
+	// registers the file descriptor with the runtime poller, which is then
+	// used for all subsequent operations.
+	//
+	// See also: https://golang.org/pkg/os/#NewFile
+	f := os.NewFile(uintptr(sock), filename)
+	sc, err := f.SyscallConn()
+	if err != nil {
+		return nil, err
+	}
+
+	// Wrap raw socket in socket interface.
+	pc, err := newPacketConn(ifi, &sysSocket{f: f, rc: sc}, htons(proto), cfg.Filter)
+	if err != nil {
+		return nil, err
+	}
+
+	pc.noCumulativeStats = cfg.NoCumulativeStats
+	return pc, nil
 }
 
 // newPacketConn creates a net.PacketConn using the specified network
-// interface, wrapped socket, big endian protocol number, and Sleep
-// implementation used for read/write retries.
+// interface, wrapped socket and big endian protocol number.
 //
 // It is the entry point for tests in this package.
-func newPacketConn(ifi *net.Interface, s socket, pbe uint16, sleeper sleeper) (*packetConn, error) {
+func newPacketConn(ifi *net.Interface, s socket, pbe uint16, filter []bpf.RawInstruction) (*packetConn, error) {
+	pc := &packetConn{
+		ifi: ifi,
+		s:   s,
+		pbe: pbe,
+	}
+
+	if len(filter) > 0 {
+		if err := pc.SetBPF(filter); err != nil {
+			return nil, err
+		}
+	}
+
 	// Bind the packet socket to the interface specified by ifi
 	// packet(7):
 	//   Only the sll_protocol and the sll_ifindex address fields are used for
 	//   purposes of binding.
-	err := s.Bind(&syscall.SockaddrLinklayer{
-		Protocol: pbe,
+	// This overrides the protocol given to socket(AF_PACKET).
+	err := s.Bind(&unix.SockaddrLinklayer{
+		Protocol: pc.pbe,
 		Ifindex:  ifi.Index,
 	})
+	if err != nil {
+		return nil, err
+	}
 
-	return &packetConn{
-		ifi:     ifi,
-		s:       s,
-		sleeper: sleeper,
-	}, err
+	return pc, nil
 }
 
 // ReadFrom implements the net.PacketConn.ReadFrom method.
 func (p *packetConn) ReadFrom(b []byte) (int, net.Addr, error) {
-	// Set up deadline context if needed, if a read timeout is set
-	ctx, cancel := context.TODO(), func() {}
-	p.timeoutMu.RLock()
-	if p.rtimeout.After(time.Now()) {
-		ctx, cancel = context.WithDeadline(context.Background(), p.rtimeout)
-	}
-	p.timeoutMu.RUnlock()
-
-	// Information returned by syscall.Recvfrom
-	var n int
-	var addr syscall.Sockaddr
-	var err error
-
-	for {
-		// Continue looping, or if deadline is set and has expired, return
-		// an error
-		select {
-		case <-ctx.Done():
-			// We only know how to handle deadline exceeded, so return any
-			// other errors for the caller to deal with
-			if err := ctx.Err(); err != context.DeadlineExceeded {
-				return n, nil, err
-			}
-
-			// Return standard net.OpError so caller can detect timeouts and retry
-			return n, nil, &net.OpError{
-				Op:   "read",
-				Net:  "raw",
-				Addr: nil,
-				Err:  &timeoutError{},
-			}
-		default:
-			// Not timed out, keep trying
-		}
-
-		// Attempt to receive on socket
-		n, addr, err = p.s.Recvfrom(b, 0)
-		if err != nil {
-			n = 0
-
-			// EAGAIN is returned when no data is available for non-blocking
-			// I/O, so keep trying after a short delay
-			if err == syscall.EAGAIN {
-				p.sleeper.Sleep(2 * time.Millisecond)
-				continue
-			}
-
-			// Return other errors
-			return n, nil, err
-		}
-
-		// Got data, cancel the deadline
-		cancel()
-		break
+	// Attempt to receive on socket
+	n, addr, err := p.s.Recvfrom(b, 0)
+	if err != nil {
+		return n, nil, err
 	}
 
-	// Retrieve hardware address and other information from addr
-	sa, ok := addr.(*syscall.SockaddrLinklayer)
-	if !ok || sa.Halen < 6 {
-		return n, nil, syscall.EINVAL
+	// Retrieve hardware address and other information from addr.
+	sa, ok := addr.(*unix.SockaddrLinklayer)
+	if !ok {
+		return n, nil, unix.EINVAL
 	}
 
-	// Use length specified to convert byte array into a hardware address slice
+	// Use length specified to convert byte array into a hardware address slice.
 	mac := make(net.HardwareAddr, sa.Halen)
 	copy(mac, sa.Addr[:])
 
@@ -183,25 +161,27 @@ func (p *packetConn) ReadFrom(b []byte) (int, net.Addr, error) {
 
 // WriteTo implements the net.PacketConn.WriteTo method.
 func (p *packetConn) WriteTo(b []byte, addr net.Addr) (int, error) {
-	// Ensure correct Addr type
+	// Ensure correct Addr type.
 	a, ok := addr.(*Addr)
-	if !ok || len(a.HardwareAddr) < 6 {
-		return 0, syscall.EINVAL
+	if !ok || a.HardwareAddr == nil {
+		return 0, unix.EINVAL
 	}
 
-	// Convert hardware address back to byte array form
+	// Convert hardware address back to byte array form.
 	var baddr [8]byte
 	copy(baddr[:], a.HardwareAddr)
 
 	// Send message on socket to the specified hardware address from addr
 	// packet(7):
 	//   When you send packets it is enough to specify sll_family, sll_addr,
-	//   sll_halen, sll_ifindex.  The other fields should  be 0.
-	// In this case, sll_family is taken care of automatically by syscall
-	err := p.s.Sendto(b, 0, &syscall.SockaddrLinklayer{
-		Ifindex: p.ifi.Index,
-		Halen:   uint8(len(a.HardwareAddr)),
-		Addr:    baddr,
+	//   sll_halen, sll_ifindex, and sll_protocol. The other fields should
+	//   be 0.
+	// In this case, sll_family is taken care of automatically by unix.
+	err := p.s.Sendto(b, 0, &unix.SockaddrLinklayer{
+		Ifindex:  p.ifi.Index,
+		Halen:    uint8(len(a.HardwareAddr)),
+		Addr:     baddr,
+		Protocol: p.pbe,
 	})
 	return len(b), err
 }
@@ -218,66 +198,36 @@ func (p *packetConn) LocalAddr() net.Addr {
 	}
 }
 
-// TODO(mdlayher): it is unfortunate that we have to implement deadlines using
-// a context, but it appears that there may not be a better solution until
-// Go 1.6 or later.  See here: https://github.com/golang/go/issues/10565.
-
 // SetDeadline implements the net.PacketConn.SetDeadline method.
 func (p *packetConn) SetDeadline(t time.Time) error {
-	return p.SetReadDeadline(t)
+	return p.s.SetDeadline(t)
 }
 
 // SetReadDeadline implements the net.PacketConn.SetReadDeadline method.
 func (p *packetConn) SetReadDeadline(t time.Time) error {
-	p.timeoutMu.Lock()
-
-	// Set nonblocking I/O so we can time out reads and writes
-	//
-	// This is set only if timeouts are used, because a server probably
-	// does not want timeouts by default, and a client can request them
-	// itself if needed.
-	var err error
-
-	// If already nonblocking and the zero-value for t is entered, disable
-	// nonblocking mode
-	if p.nonblocking && t.IsZero() {
-		err = p.s.SetNonblock(false)
-		p.nonblocking = false
-	} else if !p.nonblocking && t.After(time.Now()) {
-		// If not nonblocking and t is after current time, enable nonblocking
-		// mode
-		err = p.s.SetNonblock(true)
-		p.nonblocking = true
-	}
-
-	p.rtimeout = t
-	p.timeoutMu.Unlock()
-
-	return err
+	return p.s.SetReadDeadline(t)
 }
 
 // SetWriteDeadline implements the net.PacketConn.SetWriteDeadline method.
 func (p *packetConn) SetWriteDeadline(t time.Time) error {
-	return nil
+	return p.s.SetWriteDeadline(t)
 }
 
 // SetBPF attaches an assembled BPF program to a raw net.PacketConn.
 func (p *packetConn) SetBPF(filter []bpf.RawInstruction) error {
-	prog := syscall.SockFprog{
+	prog := unix.SockFprog{
 		Len:    uint16(len(filter)),
-		Filter: (*syscall.SockFilter)(unsafe.Pointer(&filter[0])),
+		Filter: (*unix.SockFilter)(unsafe.Pointer(&filter[0])),
 	}
 
-	err := p.s.SetSockopt(
-		syscall.SOL_SOCKET,
-		syscall.SO_ATTACH_FILTER,
-		unsafe.Pointer(&prog),
-		uint32(unsafe.Sizeof(prog)),
+	err := p.s.SetSockoptSockFprog(
+		unix.SOL_SOCKET,
+		unix.SO_ATTACH_FILTER,
+		&prog,
 	)
 	if err != nil {
 		return os.NewSyscallError("setsockopt", err)
 	}
-
 	return nil
 }
 
@@ -294,34 +244,145 @@ func (p *packetConn) SetPromiscuous(b bool) error {
 		membership = unix.PACKET_DROP_MEMBERSHIP
 	}
 
-	return p.s.SetSockopt(unix.SOL_PACKET, membership, unsafe.Pointer(&mreq), unix.SizeofPacketMreq)
+	return p.s.SetSockoptPacketMreq(unix.SOL_PACKET, membership, &mreq)
+}
+
+// Stats retrieves statistics from the Conn.
+func (p *packetConn) Stats() (*Stats, error) {
+	stats, err := p.s.GetSockoptTpacketStats(unix.SOL_PACKET, unix.PACKET_STATISTICS)
+	if err != nil {
+		return nil, err
+	}
+
+	return p.handleStats(stats), nil
+}
+
+// handleStats handles creation of Stats structures from raw packet socket stats.
+func (p *packetConn) handleStats(s *unix.TpacketStats) *Stats {
+	// Does the caller want instantaneous stats as provided by Linux?  If so,
+	// return the structure directly.
+	if p.noCumulativeStats {
+		return &Stats{
+			Packets: uint64(s.Packets),
+			Drops:   uint64(s.Drops),
+		}
+	}
+
+	// The caller wants cumulative stats.  Add stats with the internal stats
+	// structure and return a copy of the resulting stats.
+	packets := atomic.AddUint64(&p.stats.Packets, uint64(s.Packets))
+	drops := atomic.AddUint64(&p.stats.Drops, uint64(s.Drops))
+
+	return &Stats{
+		Packets: packets,
+		Drops:   drops,
+	}
 }
 
 // sysSocket is the default socket implementation.  It makes use of
 // Linux-specific system calls to handle raw socket functionality.
 type sysSocket struct {
-	fd int
+	f  *os.File
+	rc syscall.RawConn
 }
 
-// Method implementations simply invoke the syscall of the same name, but pass
-// the file descriptor stored in the sysSocket as the socket to use.
-func (s *sysSocket) Bind(sa syscall.Sockaddr) error { return syscall.Bind(s.fd, sa) }
-func (s *sysSocket) Close() error                   { return syscall.Close(s.fd) }
-func (s *sysSocket) FD() int                        { return s.fd }
-func (s *sysSocket) Recvfrom(p []byte, flags int) (int, syscall.Sockaddr, error) {
-	return syscall.Recvfrom(s.fd, p, flags)
-}
-func (s *sysSocket) Sendto(p []byte, flags int, to syscall.Sockaddr) error {
-	return syscall.Sendto(s.fd, p, flags, to)
-}
-func (s *sysSocket) SetNonblock(nonblocking bool) error { return syscall.SetNonblock(s.fd, nonblocking) }
-func (s *sysSocket) SetSockopt(level, name int, v unsafe.Pointer, l uint32) error {
-	return setsockopt(s.fd, level, name, v, l)
+func (s *sysSocket) SetDeadline(t time.Time) error {
+	return s.f.SetDeadline(t)
 }
 
-// timeSleeper sleeps using time.Sleep.
-type timeSleeper struct{}
+func (s *sysSocket) SetReadDeadline(t time.Time) error {
+	return s.f.SetReadDeadline(t)
+}
 
-func (timeSleeper) Sleep(d time.Duration) {
-	time.Sleep(d)
+func (s *sysSocket) SetWriteDeadline(t time.Time) error {
+	return s.f.SetWriteDeadline(t)
+}
+
+func (s *sysSocket) Bind(sa unix.Sockaddr) error {
+	var err error
+	cerr := s.rc.Control(func(fd uintptr) {
+		err = unix.Bind(int(fd), sa)
+	})
+	if err != nil {
+		return err
+	}
+	return cerr
+}
+
+func (s *sysSocket) Close() error {
+	return s.f.Close()
+}
+
+func (s *sysSocket) GetSockoptTpacketStats(level, name int) (*unix.TpacketStats, error) {
+	var stats *unix.TpacketStats
+	var err error
+	cerr := s.rc.Control(func(fd uintptr) {
+		s, errno := unix.GetsockoptTpacketStats(int(fd), level, name)
+		stats = s
+		if errno != nil {
+			err = os.NewSyscallError("getsockopt", errno)
+		}
+	})
+	if err != nil {
+		return stats, err
+	}
+	return stats, cerr
+}
+
+func (s *sysSocket) Recvfrom(p []byte, flags int) (n int, addr unix.Sockaddr, err error) {
+	cerr := s.rc.Read(func(fd uintptr) bool {
+		n, addr, err = unix.Recvfrom(int(fd), p, flags)
+		// When the socket is in non-blocking mode, we might see EAGAIN
+		// and end up here. In that case, return false to let the
+		// poller wait for readiness. See the source code for
+		// internal/poll.FD.RawRead for more details.
+		//
+		// If the socket is in blocking mode, EAGAIN should never occur.
+		return err != unix.EAGAIN
+	})
+	if err != nil {
+		return n, addr, err
+	}
+	return n, addr, cerr
+}
+
+func (s *sysSocket) Sendto(p []byte, flags int, to unix.Sockaddr) error {
+	var err error
+	cerr := s.rc.Write(func(fd uintptr) bool {
+		err = unix.Sendto(int(fd), p, flags, to)
+		// See comment in Recvfrom.
+		return err != unix.EAGAIN
+	})
+	if err != nil {
+		return err
+	}
+	return cerr
+}
+
+func (s *sysSocket) SetSockoptSockFprog(level, name int, fprog *unix.SockFprog) error {
+	var err error
+	cerr := s.rc.Control(func(fd uintptr) {
+		errno := unix.SetsockoptSockFprog(int(fd), level, name, fprog)
+		if errno != nil {
+			err = os.NewSyscallError("setsockopt", errno)
+		}
+	})
+	if err != nil {
+		return err
+	}
+	return cerr
+}
+
+func (s *sysSocket) SetSockoptPacketMreq(level, name int, mreq *unix.PacketMreq) error {
+	var err error
+	cerr := s.rc.Control(func(fd uintptr) {
+		errno := unix.SetsockoptPacketMreq(int(fd), level, name, mreq)
+		if errno != nil {
+			err = os.NewSyscallError("setsockopt", errno)
+		}
+	})
+	if err != nil {
+		return err
+	}
+	return cerr
 }

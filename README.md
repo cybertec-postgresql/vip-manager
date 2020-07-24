@@ -3,11 +3,12 @@
 Manages a virtual IP based on state kept in etcd or Consul. Monitors state in etcd 
 
 ## building
-1. To make sure that internal includes (the vipconfig and the checker package) are satisfied, place the base directory of this project properly into your `$GOPATH`.
+1. Make sure you have at least version 1.12 of Golang
+2. To make sure that internal includes (the vipconfig and the checker package) are satisfied, place the base directory of this project properly into your `$GOPATH`.
     The resulting location should be `$GOPATH/src/github.com/cybertec-postgresql/vip-manager/`. The easiest way to do this is:
     ```go get github.com/cybertec-postgresql/vip-manager```
-2. Build the binary using `make`.
-3. To build your own .deb or .rpm, `fpm` is required.
+3. Build the binary using `make`.
+4. To build your own .deb or .rpm, `fpm` is required.
     Install it, add it to your path and try running `make package`, which will generate a .deb package and will also convert that into a matching .rpm file.
 > note: on debianoids, rpmbuild will be required to create the rpm package...
 
@@ -25,7 +26,8 @@ Manages a virtual IP based on state kept in etcd or Consul. Monitors state in et
 * Edit config and start the service.
 
 ## Configuration
-The configuration can be passed to the executable through argument flags or through a YAML config file.
+The configuration can be passed to the executable through argument flags or through a YAML config file. Run `vip-manager --help` to see the available flags.
+
 > The location of the YAML config file can be specified with the -config flag.
 > An exemplary config file is installed into `/etc/default/vip-manager_default.yml` or is available in the vipconfig directory in the repository of the software.
 
@@ -39,7 +41,7 @@ These configuration keys are currently mandatory:
 | VIP_KEY   | /service/batman/leader | Key to monitor. Must match `<namespace>/<scope>/leader` from Patroni.      |
 | VIP_HOST  | serverX  | Value to trigger on. Must match `<name>` from Patroni.                                   |
 | VIP_TYPE  | etcd     | Type of endpoint (etcd or consul)                                                        |
-| VIP_ENDPOINT | http://10.1.2.3:2379 | Location of endpoint (etcd or consul)                                     |
+| VIP_ENDPOINT | http://10.1.2.3:2379 | Location of one or more endpoints (etcd or consul). Separate multiple endpoints with commas |
 
 These configuration keys are optional:
 

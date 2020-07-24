@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"strings"
 	"io/ioutil"
 	"log"
 	"net"
@@ -34,7 +35,7 @@ var etcd_cert_file = flag.String("etcd_cert_file", "none", "etcd client certific
 var etcd_key_file = flag.String("etcd_key_file", "none", "etcd client private key")
 
 var endpointType = flag.String("type", "etcd", "type of endpoint used for key storage. Supported values: etcd, consul")
-var endpoint = flag.String("endpoint", "http://localhost:2379[,http://host:port,..]", "endpoint")
+var endpoints = flag.String("endpoint", "http://localhost:2379[,http://host:port,..]", "endpoint")
 var interval = flag.Int("interval", 1000, "DCS scan interval in milliseconds")
 
 var hostingType = flag.String("hostingtype", "basic", "type of hosting. Supported values: self, hetzner")
@@ -69,9 +70,13 @@ func main() {
 		fmt.Println("version 0.6.2")
 		return
 	}
+
+	// split "http[s]://localhost:2379[,http[s]://host:port,..]" into individual strings
+	endpointArray := strings.Split(*endpoints, ",")
+
 	//introduce parsed values into conf
 	conf = vipconfig.Config{Ip: *ip, Mask: *mask, Iface: *iface, HostingType: *hostingType,
-		Key: *key, Nodename: *host, Endpoint_type: *endpointType, Endpoints: []string{*endpoint},
+		Key: *key, Nodename: *host, Endpoint_type: *endpointType, Endpoints: endpointArray,
 		Etcd_user: *etcd_user, Etcd_password: *etcd_password, Etcd_ca_file: *etcd_ca_file,
 		Etcd_cert_file: *etcd_cert_file, Etcd_key_file: *etcd_key_file, Interval: *interval}
 
@@ -111,6 +116,12 @@ func main() {
 			log.Printf("No nodename specified, instead using hostname: %v", nodename)
 			conf.Nodename = nodename
 		}
+	}
+
+	if conf.Retry_num == 0 {
+		log.Println("Number of retries (retry_num) was not set or set to 0. It needs to be set to something more than 0 for vip-manager to work. Will set it to 3 by default.")
+		conf.Retry_num = 3
+		conf.Retry_after = 250
 	}
 
 	states := make(chan bool)

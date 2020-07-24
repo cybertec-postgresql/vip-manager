@@ -33,6 +33,6 @@ etcd_key_file: "/path/to/etcd/client/key/file"
 # don't worry about parameter with a prefix that doesn't match the endpoint_type. You can write anything there, I won't even look at it.
 consul_token: "Julian's secret token"
 
-#how often things should be retried and how long to wait between retries. (currently only affects arpClient)
+# how often things should be retried and how long to wait between retries. (currently only affects arpClient)
 retry_num: 2
 retry_after: 250  #in milliseconds

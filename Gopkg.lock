@@ -65,27 +65,27 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:39509fc0baedf78b5d384abe8d01824ac2f58a14760bb57b8a962185deb0eb7b"
+  digest = "1:d124708b396d73808273af5cbd3b4f49995145bcad348a37b6d9fd3c720dc179"
   name = "github.com/mdlayher/arp"
   packages = ["."]
   pruneopts = ""
-  revision = "43953fc6354aa71b6d6814755eceba262eae9246"
+  revision = "f72070a231fc79cef00154e99b3d5a06be72398d"
 
 [[projects]]
   branch = "master"
-  digest = "1:fdbcf8c617ed9a08bc82c19c577664e50698e402af7669a75224858442ba70a6"
+  digest = "1:784945b75874aebb12fbba657773e9fce33b53c6832c7bd26cffd3253a9087c4"
   name = "github.com/mdlayher/ethernet"
   packages = ["."]
   pruneopts = ""
-  revision = "e72cf8343052938936194daba1914fd1bb33d2fe"
+  revision = "0394541c37b7f86a10e0b49492f6d4f605c34163"
 
 [[projects]]
   branch = "master"
-  digest = "1:c0e8e4bb5e4b9db286aaa5e98d883a4d7e40a962091eff7549b74ee4a7230c71"
+  digest = "1:ae8c7c747b36590d55929526d450231ebaacbce50937d065b58088e41ed413be"
   name = "github.com/mdlayher/raw"
   packages = ["."]
   pruneopts = ""
-  revision = "156e9b63ae185a43fd1726bbee88eb0109afe5f4"
+  revision = "50f2db8cc0658568575938a39dbaa46172921d98"
 
 [[projects]]
   branch = "master"
@@ -113,22 +113,22 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:35171304d8332a0cfac5f3bd9222467f036732ddde75c65278b16f65216e03ed"
+  digest = "1:b685b398fb09e20bc0ddb0233d1d93c51d4c7d10b3165b90576fce9842e60dab"
   name = "golang.org/x/net"
-  packages = [
-    "bpf",
-    "context",
-  ]
+  packages = ["bpf"]
   pruneopts = ""
-  revision = "1c05540f6879653db88113bc4a2b70aec4bd491f"
+  revision = "a91f0712d120a21e49061d61eb6ba9b88cb0d376"
 
 [[projects]]
   branch = "master"
-  digest = "1:a67e20a897efd79402efc713c2c37af983af83ee6a80bdca40d602c12a347283"
+  digest = "1:408ab0dbd5314dc8e22673df258a635e4b674fa2e037949913b27debac731c51"
   name = "golang.org/x/sys"
-  packages = ["unix"]
+  packages = [
+    "internal/unsafeheader",
+    "unix",
+  ]
   pruneopts = ""
-  revision = "92ac112afc6efd90284acda2b046fc0e351228f6"
+  revision = "1151b9dac4a98d49ef7f80f07ddd826ff51e0b36"
 
 [[projects]]
   digest = "1:cedccf16b71e86db87a24f8d4c70b0a855872eb967cb906a66b95de56aefbd0d"
