@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"strings"
 	"io/ioutil"
 	"log"
 	"net"
@@ -31,7 +32,7 @@ var etcd_user = flag.String("etcd_user", "none", "username that can be used to a
 var etcd_password = flag.String("etcd_password", "none", "password for the etcd_user")
 
 var endpointType = flag.String("type", "etcd", "type of endpoint used for key storage. Supported values: etcd, consul")
-var endpoint = flag.String("endpoint", "http://localhost:2379[,http://host:port,..]", "endpoint")
+var endpoints = flag.String("endpoint", "http://localhost:2379[,http://host:port,..]", "endpoint")
 var interval = flag.Int("interval", 1000, "DCS scan interval in milliseconds")
 
 var hostingType = flag.String("hostingtype", "basic", "type of hosting. Supported values: self, hetzner")
@@ -68,9 +69,13 @@ func main() {
 		fmt.Println("version 0.6.1")
 		return
 	}
+
+	// split "http[s]://localhost:2379[,http[s]://host:port,..]" into individual strings
+	endpointArray := strings.Split(*endpoints, ",")
+
 	//introduce parsed values into conf
 	conf = vipconfig.Config{Ip: *ip, Mask: *mask, Iface: *iface, HostingType: *hostingType,
-		Key: *key, Nodename: *host, Endpoint_type: *endpointType, Endpoints: []string{*endpoint},
+		Key: *key, Nodename: *host, Endpoint_type: *endpointType, Endpoints: endpointArray,
 		Etcd_user: *etcd_user, Etcd_password: *etcd_password, Interval: *interval,
 		Verbose: *verbose,
 	}
