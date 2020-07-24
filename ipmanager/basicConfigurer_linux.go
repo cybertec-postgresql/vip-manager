@@ -6,7 +6,7 @@ import (
 )
 
 func (c *BasicConfigurer) ConfigureAddress() bool {
-	log.Printf("Configuring address %s on %s", c.GetCIDR(), c.iface.Name)
+	log.Printf("Configuring address %s on %s", c.GetCIDR(), c.Iface.Name)
 
 	result := c.runAddressConfiguration("add")
 
@@ -21,14 +21,14 @@ func (c *BasicConfigurer) ConfigureAddress() bool {
 }
 
 func (c *BasicConfigurer) DeconfigureAddress() bool {
-	log.Printf("Removing address %s on %s", c.GetCIDR(), c.iface.Name)
+	log.Printf("Removing address %s on %s", c.GetCIDR(), c.Iface.Name)
 	return c.runAddressConfiguration("delete")
 }
 
 func (c *BasicConfigurer) runAddressConfiguration(action string) bool {
 	cmd := exec.Command("ip", "addr", action,
 		c.GetCIDR(),
-		"dev", c.iface.Name)
+		"dev", c.Iface.Name)
 	output, err := cmd.CombinedOutput()
 
 	switch err.(type) {
@@ -39,7 +39,7 @@ func (c *BasicConfigurer) runAddressConfiguration(action string) bool {
 	}
 	if err != nil {
 		log.Printf("Error running ip address %s %s on %s: %s",
-			action, c.vip, c.iface.Name, err)
+			action, c.VIP, c.Iface.Name, err)
 		return false
 	}
 	return true
