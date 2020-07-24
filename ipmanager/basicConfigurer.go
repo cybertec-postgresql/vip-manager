@@ -1,4 +1,4 @@
-package main
+package ipmanager
 
 import (
 	"fmt"
@@ -42,7 +42,7 @@ func NewBasicConfigurer(config *IPConfiguration) (*BasicConfigurer, error) {
 		log.Fatalf("Couldn't create an Arp client: %s", err)
 	}
 
-	if c.iface.HardwareAddr == nil || c.iface.HardwareAddr.String() == "00:00:00:00:00:00" {
+	if c.Iface.HardwareAddr == nil || c.Iface.HardwareAddr.String() == "00:00:00:00:00:00" {
 		log.Fatalf("Cannot run vip-manager on the loopback device as its hardware address is the local address (00:00:00:00:00:00), which prohibits sending of gratuitous ARP messages.")
 	}
 
@@ -53,7 +53,7 @@ func (c *BasicConfigurer) createArpClient() error {
 	var err error
 	var arpClient *arp.Client
 	for i := 0; i < c.RetryNum; i++ {
-		arpClient, err = arp.Dial(&c.iface)
+		arpClient, err = arp.Dial(&c.Iface)
 		if err != nil {
 			log.Printf("Problems with producing the arp client: %s", err)
 		} else {
@@ -78,10 +78,10 @@ func (c *BasicConfigurer) ARPSendGratuitous() error {
 	 */
 	gratuitousReplyPackage, err := arp.NewPacket(
 		arpReplyOp,
-		c.iface.HardwareAddr,
-		c.vip,
-		c.iface.HardwareAddr,
-		c.vip,
+		c.Iface.HardwareAddr,
+		c.VIP,
+		c.Iface.HardwareAddr,
+		c.VIP,
 	)
 	if err != nil {
 		log.Printf("Gratuitous arp reply package is malformed: %s", err)
@@ -97,15 +97,15 @@ func (c *BasicConfigurer) ARPSendGratuitous() error {
 	arpRequestDestMac, err := net.ParseMAC("00:00:00:00:00:00")
 	if err != nil {
 		// not entirely RFC-2002 conform but better then nothing.
-		arpRequestDestMac = c.iface.HardwareAddr
+		arpRequestDestMac = c.Iface.HardwareAddr
 	}
 
 	gratuitousRequestPackage, err := arp.NewPacket(
 		arpRequestOp,
-		c.iface.HardwareAddr,
-		c.vip,
+		c.Iface.HardwareAddr,
+		c.VIP,
 		arpRequestDestMac,
-		c.vip,
+		c.VIP,
 	)
 	if err != nil {
 		log.Printf("Gratuitous arp request package is malformed: %s", err)
@@ -147,7 +147,7 @@ func (c *BasicConfigurer) ARPSendGratuitous() error {
 }
 
 func (c *BasicConfigurer) QueryAddress() bool {
-	iface, err := net.InterfaceByName(c.iface.Name)
+	iface, err := net.InterfaceByName(c.Iface.Name)
 	if err != nil {
 		return false
 	}
@@ -156,7 +156,7 @@ func (c *BasicConfigurer) QueryAddress() bool {
 		return false
 	}
 	for _, address := range addresses {
-		if strings.Contains(address.String(), c.vip.String()) {
+		if strings.Contains(address.String(), c.VIP.String()) {
 			return true
 		}
 	}
@@ -164,7 +164,7 @@ func (c *BasicConfigurer) QueryAddress() bool {
 }
 
 func (c *BasicConfigurer) GetCIDR() string {
-	return fmt.Sprintf("%s/%d", c.vip.String(), NetmaskSize(c.netmask))
+	return fmt.Sprintf("%s/%d", c.VIP.String(), NetmaskSize(c.Netmask))
 }
 
 func (c *BasicConfigurer) cleanupArp() {

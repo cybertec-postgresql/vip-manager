@@ -1,4 +1,4 @@
-package main
+package ipmanager
 
 import (
 	"bufio"
@@ -104,9 +104,9 @@ func (c *HetznerConfigurer) curlQueryFailover(post bool) (string, error) {
 		}
 		log.Printf("my_own_ip: %s\n", myOwnIP.String())
 
-		cmd = exec.Command("curl", "--ipv4", "-u", user+":"+password, "https://robot-ws.your-server.de/failover/"+c.vip.String(), "-d", "active_server_ip="+myOwnIP.String())
+		cmd = exec.Command("curl", "--ipv4", "-u", user+":"+password, "https://robot-ws.your-server.de/failover/"+c.VIP.String(), "-d", "active_server_ip="+myOwnIP.String())
 	} else {
-		cmd = exec.Command("curl", "--ipv4", "-u", user+":"+password, "https://robot-ws.your-server.de/failover/"+c.vip.String())
+		cmd = exec.Command("curl", "--ipv4", "-u", user+":"+password, "https://robot-ws.your-server.de/failover/"+c.VIP.String())
 	}
 
 	out, err := cmd.Output()
@@ -249,7 +249,7 @@ func (c *HetznerConfigurer) runAddressConfiguration(action string) bool {
 }
 
 func (c *HetznerConfigurer) GetCIDR() string {
-	return fmt.Sprintf("%s/%d", c.vip.String(), NetmaskSize(c.netmask))
+	return fmt.Sprintf("%s/%d", c.VIP.String(), NetmaskSize(c.Netmask))
 }
 
 func (c *HetznerConfigurer) cleanupArp() {

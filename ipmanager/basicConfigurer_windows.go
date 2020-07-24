@@ -1,4 +1,4 @@
-package main
+package ipmanager
 
 import (
 	"encoding/binary"
@@ -9,13 +9,13 @@ import (
 )
 
 func (c *BasicConfigurer) ConfigureAddress() bool {
-	log.Printf("Configuring address %s on %s", c.GetCIDR(), c.iface.Name)
+	log.Printf("Configuring address %s on %s", c.GetCIDR(), c.Iface.Name)
 	var (
-		ip          uint32 = binary.LittleEndian.Uint32(c.vip.To4())
-		mask        uint32 = binary.LittleEndian.Uint32(c.netmask)
+		ip          uint32 = binary.LittleEndian.Uint32(c.VIP.To4())
+		mask        uint32 = binary.LittleEndian.Uint32(c.Netmask)
 		nteinstance uint32
 	)
-	iface, err := net.InterfaceByName(c.iface.Name)
+	iface, err := net.InterfaceByName(c.Iface.Name)
 	if err != nil {
 		log.Printf("Got error: %v", err)
 		return false
@@ -33,7 +33,7 @@ func (c *BasicConfigurer) ConfigureAddress() bool {
 }
 
 func (c *BasicConfigurer) DeconfigureAddress() bool {
-	log.Printf("Removing address %s on %s", c.GetCIDR(), c.iface.Name)
+	log.Printf("Removing address %s on %s", c.GetCIDR(), c.Iface.Name)
 	err := iphlpapi.DeleteIPAddress(c.ntecontext)
 	if err != nil {
 		log.Printf("Got error: %v", err)

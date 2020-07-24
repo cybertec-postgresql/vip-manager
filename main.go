@@ -15,6 +15,7 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/cybertec-postgresql/vip-manager/checker"
+	"github.com/cybertec-postgresql/vip-manager/ipmanager"
 	"github.com/cybertec-postgresql/vip-manager/vipconfig"
 	//"github.com/milosgajdos83/tenus"
 )
@@ -129,12 +130,12 @@ func main() {
 	vip := net.ParseIP(conf.IP)
 	vipMask := getMask(vip, conf.Mask)
 	netIface := getNetIface(conf.Iface)
-	manager, err := NewIPManager(
+	manager, err := ipmanager.NewIPManager(
 		conf.HostingType,
-		&IPConfiguration{
-			vip:        vip,
-			netmask:    vipMask,
-			iface:      *netIface,
+		&ipmanager.IPConfiguration{
+			VIP:        vip,
+			Netmask:    vipMask,
+			Iface:      *netIface,
 			RetryNum:   conf.RetryNum,
 			RetryAfter: conf.RetryAfter,
 		},

@@ -1,4 +1,4 @@
-package main
+package ipmanager
 
 import (
 	"fmt"
@@ -6,15 +6,15 @@ import (
 )
 
 type IPConfiguration struct {
-	vip        net.IP
-	netmask    net.IPMask
-	iface      net.Interface
+	VIP        net.IP
+	Netmask    net.IPMask
+	Iface      net.Interface
 	RetryNum   int
 	RetryAfter int
 }
 
 func (c *IPConfiguration) GetCIDR() string {
-	return fmt.Sprintf("%s/%d", c.vip.String(), NetmaskSize(c.netmask))
+	return fmt.Sprintf("%s/%d", c.VIP.String(), NetmaskSize(c.Netmask))
 }
 
 func NetmaskSize(mask net.IPMask) int {
