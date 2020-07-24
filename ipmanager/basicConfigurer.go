@@ -29,7 +29,7 @@ type BasicConfigurer struct {
 }
 
 func NewBasicConfigurer(config *IPConfiguration) (*BasicConfigurer, error) {
-	c := &BasicConfigurer{IPConfiguration: config}
+	c := &BasicConfigurer{IPConfiguration: config, ntecontext: 0}
 
 	// //this should never error out, otherwise we have bigger problems
 	// local_hardware_addr, err := net.ParseMAC("00:00:00:00:00:00")
