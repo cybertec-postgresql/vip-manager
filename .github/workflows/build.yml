@@ -12,7 +12,7 @@ on:
       - '*'
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: [windows-latest, ubuntu-latest]
 
     name: Build & Test
     steps:
@@ -26,10 +26,25 @@ jobs:
         go version
         go build
 
-    - name: GolangCI-Lint
+    - name: Remove windows dependencies for Ubuntu
+      if: runner.os == 'Linux'
       run: |
-        curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s v1.29.0
-        ./bin/golangci-lint run -v
+        rm -r iphlpapi
+
+    - name: GolangCI-Lint
+    - uses: actions/checkout@v2
+      uses: golangci/golangci-lint-action@v1
+      with:
+        # Required: the version of golangci-lint is required and must be specified without patch version: we always use the latest patch version.
+        version: v1.29
+
+        # Optional: golangci-lint command line arguments.
+        args: --verbose
+
+    # - name: GolangCI-Lint
+    #   run: |
+    #     curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s v1.29.0
+    #     ./bin/golangci-lint run -v
 
     # - name: Test
     #   run: go test -v -p 1 -coverprofile=profile.cov ./...
