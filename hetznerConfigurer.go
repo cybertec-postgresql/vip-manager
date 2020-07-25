@@ -32,12 +32,12 @@ type HetznerConfigurer struct {
 	verbose      bool
 }
 
-func NewHetznerConfigurer(config *IPConfiguration, verbose_ bool) (*HetznerConfigurer, error) {
+func NewHetznerConfigurer(config *IPConfiguration, verbose bool) (*HetznerConfigurer, error) {
 	c := &HetznerConfigurer{
 		IPConfiguration: config,
 		cachedState: UNKNOWN,
 		lastAPICheck: time.Unix(0, 0),
-		verbose: verbose_}
+		verbose: verbose}
 
 	return c, nil
 }
