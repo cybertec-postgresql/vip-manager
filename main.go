@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+
 	// "flag"
 	"fmt"
 	"log"
@@ -74,7 +75,7 @@ func checkMandatory() {
 	for _, v := range mandatory {
 		success = checkSetting(v) && success
 	}
-	if success == false {
+	if !success {
 		log.Fatal("one or more mandatory settings were not set.")
 	}
 }
@@ -101,25 +102,25 @@ func defineFlags() {
 
 	// old CLI flags, now deprecated:
 	pflag.String("mask", "", "")
-	pflag.CommandLine.MarkDeprecated("mask", "use --netmask instead")
+	_ = pflag.CommandLine.MarkDeprecated("mask", "use --netmask instead")
 	pflag.String("hostingtype", "", "")
-	pflag.CommandLine.MarkDeprecated("hostingtype", "use --manager-mode instead")
+	_ = pflag.CommandLine.MarkDeprecated("hostingtype", "use --manager-mode instead")
 	pflag.String("endpoint", "", "")
-	pflag.CommandLine.MarkDeprecated("endpoint", "use --dcs-endpoints instead")
+	_ = pflag.CommandLine.MarkDeprecated("endpoint", "use --dcs-endpoints instead")
 	pflag.String("type", "", "")
-	pflag.CommandLine.MarkDeprecated("type", "use --dcs-type instead")
+	_ = pflag.CommandLine.MarkDeprecated("type", "use --dcs-type instead")
 	pflag.String("etcd_password", "", "")
-	pflag.CommandLine.MarkDeprecated("etcd_password", "use --etcd-password instead")
+	_ = pflag.CommandLine.MarkDeprecated("etcd_password", "use --etcd-password instead")
 	pflag.String("etcd_user", "", "")
-	pflag.CommandLine.MarkDeprecated("etcd_user", "use --etcd-user instead")
+	_ = pflag.CommandLine.MarkDeprecated("etcd_user", "use --etcd-user instead")
 	pflag.String("consul_token", "", "")
-	pflag.CommandLine.MarkDeprecated("consul_token", "use --consul-token instead")
+	_ = pflag.CommandLine.MarkDeprecated("consul_token", "use --consul-token instead")
 	pflag.String("nodename", "", "")
-	pflag.CommandLine.MarkDeprecated("nodename", "use --trigger-value instead")
+	_ = pflag.CommandLine.MarkDeprecated("nodename", "use --trigger-value instead")
 	pflag.String("key", "", "")
-	pflag.CommandLine.MarkDeprecated("key", "use --trigger-key instead")
+	_ = pflag.CommandLine.MarkDeprecated("key", "use --trigger-key instead")
 	pflag.String("iface", "", "")
-	pflag.CommandLine.MarkDeprecated("iface", "use --interface instead")
+	_ = pflag.CommandLine.MarkDeprecated("iface", "use --interface instead")
 
 	pflag.CommandLine.SortFlags = false
 }
@@ -162,7 +163,7 @@ func main() {
 	//put existing flags into pflags:
 	pflag.Parse()
 	//import pflags into viper
-	viper.BindPFlags(pflag.CommandLine)
+	_ = viper.BindPFlags(pflag.CommandLine)
 
 	// make viper look for env variables that are prefixed VIP_...
 	// viper.getString("IP") will thus check env variable VIP_IP
@@ -187,7 +188,7 @@ func main() {
 
 		err := viper.ReadInConfig() // Find and read the config file
 		if err != nil {             // Handle errors reading the config file
-			panic(fmt.Errorf("Fatal error reading config file: %s \n", err))
+			panic(fmt.Errorf("Fatal error reading config file: %w", err))
 		}
 		fmt.Printf("Using config from file: %s\n", viper.ConfigFileUsed())
 	}
@@ -222,30 +223,30 @@ func main() {
 	}
 
 	if len(viper.GetString("trigger-value")) == 0 {
-		trigger_value, err := os.Hostname()
+		triggerValue, err := os.Hostname()
 		if err != nil {
 			log.Printf("No trigger-value specified, hostname could not be retrieved: %s\n", err)
 		} else {
-			log.Printf("No trigger-value specified, instead using hostname: %v\n", trigger_value)
-			viper.Set("trigger-value", trigger_value)
+			log.Printf("No trigger-value specified, instead using hostname: %v\n", triggerValue)
+			viper.Set("trigger-value", triggerValue)
 		}
 	}
 
 	conf = vipconfig.Config{
-		Ip:            viper.GetString("ip"),
-		Mask:          viper.GetInt("netmask"),
-		Iface:         viper.GetString("interface"),
-		HostingType:   viper.GetString("manager-mode"),
-		Key:           viper.GetString("trigger-key"),
-		Nodename:      viper.GetString("trigger-value"),
-		Endpoint_type: viper.GetString("dcs-type"),
-		Endpoints:     viper.GetStringSlice("dcs-endpoints"),
-		Etcd_user:     viper.GetString("etcd-user"),
-		Etcd_password: viper.GetString("etcd-password"),
-		Consul_token:  viper.GetString("consul-token"),
-		Interval:      viper.GetInt("interval"),
-		Retry_after:   viper.GetInt("retry-after"),
-		Retry_num:     viper.GetInt("retry-num"),
+		IP:           viper.GetString("ip"),
+		Mask:         viper.GetInt("netmask"),
+		Iface:        viper.GetString("interface"),
+		HostingType:  viper.GetString("manager-mode"),
+		Key:          viper.GetString("trigger-key"),
+		Nodename:     viper.GetString("trigger-value"),
+		EndpointType: viper.GetString("dcs-type"),
+		Endpoints:    viper.GetStringSlice("dcs-endpoints"),
+		EtcdUser:     viper.GetString("etcd-user"),
+		EtcdPassword: viper.GetString("etcd-password"),
+		ConsulToken:  viper.GetString("consul-token"),
+		Interval:     viper.GetInt("interval"),
+		RetryAfter:   viper.GetInt("retry-after"),
+		RetryNum:     viper.GetInt("retry-num"),
 	}
 
 	b, err := json.MarshalIndent(conf, "", "  ")
