@@ -13,6 +13,7 @@ import (
 	"sync"
 
 	"github.com/cybertec-postgresql/vip-manager/checker"
+	"github.com/cybertec-postgresql/vip-manager/ipmanager"
 	"github.com/cybertec-postgresql/vip-manager/vipconfig"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -260,17 +261,17 @@ func main() {
 		log.Fatalf("Failed to initialize leader checker: %s\n", err)
 	}
 
-	vip := net.ParseIP(conf.Ip)
+	vip := net.ParseIP(conf.IP)
 	vipMask := getMask(vip, conf.Mask)
 	netIface := getNetIface(conf.Iface)
-	manager, err := NewIPManager(
+	manager, err := ipmanager.NewIPManager(
 		conf.HostingType,
-		&IPConfiguration{
-			vip:         vip,
-			netmask:     vipMask,
-			iface:       *netIface,
-			Retry_num:   conf.Retry_num,
-			Retry_after: conf.Retry_after,
+		&ipmanager.IPConfiguration{
+			VIP:        vip,
+			Netmask:    vipMask,
+			Iface:      *netIface,
+			RetryNum:   conf.RetryNum,
+			RetryAfter: conf.RetryAfter,
 		},
 		states,
 	)
