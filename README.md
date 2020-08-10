@@ -7,7 +7,7 @@
 
 Manages a virtual IP based on state kept in etcd or Consul. Monitors state in etcd 
 
-## building
+## Building
 1. Make sure you have at least version 1.12 of Golang
 2. To make sure that internal includes (the vipconfig and the checker package) are satisfied, place the base directory of this project properly into your `$GOPATH`.
     The resulting location should be `$GOPATH/src/github.com/cybertec-postgresql/vip-manager/`. The easiest way to do this is:
@@ -47,6 +47,12 @@ These configuration keys are currently mandatory:
 | VIP_HOST  | serverX  | Value to trigger on. Must match `<name>` from Patroni.                                   |
 | VIP_TYPE  | etcd     | Type of endpoint (etcd or consul)                                                        |
 | VIP_ENDPOINT | http://10.1.2.3:2379 | Location of one or more endpoints (etcd or consul). Separate multiple endpoints with commas |
+
+### PostgreSQL side prerequisites
+
+For any virtual IP based solutions to work in general with Postgres you need to make sure that it is configured to automatically scan and bind
+to all found network interfaces. So something like `*` or `0.0.0.0` (IPv4 only) is needed for the `listen_addresses` parameter
+to activate the automatic binding. This again might not be suitable for all use cases where security is paramount for example.
 
 ### Configuration - Hetzner
 To use vip-manager with Hetzner Robot API you need a Credential file, set hosting_type to `hetzner` and your Floating-IP must be added on all Servers.
