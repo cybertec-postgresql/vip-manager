@@ -14,6 +14,10 @@ const (
 	arpReplyOp   = 2
 )
 
+var (
+	ethernetBroadcast = net.HardwareAddr{0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
+)
+
 func (c *BasicConfigurer) ConfigureAddress() bool {
 	if c.arpClient == nil {
 		err := c.createArpClient()
