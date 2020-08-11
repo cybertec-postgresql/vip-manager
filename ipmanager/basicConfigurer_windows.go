@@ -28,7 +28,7 @@ func (c *BasicConfigurer) ConfigureAddress() bool {
 	// For now it is save to say that also working even if a
 	// gratuitous arp message could not be send but logging an
 	// errror should be enough.
-	_ = c.ARPSendGratuitous()
+	//_ = c.ARPSendGratuitous()
 	return true
 }
 
