@@ -2,8 +2,11 @@ package ipmanager
 
 import (
 	"log"
+	"net"
 	"os/exec"
 	"time"
+
+	arp "github.com/mdlayher/arp"
 )
 
 const (
