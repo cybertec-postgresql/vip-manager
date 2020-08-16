@@ -16,19 +16,19 @@ type ConsulLeaderChecker struct {
 	apiClient *api.Client
 }
 
-//naming this c_conf to avoid conflict with conf in etcd_leader_checker.go
-var c_conf vipconfig.Config
+//naming this cConf to avoid conflict with conf in etcd_leader_checker.go
+var cConf vipconfig.Config
 
 //func NewConsulLeaderChecker(endpoint, key, nodename string) (*ConsulLeaderChecker, error) {
 func NewConsulLeaderChecker(con vipconfig.Config) (*ConsulLeaderChecker, error) {
-	c_conf = con
+	cConf = con
 
 	lc := &ConsulLeaderChecker{
-		key:      c_conf.Key,
-		nodename: c_conf.Nodename,
+		key:      cConf.Key,
+		nodename: cConf.Nodename,
 	}
 
-	url, err := url.Parse(c_conf.Endpoints[0])
+	url, err := url.Parse(cConf.Endpoints[0])
 	if err != nil {
 		return nil, err
 	}
@@ -40,8 +40,8 @@ func NewConsulLeaderChecker(con vipconfig.Config) (*ConsulLeaderChecker, error) 
 		WaitTime: time.Second,
 	}
 
-	if c_conf.Consul_token != ""{
-		config.Token = c_conf.Consul_token
+	if cConf.ConsulToken != "" {
+		config.Token = cConf.ConsulToken
 	}
 
 	apiClient, err := api.NewClient(config)
@@ -70,13 +70,13 @@ checkLoop:
 			}
 			log.Printf("consul error: %s", err)
 			out <- false
-			time.Sleep(time.Duration(c_conf.Interval) * time.Millisecond)
+			time.Sleep(time.Duration(cConf.Interval) * time.Millisecond)
 			continue
 		}
 		if resp == nil {
 			log.Printf("Cannot get variable for key %s. Will try again in a second.", c.key)
 			out <- false
-			time.Sleep(time.Duration(c_conf.Interval) * time.Millisecond)
+			time.Sleep(time.Duration(cConf.Interval) * time.Millisecond)
 			continue
 		}
 
@@ -87,7 +87,7 @@ checkLoop:
 		case <-ctx.Done():
 			break checkLoop
 		case out <- state:
-			time.Sleep(time.Duration(c_conf.Interval) * time.Millisecond)
+			time.Sleep(time.Duration(cConf.Interval) * time.Millisecond)
 			continue
 		}
 	}

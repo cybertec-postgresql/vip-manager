@@ -3,6 +3,7 @@ package checker
 import (
 	"context"
 	"errors"
+
 	"github.com/cybertec-postgresql/vip-manager/vipconfig"
 )
 
@@ -17,7 +18,7 @@ func NewLeaderChecker(con vipconfig.Config) (LeaderChecker, error) {
 	var lc LeaderChecker
 	var err error
 
-	switch con.Endpoint_type {
+	switch con.EndpointType {
 	case "consul":
 		lc, err = NewConsulLeaderChecker(con)
 	case "etcd":
