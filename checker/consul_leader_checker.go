@@ -53,7 +53,7 @@ func NewConsulLeaderChecker(cConf *vipconfig.Config) (*ConsulLeaderChecker, erro
 	return lc, nil
 }
 
-// GetChangeNotificationStream checks the shatus in the loop
+// GetChangeNotificationStream checks the status in the loop
 func (c *ConsulLeaderChecker) GetChangeNotificationStream(ctx context.Context, out chan<- bool) error {
 	kv := c.apiClient.KV()
 

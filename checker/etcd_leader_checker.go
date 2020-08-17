@@ -37,7 +37,7 @@ func NewEtcdLeaderChecker(eConf *vipconfig.Config) (*EtcdLeaderChecker, error) {
 	return e, nil
 }
 
-// GetChangeNotificationStream checks the shatus in the loop
+// GetChangeNotificationStream checks the status in the loop
 func (e *EtcdLeaderChecker) GetChangeNotificationStream(ctx context.Context, out chan<- bool) error {
 	clientOptions := &client.GetOptions{
 		Quorum:    true,
