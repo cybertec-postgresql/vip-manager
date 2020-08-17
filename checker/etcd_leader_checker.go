@@ -9,6 +9,7 @@ import (
 	"github.com/cybertec-postgresql/vip-manager/vipconfig"
 )
 
+// EtcdLeaderChecker is used to check state of the leader key in Etcd
 type EtcdLeaderChecker struct {
 	key      string
 	nodename string
@@ -18,11 +19,9 @@ type EtcdLeaderChecker struct {
 //naming this c_conf to avoid conflict with conf in etcd_leader_checker.go
 var eConf vipconfig.Config
 
-//func NewEtcdLeaderChecker(endpoint, key, nodename string, etcd_user string, etcd_password string) (*EtcdLeaderChecker, error) {
-func NewEtcdLeaderChecker(con vipconfig.Config) (*EtcdLeaderChecker, error) {
-	eConf = con
+// NewEtcdLeaderChecker returns  a new EtcdLeaderChecker instance
+func NewEtcdLeaderChecker(eConf *vipconfig.Config) (*EtcdLeaderChecker, error) {
 	e := &EtcdLeaderChecker{key: eConf.Key, nodename: eConf.Nodename}
-
 	cfg := client.Config{
 		Endpoints:               eConf.Endpoints,
 		Transport:               client.DefaultTransport,
@@ -30,18 +29,15 @@ func NewEtcdLeaderChecker(con vipconfig.Config) (*EtcdLeaderChecker, error) {
 		Username:                eConf.EtcdUser,
 		Password:                eConf.EtcdPassword,
 	}
-
 	c, err := client.New(cfg)
-
 	if err != nil {
 		return nil, err
 	}
-
 	e.kapi = client.NewKeysAPI(c)
-
 	return e, nil
 }
 
+// GetChangeNotificationStream checks the shatus in the loop
 func (e *EtcdLeaderChecker) GetChangeNotificationStream(ctx context.Context, out chan<- bool) error {
 	clientOptions := &client.GetOptions{
 		Quorum:    true,

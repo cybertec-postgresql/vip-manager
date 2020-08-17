@@ -8,8 +8,9 @@ import (
 	"github.com/cybertec-postgresql/vip-manager/iphlpapi"
 )
 
-func (c *BasicConfigurer) ConfigureAddress() bool {
-	log.Printf("Configuring address %s on %s", c.GetCIDR(), c.Iface.Name)
+// ConfigureAddress assigns virtual IP address
+func (c *BasicConfigurer) configureAddress() bool {
+	log.Printf("Configuring address %s on %s", c.getCIDR(), c.Iface.Name)
 	var (
 		ip          uint32 = binary.LittleEndian.Uint32(c.VIP.To4())
 		mask        uint32 = binary.LittleEndian.Uint32(c.Netmask)
@@ -32,8 +33,9 @@ func (c *BasicConfigurer) ConfigureAddress() bool {
 	return true
 }
 
-func (c *BasicConfigurer) DeconfigureAddress() bool {
-	log.Printf("Removing address %s on %s", c.GetCIDR(), c.Iface.Name)
+// DeconfigureAddress drops virtual IP address
+func (c *BasicConfigurer) deconfigureAddress() bool {
+	log.Printf("Removing address %s on %s", c.getCIDR(), c.Iface.Name)
 	err := iphlpapi.DeleteIPAddress(c.ntecontext)
 	if err != nil {
 		log.Printf("Got error: %v", err)

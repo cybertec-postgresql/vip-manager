@@ -5,6 +5,7 @@ import (
 	"net"
 )
 
+// IPConfiguration holds the configuration for VIP manager
 type IPConfiguration struct {
 	VIP        net.IP
 	Netmask    net.IPMask
@@ -13,11 +14,12 @@ type IPConfiguration struct {
 	RetryAfter int
 }
 
-func (c *IPConfiguration) GetCIDR() string {
-	return fmt.Sprintf("%s/%d", c.VIP.String(), NetmaskSize(c.Netmask))
+// getCIDR returns the CIDR composed from the given address and mask
+func (c *IPConfiguration) getCIDR() string {
+	return fmt.Sprintf("%s/%d", c.VIP.String(), netmaskSize(c.Netmask))
 }
 
-func NetmaskSize(mask net.IPMask) int {
+func netmaskSize(mask net.IPMask) int {
 	ones, bits := mask.Size()
 	if bits == 0 {
 		panic("Invalid mask")

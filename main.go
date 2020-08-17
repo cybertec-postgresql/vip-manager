@@ -2,33 +2,24 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 
 	// "flag"
-	"fmt"
+
 	"log"
 	"net"
 	"os"
 	"os/signal"
-	"strings"
 	"sync"
 
 	"github.com/cybertec-postgresql/vip-manager/checker"
 	"github.com/cybertec-postgresql/vip-manager/ipmanager"
 	"github.com/cybertec-postgresql/vip-manager/vipconfig"
-	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
 
-var conf vipconfig.Config
-
-func checkSetting(name string) bool {
-	if !viper.IsSet(name) {
-		log.Printf("Setting %s is mandatory", name)
-		return false
-	}
-	return true
-}
+var (
+	version string = "1.0"
+)
 
 func getMask(vip net.IP, mask int) net.IPMask {
 	if mask > 0 || mask < 33 {
