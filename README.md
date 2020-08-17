@@ -76,8 +76,8 @@ This is a list of all avaiable configuration items:
 | ------------- | ------------------- | ------- | ----------- |
 `ip`            | `VIP_IP`            | 10.10.10.123              | The virtual IP address that will be managed.
 `netmask`       | `VIP_NETMASK`       | 24                        | The netmask that is associated with the subnet that the virtual IP `vip` is part of.
-`manager-mode`  | `VIP_MANAGER_MODE`  | basic                     | Either `basic` or `hetzner`. This describes the mechanism that is used to manage the virtual IP. Defaults to `basic`.
-`interface`     | `VIP_INTERFACE`     | eth0                      | A local network interface on the machine that runs vip-manager. Required when using `manager-mode=basic`. The vip will be added to and removed from this interface.
+`manager-type`  | `VIP_MANAGER_MODE`  | basic                     | Either `basic` or `hetzner`. This describes the mechanism that is used to manage the virtual IP. Defaults to `basic`.
+`interface`     | `VIP_INTERFACE`     | eth0                      | A local network interface on the machine that runs vip-manager. Required when using `manager-type=basic`. The vip will be added to and removed from this interface.
 `interval`      | `VIP_INTERVAL`      | 1000                      | The time vip-manager main loop sleeps before checking for changes. Measured in ms. Defaults to `1000`.
 `retry-after`   | `VIP_RETRY_AFTER`   | 250                       | The time to wait before retrying interactions with components outside of vip-manager. Measured in ms. Defaults to `250`.
 `retry-num`     | `VIP_RETRY_NUM`     | 3                         | The number of times interactions with components outside of vip-manager are retried. Measured in ms. Defaults to `250`.

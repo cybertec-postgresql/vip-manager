@@ -97,13 +97,13 @@ func defineFlags() {
 	pflag.String("consul-token", "", "token for consul DCS endpoints")
 
 	pflag.String("interval", "1000", "DCS scan interval in milliseconds")
-	pflag.String("manager-mode", "basic", "type of hosting. Supported values: basic, hetzner")
+	pflag.String("manager-type", "basic", "type of hosting. Supported values: basic, hetzner")
 
 	// old CLI flags, now deprecated:
 	pflag.String("mask", "", "")
 	_ = pflag.CommandLine.MarkDeprecated("mask", "use --netmask instead")
 	pflag.String("hostingtype", "", "")
-	_ = pflag.CommandLine.MarkDeprecated("hostingtype", "use --manager-mode instead")
+	_ = pflag.CommandLine.MarkDeprecated("hostingtype", "use --manager-type instead")
 	pflag.String("endpoint", "", "")
 	_ = pflag.CommandLine.MarkDeprecated("endpoint", "use --dcs-endpoints instead")
 	pflag.String("type", "", "")
@@ -136,8 +136,8 @@ func mapDeprecated() error {
 		"type":          "dcs-type",
 		"endpoint":      "dcs-endpoints",
 		"endpoints":     "dcs-endpoints",
-		"hostingtype":   "manager-mode",
-		"hosting_type":  "manager-mode",
+		"hostingtype":   "manager-type",
+		"hosting_type":  "manager-type",
 		"endpoint_type": "dcs-type",
 		"retry_num":     "retry-num",
 		"retry_after":   "retry-after",
@@ -235,7 +235,7 @@ func NewConfig() (*Config, error) {
 		IP:           viper.GetString("ip"),
 		Mask:         viper.GetInt("netmask"),
 		Iface:        viper.GetString("interface"),
-		HostingType:  viper.GetString("manager-mode"),
+		HostingType:  viper.GetString("manager-type"),
 		Key:          viper.GetString("trigger-key"),
 		Nodename:     viper.GetString("trigger-value"),
 		EndpointType: viper.GetString("dcs-type"),
