@@ -3,13 +3,8 @@ package ipmanager
 import (
 	"context"
 	"log"
-	"net"
 	"sync"
 	"time"
-)
-
-var (
-	ethernetBroadcast = net.HardwareAddr{0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
 )
 
 type IPConfigurer interface {

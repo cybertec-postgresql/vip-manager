@@ -1,8 +1,13 @@
+[![License: MIT](https://img.shields.io/badge/License-BSD-green.svg)](https://opensource.org/licenses/BSD-2)
+![](https://github.com/cybertec-postgresql/vip-manager/workflows/Go%20Build%20&%20Test/badge.svg)
+[![Go Report Card](https://goreportcard.com/badge/github.com/cybertec-postgresql/vip-manager)](https://goreportcard.com/report/github.com/cybertec-postgresql/vip-manager)
+[![Release](https://img.shields.io/github/release/cybertec-postgresql/vip-manager.svg)](https://github.com/cybertec-postgresql/vip-manager/releases/latest)
+
 # vip-manager
 
 Manages a virtual IP based on state kept in etcd or Consul. Monitors state in etcd 
 
-## building
+## Building
 1. Make sure you have at least version 1.12 of Golang
 2. To make sure that internal includes (the vipconfig and the checker package) are satisfied, place the base directory of this project properly into your `$GOPATH`.
     The resulting location should be `$GOPATH/src/github.com/cybertec-postgresql/vip-manager/`. The easiest way to do this is:
@@ -25,14 +30,8 @@ Manages a virtual IP based on state kept in etcd or Consul. Monitors state in et
 * Install configuration file from `package/config/vip-manager.default` to `/etc/default/vip-manager`
 * Edit config and start the service.
 
-<<<<<<< HEAD
-## deprecated Configuration
-The configuration can be passed to the executable through argument flags or through a YAML config file.
-=======
-## Configuration
 The configuration can be passed to the executable through argument flags or through a YAML config file. Run `vip-manager --help` to see the available flags.
 
->>>>>>> 49_windows
 > The location of the YAML config file can be specified with the -config flag.
 > An exemplary config file is installed into `/etc/default/vip-manager_default.yml` or is available in the vipconfig directory in the repository of the software.
 
@@ -48,6 +47,11 @@ These configuration keys are currently mandatory:
 | VIP_TYPE  | etcd     | Type of endpoint (etcd or consul)                                                        |
 | VIP_ENDPOINT | http://10.1.2.3:2379 | Location of one or more endpoints (etcd or consul). Separate multiple endpoints with commas |
 
+### PostgreSQL side prerequisites
+
+For any virtual IP based solutions to work in general with Postgres you need to make sure that it is configured to automatically scan and bind
+to all found network interfaces. So something like `*` or `0.0.0.0` (IPv4 only) is needed for the `listen_addresses` parameter
+to activate the automatic binding. This again might not be suitable for all use cases where security is paramount for example.
 
 ## reworked Configuration
 Configuration is now handled using the [`viper`](https://github.com/spf13/viper) library.
