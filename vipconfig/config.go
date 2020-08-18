@@ -99,28 +99,6 @@ func defineFlags() {
 	pflag.String("interval", "1000", "DCS scan interval in milliseconds")
 	pflag.String("manager-type", "basic", "type of hosting. Supported values: basic, hetzner")
 
-	// old CLI flags, now deprecated:
-	pflag.String("mask", "", "")
-	_ = pflag.CommandLine.MarkDeprecated("mask", "use --netmask instead")
-	pflag.String("hostingtype", "", "")
-	_ = pflag.CommandLine.MarkDeprecated("hostingtype", "use --manager-type instead")
-	pflag.String("endpoint", "", "")
-	_ = pflag.CommandLine.MarkDeprecated("endpoint", "use --dcs-endpoints instead")
-	pflag.String("type", "", "")
-	_ = pflag.CommandLine.MarkDeprecated("type", "use --dcs-type instead")
-	pflag.String("etcd_password", "", "")
-	_ = pflag.CommandLine.MarkDeprecated("etcd_password", "use --etcd-password instead")
-	pflag.String("etcd_user", "", "")
-	_ = pflag.CommandLine.MarkDeprecated("etcd_user", "use --etcd-user instead")
-	pflag.String("consul_token", "", "")
-	_ = pflag.CommandLine.MarkDeprecated("consul_token", "use --consul-token instead")
-	pflag.String("nodename", "", "")
-	_ = pflag.CommandLine.MarkDeprecated("nodename", "use --trigger-value instead")
-	pflag.String("key", "", "")
-	_ = pflag.CommandLine.MarkDeprecated("key", "use --trigger-key instead")
-	pflag.String("iface", "", "")
-	_ = pflag.CommandLine.MarkDeprecated("iface", "use --interface instead")
-
 	pflag.CommandLine.SortFlags = false
 }
 
@@ -142,15 +120,25 @@ func mapDeprecated() error {
 		"retry_num":     "retry-num",
 		"retry_after":   "retry-after",
 		"consul_token":  "consul-token",
+		"host":          "trigger-value",
 	}
 
 	for k, v := range deprecated {
 		if viper.IsSet(k) {
 			log.Printf("Parameter \"%s\" has been deprecated, please use \"%s\" instead", k, v)
 			if viper.IsSet(v) {
-				log.Printf("conflicting settings: %s and %s are both specified", k, v)
-				return fmt.Errorf("values: %s and %s are both specified", viper.GetString(k), viper.GetString(v))
+				replacer := strings.NewReplacer("-", "_")
+				defer viper.SetEnvKeyReplacer(replacer)
+
+				// Check if there is only a collision because ENV vars always use _ instead of - and the deprecated mapping only maps from *_* to *-*.
+				testReplacer := strings.NewReplacer("", "")
+				viper.SetEnvKeyReplacer(testReplacer)
+				if viper.IsSet(v) {
+					log.Printf("conflicting settings: %s and %s are both specified", k, v)
+					return fmt.Errorf("conflicting values: %s and %s", viper.GetString(k), viper.GetString(v))
+				}
 			}
+			// if this is a valid mapping due to deprecation, set the new key explicitly to the value of the deprecated key.
 			viper.Set(v, viper.Get(k))
 		}
 	}
