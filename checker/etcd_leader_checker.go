@@ -17,10 +17,11 @@ type EtcdLeaderChecker struct {
 }
 
 //naming this c_conf to avoid conflict with conf in etcd_leader_checker.go
-var eConf vipconfig.Config
+var eConf *vipconfig.Config
 
 // NewEtcdLeaderChecker returns  a new EtcdLeaderChecker instance
-func NewEtcdLeaderChecker(eConf *vipconfig.Config) (*EtcdLeaderChecker, error) {
+func NewEtcdLeaderChecker(con *vipconfig.Config) (*EtcdLeaderChecker, error) {
+	eConf = con
 	e := &EtcdLeaderChecker{key: eConf.Key, nodename: eConf.Nodename}
 	cfg := client.Config{
 		Endpoints:               eConf.Endpoints,

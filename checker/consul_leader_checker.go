@@ -18,10 +18,11 @@ type ConsulLeaderChecker struct {
 }
 
 //naming this cConf to avoid conflict with conf in etcd_leader_checker.go
-var cConf vipconfig.Config
+var cConf *vipconfig.Config
 
 // NewConsulLeaderChecker returns a new instance
-func NewConsulLeaderChecker(cConf *vipconfig.Config) (*ConsulLeaderChecker, error) {
+func NewConsulLeaderChecker(con *vipconfig.Config) (*ConsulLeaderChecker, error) {
+	cConf = con
 	lc := &ConsulLeaderChecker{
 		key:      cConf.Key,
 		nodename: cConf.Nodename,
