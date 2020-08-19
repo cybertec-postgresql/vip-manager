@@ -7,16 +7,17 @@ import (
 	"time"
 )
 
-type IPConfigurer interface {
-	QueryAddress() bool
-	ConfigureAddress() bool
-	DeconfigureAddress() bool
-	GetCIDR() string
+type ipConfigurer interface {
+	queryAddress() bool
+	configureAddress() bool
+	deconfigureAddress() bool
+	getCIDR() string
 	cleanupArp()
 }
 
+// IPManager implements the main functionality of the VIP manager
 type IPManager struct {
-	configurer IPConfigurer
+	configurer ipConfigurer
 
 	states       <-chan bool
 	currentState bool
@@ -24,6 +25,7 @@ type IPManager struct {
 	recheck      *sync.Cond
 }
 
+// NewIPManager returns a new instance of IPManager
 func NewIPManager(hostingType string, config *IPConfiguration, states <-chan bool) (m *IPManager, err error) {
 	m = &IPManager{
 		states:       states,
@@ -32,11 +34,11 @@ func NewIPManager(hostingType string, config *IPConfiguration, states <-chan boo
 	m.recheck = sync.NewCond(&m.stateLock)
 	switch hostingType {
 	case "hetzner":
-		m.configurer, err = NewHetznerConfigurer(config)
+		m.configurer, err = newHetznerConfigurer(config)
 	case "basic":
 		fallthrough
 	default:
-		m.configurer, err = NewBasicConfigurer(config)
+		m.configurer, err = newBasicConfigurer(config)
 	}
 	if err != nil {
 		m = nil
@@ -50,20 +52,20 @@ func (m *IPManager) applyLoop(ctx context.Context) {
 		// Check if we should exit
 		select {
 		case <-ctx.Done():
-			m.configurer.DeconfigureAddress()
+			m.configurer.deconfigureAddress()
 			return
 		case <-time.After(time.Duration(timeout) * time.Second):
-			actualState := m.configurer.QueryAddress()
+			actualState := m.configurer.queryAddress()
 			m.stateLock.Lock()
 			desiredState := m.currentState
-			log.Printf("IP address %s state is %t, desired %t", m.configurer.GetCIDR(), actualState, desiredState)
+			log.Printf("IP address %s state is %t, desired %t", m.configurer.getCIDR(), actualState, desiredState)
 			if actualState != desiredState {
 				m.stateLock.Unlock()
 				var configureState bool
 				if desiredState {
-					configureState = m.configurer.ConfigureAddress()
+					configureState = m.configurer.configureAddress()
 				} else {
-					configureState = m.configurer.DeconfigureAddress()
+					configureState = m.configurer.deconfigureAddress()
 				}
 				if !configureState {
 					log.Printf("Error while acquiring virtual ip for this machine")
@@ -82,6 +84,7 @@ func (m *IPManager) applyLoop(ctx context.Context) {
 	}
 }
 
+// SyncStates implements states synchronization
 func (m *IPManager) SyncStates(ctx context.Context, states <-chan bool) {
 	ticker := time.NewTicker(10 * time.Second)
 

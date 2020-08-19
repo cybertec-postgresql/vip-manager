@@ -18,7 +18,8 @@ var (
 	ethernetBroadcast = net.HardwareAddr{0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
 )
 
-func (c *BasicConfigurer) ConfigureAddress() bool {
+// ConfigureAddress assigns virtual IP address
+func (c *BasicConfigurer) configureAddress() bool {
 	if c.arpClient == nil {
 		err := c.createArpClient()
 		if err != nil {
@@ -26,7 +27,7 @@ func (c *BasicConfigurer) ConfigureAddress() bool {
 		}
 	}
 
-	log.Printf("Configuring address %s on %s", c.GetCIDR(), c.Iface.Name)
+	log.Printf("Configuring address %s on %s", c.getCIDR(), c.Iface.Name)
 
 	result := c.runAddressConfiguration("add")
 
@@ -40,14 +41,15 @@ func (c *BasicConfigurer) ConfigureAddress() bool {
 	return result
 }
 
-func (c *BasicConfigurer) DeconfigureAddress() bool {
-	log.Printf("Removing address %s on %s", c.GetCIDR(), c.Iface.Name)
+// DeconfigureAddress drops virtual IP address
+func (c *BasicConfigurer) deconfigureAddress() bool {
+	log.Printf("Removing address %s on %s", c.getCIDR(), c.Iface.Name)
 	return c.runAddressConfiguration("delete")
 }
 
 func (c *BasicConfigurer) runAddressConfiguration(action string) bool {
 	cmd := exec.Command("ip", "addr", action,
-		c.GetCIDR(),
+		c.getCIDR(),
 		"dev", c.Iface.Name)
 	output, err := cmd.CombinedOutput()
 

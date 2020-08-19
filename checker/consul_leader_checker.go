@@ -10,6 +10,7 @@ import (
 	"github.com/hashicorp/consul/api"
 )
 
+// ConsulLeaderChecker is used to check state of the leader key in Consul
 type ConsulLeaderChecker struct {
 	key       string
 	nodename  string
@@ -17,12 +18,11 @@ type ConsulLeaderChecker struct {
 }
 
 //naming this cConf to avoid conflict with conf in etcd_leader_checker.go
-var cConf vipconfig.Config
+var cConf *vipconfig.Config
 
-//func NewConsulLeaderChecker(endpoint, key, nodename string) (*ConsulLeaderChecker, error) {
-func NewConsulLeaderChecker(con vipconfig.Config) (*ConsulLeaderChecker, error) {
+// NewConsulLeaderChecker returns a new instance
+func NewConsulLeaderChecker(con *vipconfig.Config) (*ConsulLeaderChecker, error) {
 	cConf = con
-
 	lc := &ConsulLeaderChecker{
 		key:      cConf.Key,
 		nodename: cConf.Nodename,
@@ -54,6 +54,7 @@ func NewConsulLeaderChecker(con vipconfig.Config) (*ConsulLeaderChecker, error) 
 	return lc, nil
 }
 
+// GetChangeNotificationStream checks the status in the loop
 func (c *ConsulLeaderChecker) GetChangeNotificationStream(ctx context.Context, out chan<- bool) error {
 	kv := c.apiClient.KV()
 

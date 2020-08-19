@@ -3,13 +3,15 @@ linters:
     - gocyclo
     - golint
     - misspell
-  disable:
     - unused
     
 linters-settings:
   gocyclo:
     # minimal code complexity to report, 30 by default (but we recommend 10-20)
     min-complexity: 16
+  golint:
+    # minimal confidence for issues, default is 0.8
+    min-confidence: 0.8    
 
 issues:
   # List of regexps of issue texts to exclude, empty list by default.
