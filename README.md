@@ -9,11 +9,11 @@ Manages a virtual IP based on state kept in etcd or Consul. Monitors state in et
 
 ## Table of Contents
 - [Building](#building)
-- [Installing on debian](#installing-on-debian)
+- [Installing from package](#Installing-from-package)
 - [Installing by hand](#installing-by-hand)
 - [PostgreSQL prerequisites](#PostgreSQL-prerequisites)
 - [Configuration](#Configuration)
-- [Migrating configuration from releases before v1.0](#Migrating-configuration-from-releases-before-v1.0)
+- [Migrating configuration from releases before v1.0](#migrating-configuration-from-releases-before-v10)
     - [Migration for Service Files using Environment Variables](#Migration-for-Service-Files-using-Environment-Variables)
     - [Migration for Service Files using YAML config files](#Migration-for-Service-Files-using-YAML-config-files)
 - [Configuration - Hetzner](#Configuration---Hetzner)
