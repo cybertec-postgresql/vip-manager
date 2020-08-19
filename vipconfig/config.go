@@ -14,9 +14,9 @@ type Config struct {
 	Endpoints    []string `yaml:"endpoints"`
 	EtcdUser     string   `yaml:"etcd_user"`
 	EtcdPassword string   `yaml:"etcd_password"`
-	EtcdCAFile   string   `yaml:etcd_ca_file`
-	EtcdCertFile string   `yaml:etcd_cert_file`
-	EtcdKeyFile  string   `yaml:etcd_key_file`  
+	EtcdCAFile   string   `yaml:"etcd_ca_file"`
+	EtcdCertFile string   `yaml:"etcd_cert_file"`
+	EtcdKeyFile  string   `yaml:"etcd_key_file"`  
 
 	ConsulToken string `yaml:"consul_token"`
 
