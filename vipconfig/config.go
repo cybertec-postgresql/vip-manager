@@ -50,7 +50,7 @@ func defineFlags() {
 
 	pflag.String("dcs-type", "etcd", "Type of endpoint used for key storage. Supported values: etcd, consul.")
 	// note: can't put a default value into dcs-endpoints as that would mess with applying default localhost when using consul
-	pflag.String("dcs-endpoints", "", "DCS endpoint(s), seperate multiple endpoints using commas. (default \"http://127.0.0.1:2379\" or \"http://127.0.0.1:8500\" depending on dcs-type.)")
+	pflag.String("dcs-endpoints", "", "DCS endpoint(s), separate multiple endpoints using commas. (default \"http://127.0.0.1:2379\" or \"http://127.0.0.1:8500\" depending on dcs-type.)")
 	pflag.String("etcd-user", "", "Username for etcd DCS endpoints.")
 	pflag.String("etcd-password", "", "Password for etcd DCS endpoints.")
 	pflag.String("consul-token", "", "Token for consul DCS endpoints.")
