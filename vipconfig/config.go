@@ -33,6 +33,8 @@ type Config struct {
 
 	RetryAfter int `yaml:"retry_after"` //milliseconds
 	RetryNum   int `yaml:"retry_num"`
+
+	Verbose bool `yaml:"verbose"`
 }
 
 func defineFlags() {
@@ -57,6 +59,8 @@ func defineFlags() {
 
 	pflag.String("interval", "1000", "DCS scan interval in milliseconds.")
 	pflag.String("manager-type", "basic", "Type of VIP-management to be used. Supported values: basic, hetzner.")
+
+	pflag.Bool("verbose", false, "Be verbose. Currently only implemented for manager-type=hetzner .")
 
 	pflag.CommandLine.SortFlags = false
 }

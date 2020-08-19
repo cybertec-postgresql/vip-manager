@@ -35,7 +35,7 @@ func (c *BasicConfigurer) configureAddress() bool {
 		// For now it is save to say that also working even if a
 		// gratuitous arp message could not be send but logging an
 		// errror should be enough.
-		_ = c.ARPSendGratuitous()
+		_ = c.arpSendGratuitous()
 	}
 
 	return result
@@ -87,7 +87,8 @@ func (c *BasicConfigurer) createArpClient() error {
 	return nil
 }
 
-func (c *BasicConfigurer) ARPSendGratuitous() error {
+// sends a gratuitous ARP request and reply
+func (c *BasicConfigurer) arpSendGratuitous() error {
 	/* While RFC 2002 does not say whether a gratuitous ARP request or reply is preferred
 	 * to update ones neighbours' MAC tables, the Wireshark Wiki recommends sending both.
 	 *		https://wiki.wireshark.org/Gratuitous_ARP
