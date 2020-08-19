@@ -7,7 +7,6 @@
 
 Manages a virtual IP based on state kept in etcd or Consul. Monitors state in etcd 
 
-<<<<<<< HEAD
 ## Table of Contents
 - [Building](#building)
 - [Installing from package](#Installing-from-package)
@@ -19,15 +18,11 @@ Manages a virtual IP based on state kept in etcd or Consul. Monitors state in et
     - [Migration for Service Files using YAML config files](#Migration-for-Service-Files-using-YAML-config-files)
 - [Configuration - Hetzner](#Configuration---Hetzner)
     - [Credential File - Hetzmer](#Credential-File---Hetzner)
+- [Debugging](#Debugging)
 - [Author](#Author)
 
 ## Building
 1. Make sure you have at least version 1.14 of Golang for proper module support. You can get by with go 1.12 or 1.13, but YMMV.
-=======
-## Building
-
-1. Make sure you have at least version 1.12 of Golang
->>>>>>> e99328045ca88cfcab2e1f67ef02a1aaf56e5052
 2. To make sure that internal includes (the vipconfig and the checker package) are satisfied, place the base directory of this project properly into your `$GOPATH`.
     The resulting location should be `$GOPATH/src/github.com/cybertec-postgresql/vip-manager/`. The easiest way to do this is:
     ```go get github.com/cybertec-postgresql/vip-manager```
@@ -56,11 +51,6 @@ to all found network interfaces. So something like `*` or `0.0.0.0` (IPv4 only) 
 to activate the automatic binding. This again might not be suitable for all use cases where security is paramount for example.
 
 ## Configuration
-<<<<<<< HEAD
-=======
-
-The configuration can be passed to the executable through argument flags or through a YAML config file. Run `vip-manager --help` to see the available flags.
->>>>>>> e99328045ca88cfcab2e1f67ef02a1aaf56e5052
 
 The configuration can be passed to the executable through argument flags, environment variables or through a YAML config file. Run `vip-manager --help` to see the available flags.
 
@@ -102,7 +92,7 @@ This is a list of all avaiable configuration items:
 `interval`      | `VIP_INTERVAL`      | no  | 1000                      | The time vip-manager main loop sleeps before checking for changes. Measured in ms. Defaults to `1000`.
 `retry-after`   | `VIP_RETRY_AFTER`   | no  | 250                       | The time to wait before retrying interactions with components outside of vip-manager. Measured in ms. Defaults to `250`.
 `retry-num`     | `VIP_RETRY_NUM`     | no  | 3                         | The number of times interactions with components outside of vip-manager are retried. Measured in ms. Defaults to `250`.
-
+`verbose`       | `VIP_VERBOSE`       | no  | true                      | Enable more verbose logging. Currently only the manager-type=hetzner provides additional logs.
 
 ### Migrating configuration from releases before v1.0
 As stated above, the configuration method has been changed from v1.0 onwards.
@@ -160,8 +150,9 @@ pass="myPassword"
 
 Either:
 
-* run `vip-manager` with `-verbose` flag or
+* run `vip-manager` with `--verbose` flag or
 * set `verbose` to `true` in `/etc/default/vip-manager.yml`
+* set `VIP_VERBOSE=true`
 
 (currently only supported for `hetzner`)
 
