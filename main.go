@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 
 	// "flag"
 
@@ -14,10 +15,10 @@ import (
 	"github.com/cybertec-postgresql/vip-manager/checker"
 	"github.com/cybertec-postgresql/vip-manager/ipmanager"
 	"github.com/cybertec-postgresql/vip-manager/vipconfig"
-	"github.com/spf13/viper"
 )
 
 var (
+	// vip-manager version definition
 	version string = "1.0"
 )
 
@@ -37,8 +38,11 @@ func getNetIface(iface string) *net.Interface {
 }
 
 func main() {
-	if viper.IsSet("version") {
-		log.Print("version " + version)
+	if (len(os.Args) > 1) && (os.Args[1] == "--version") {
+		//			log.Print("version " + version)
+		//			return nil, nil
+		//		}
+		fmt.Printf("version: %s\n", version)
 		return
 	}
 

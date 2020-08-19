@@ -88,7 +88,7 @@ func mapDeprecated() error {
 			// if the key is still set after replacing, that means we're dealing with env variables. pointless to emit deprecation warning "etcd_user is deprecated" when user specified VIP_ETCD_USER.
 			// if the key is no longer set after replacing, that means that the key was in fact present with an underscore in the config file.
 			if !viper.IsSet(strings.ReplaceAll(v, "_", "-")) {
-				log.Printf("Parameter \"%s\" has been deprecated, please use \"%s\" instead", k, v)
+				log.Printf("Parameters \"%s\" and \"%s\" have been deprecated, please use \"%s\" or \"%s\" instead", k, "VIP_"+strings.ToUpper(k), v, "VIP_"+strings.ReplaceAll(strings.ToUpper(v), "-", "_"))
 			}
 
 			if viper.IsSet(v) {
@@ -100,10 +100,10 @@ func mapDeprecated() error {
 				testReplacer := strings.NewReplacer("", "") // just don't replace anything
 				viper.SetEnvKeyReplacer(testReplacer)
 				if viper.IsSet(v) {
-					log.Printf("conflicting settings: %s and %s are both specified…", k, v)
+					log.Printf("conflicting settings: %s or %s and %s or %s are both specified…", k, "VIP_"+strings.ToUpper(k), v, "VIP_"+strings.ReplaceAll(strings.ToUpper(v), "-", "_"))
 
 					if viper.Get(k) == viper.Get(v) {
-						log.Printf("… But no conflicting settings: %s and %s are equal…ignoring.", viper.GetString(k), viper.GetString(v))
+						log.Printf("… But no conflicting values: %s and %s are equal…ignoring.", viper.GetString(k), viper.GetString(v))
 						continue
 					}
 
