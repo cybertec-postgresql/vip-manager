@@ -1,4 +1,6 @@
 /vip-manager
 *.deb
 *.rpm
+*.exe
 tmp/
+.vscode/
