@@ -84,13 +84,20 @@ func mapDeprecated() error {
 
 	for k, v := range deprecated {
 		if viper.IsSet(k) {
-			log.Printf("Parameter \"%s\" has been deprecated, please use \"%s\" instead", k, v)
+
+			// if the key is still set after replacing, that means we're dealing with env variables. pointless to emit deprecation warning "etcd_user is deprecated" when user specified VIP_ETCD_USER.
+			// if the key is no longer set after replacing, that means that the key was in fact present with an underscore in the config file.
+			if !viper.IsSet(strings.ReplaceAll(v, "_", "-")) {
+				log.Printf("Parameter \"%s\" has been deprecated, please use \"%s\" instead", k, v)
+			}
+
 			if viper.IsSet(v) {
+				// don't forget to reset the desired replacer when exiting
 				replacer := strings.NewReplacer("-", "_")
 				defer viper.SetEnvKeyReplacer(replacer)
 
 				// Check if there is only a collision because ENV vars always use _ instead of - and the deprecated mapping only maps from *_* to *-*.
-				testReplacer := strings.NewReplacer("", "")
+				testReplacer := strings.NewReplacer("", "") // just don't replace anything
 				viper.SetEnvKeyReplacer(testReplacer)
 				if viper.IsSet(v) {
 					log.Printf("conflicting settings: %s and %s are both specified…", k, v)
