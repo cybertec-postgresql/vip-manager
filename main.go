@@ -67,7 +67,7 @@ func getNetIface(iface string) *net.Interface {
 func main() {
 	flag.Parse()
 
-	if *versionHint == true {
+	if *versionHint {
 		fmt.Println("version 0.6.2")
 		return
 	}
