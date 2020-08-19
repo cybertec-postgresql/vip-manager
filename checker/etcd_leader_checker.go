@@ -43,7 +43,7 @@ func getTransport(conf vipconfig.Config) (client.CancelableTransport, error) {
 	var caCertPool *x509.CertPool
 
 	// create valid CertPool only if the ca certificate file exists
-	if caCertFile := getConfigParameter(conf.Etcd_ca_file, envEtcdCaFile); caCertFile != "" {
+	if caCertFile := getConfigParameter(conf.EtcdCAFile, envEtcdCaFile); caCertFile != "" {
 		caCert, err := ioutil.ReadFile(caCertFile)
 		if err != nil {
 			return nil, fmt.Errorf("cannot load CA file: %s", err)
@@ -53,9 +53,9 @@ func getTransport(conf vipconfig.Config) (client.CancelableTransport, error) {
 		caCertPool.AppendCertsFromPEM(caCert)
 	}
 
-	certFile := getConfigParameter(conf.Etcd_cert_file, envEtcdCertFile)
+	certFile := getConfigParameter(conf.EtcdCertFile, envEtcdCertFile)
 
-	keyFile := getConfigParameter(conf.Etcd_key_file, envEtcdKeyFile)
+	keyFile := getConfigParameter(conf.EtcdKeyFile, envEtcdKeyFile)
 
 	var certificates []tls.Certificate
 
@@ -94,7 +94,7 @@ func NewEtcdLeaderChecker(con vipconfig.Config) (*EtcdLeaderChecker, error) {
 	eConf = con
 	e := &EtcdLeaderChecker{key: eConf.Key, nodename: eConf.Nodename}
 
-	transport, err := getTransport(e_conf)
+	transport, err := getTransport(eConf)
 	if err != nil {
 		return nil, err
 	}
