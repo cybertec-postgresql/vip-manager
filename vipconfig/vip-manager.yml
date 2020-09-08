@@ -15,9 +15,9 @@ interface: enp0s3 #interface to which the virtual ip will be added
 # how the virtual ip should be managed. we currently support "ip addr add/remove" through shell commands or the Hetzner api
 hosting-type: basic # possible values: basic, or hetzner.
 
-endpoint-type: etcd # etcd or consul
+dcs-type: etcd # etcd or consul
 # a list that contains all DCS endpoints to which vip-manager could talk.
-endpoints:
+dcs-endpoints:
   - http://127.0.0.1:2379
   - http://192.168.0.42:2379
   # A single list-item is also fine.
