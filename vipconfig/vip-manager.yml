@@ -4,31 +4,34 @@
 interval: 1000
 
 # the etcd or consul key which vip-manager will regularly poll.
-key: "/service/pgcluster/leader"
-# if the value of the above key matches the NodeName (often the hostname of this host), vip-manager will try to add the virtual ip address to the interface specified in Iface
-nodename: "pgcluster_member1"
+trigger-key: "/service/pgcluster/leader"
+# if the value of the above key matches the trigger-value (often the hostname of this host), vip-manager will try to add the virtual ip address to the interface specified in Iface
+trigger-value: "pgcluster_member1"
 
 ip: 192.168.0.123 # the virtual ip address to manage
-mask: 24 # netmask for the virtual ip
-iface: enp0s3 #interface to which the virtual ip will be added
+netmask: 24 # netmask for the virtual ip
+interface: enp0s3 #interface to which the virtual ip will be added
 
 # how the virtual ip should be managed. we currently support "ip addr add/remove" through shell commands or the Hetzner api
-hosting_type: basic # possible values: basic, or hetzner.
+hosting-type: basic # possible values: basic, or hetzner.
 
-endpoint_type: etcd # etcd or consul
-# a list that contains all endpoints to which etcd could talk. 
-endpoints:
+dcs-type: etcd # etcd or consul
+# a list that contains all DCS endpoints to which vip-manager could talk.
+dcs-endpoints:
   - http://127.0.0.1:2379
   - http://192.168.0.42:2379
   # A single list-item is also fine.
   # consul will always only use the first entry from this list.
   # For consul, you'll obviously need to change the port to 8500. Unless you're using a different one. Maybe you're a rebel and are running consul on port 2379? Just to confuse people? Why would you do that? Oh, I get it.
 
-etcd_user: "patroni"
-etcd_password: "Julian's secret password"
+etcd-user: "patroni"
+etcd-password: "Julian's secret password"
 # don't worry about parameter with a prefix that doesn't match the endpoint_type. You can write anything there, I won't even look at it.
-consul_token: "Julian's secret token"
+consul-token: "Julian's secret token"
 
 # how often things should be retried and how long to wait between retries. (currently only affects arpClient)
-retry_num: 2
-retry_after: 250  #in milliseconds
+retry-num: 2
+retry-after: 250  #in milliseconds
+
+# verbose logs (currently only supported for hetzner)
+verbose: false

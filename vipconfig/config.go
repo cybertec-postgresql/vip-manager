@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/spf13/pflag"
@@ -13,26 +14,28 @@ import (
 
 // Config represents the configuration of the VIP manager
 type Config struct {
-	IP    string `yaml:"ip"`
-	Mask  int    `yaml:"mask"`
-	Iface string `yaml:"iface"`
+	IP    string `mapstructure:"ip"`
+	Mask  int    `mapstructure:"netmask"`
+	Iface string `mapstructure:"interface"`
 
-	HostingType string `yaml:"hosting_type"`
+	HostingType string `mapstructure:"manager-type"`
 
-	Key      string `yaml:"key"`
-	Nodename string `yaml:"nodename"` //hostname to trigger on. usually the name of the host where this vip-manager runs.
+	Key      string `mapstructure:"trigger-key"`
+	Nodename string `mapstructure:"trigger-value"` //hostname to trigger on. usually the name of the host where this vip-manager runs.
 
-	EndpointType string   `yaml:"endpoint_type"`
-	Endpoints    []string `yaml:"endpoints"`
-	EtcdUser     string   `yaml:"etcd_user"`
-	EtcdPassword string   `yaml:"etcd_password"`
+	EndpointType string   `mapstructure:"dcs-type"`
+	Endpoints    []string `mapstructure:"dcs-endpoints"`
+	EtcdUser     string   `mapstructure:"etcd-user"`
+	EtcdPassword string   `mapstructure:"etcd-password"`
 
-	ConsulToken string `yaml:"consul_token"`
+	ConsulToken string `mapstructure:"consul-token"`
 
-	Interval int `yaml:"interval"` //milliseconds
+	Interval int `mapstructure:"interval"` //milliseconds
 
-	RetryAfter int `yaml:"retry_after"` //milliseconds
-	RetryNum   int `yaml:"retry_num"`
+	RetryAfter int `mapstructure:"retry-after"` //milliseconds
+	RetryNum   int `mapstructure:"retry-num"`
+
+	Verbose bool `mapstructure:"verbose"`
 }
 
 func defineFlags() {
@@ -82,13 +85,22 @@ func mapDeprecated() error {
 		"host":          "trigger-value",
 	}
 
+	complaints := []string{}
+	errors := false
 	for k, v := range deprecated {
 		if viper.IsSet(k) {
 
-			// if the key is still set after replacing, that means we're dealing with env variables. pointless to emit deprecation warning "etcd_user is deprecated" when user specified VIP_ETCD_USER.
-			// if the key is no longer set after replacing, that means that the key was in fact present with an underscore in the config file.
-			if !viper.IsSet(strings.ReplaceAll(v, "_", "-")) {
-				log.Printf("Parameters \"%s\" and \"%s\" have been deprecated, please use \"%s\" or \"%s\" instead", k, "VIP_"+strings.ToUpper(k), v, "VIP_"+strings.ReplaceAll(strings.ToUpper(v), "-", "_"))
+			if _, exists := os.LookupEnv("VIP_" + strings.ToUpper(k)); !exists {
+				// using deprecated key in config file (as not exists in ENV)
+				complaints = append(complaints, fmt.Sprintf("Parameter \"%s\" has been deprecated, please use \"%s\" instead", k, v))
+			} else {
+				if strings.ReplaceAll(k, "_", "-") != v {
+					// this string is not a direct replacement (e.g. etcd-user replaces etcd-user, i.e. in both cases VIP_ETCD_USER is the valid env key)
+					// for example, complain about VIP_IFACE, but not VIP_CONSUL_TOKEN or VIP_ETCD_USER...
+					complaints = append(complaints, fmt.Sprintf("Parameter \"%s\" has been deprecated, please use \"%s\" instead", "VIP_"+strings.ToUpper(k), "VIP_"+strings.ReplaceAll(strings.ToUpper(v), "-", "_")))
+				} else {
+					continue
+				}
 			}
 
 			if viper.IsSet(v) {
@@ -100,19 +112,30 @@ func mapDeprecated() error {
 				testReplacer := strings.NewReplacer("", "") // just don't replace anything
 				viper.SetEnvKeyReplacer(testReplacer)
 				if viper.IsSet(v) {
-					log.Printf("conflicting settings: %s or %s and %s or %s are both specified…", k, "VIP_"+strings.ToUpper(k), v, "VIP_"+strings.ReplaceAll(strings.ToUpper(v), "-", "_"))
+					complaints = append(complaints, fmt.Sprintf("Conflicting settings: %s or %s and %s or %s are both specified…", k, "VIP_"+strings.ToUpper(k), v, "VIP_"+strings.ReplaceAll(strings.ToUpper(v), "-", "_")))
 
 					if viper.Get(k) == viper.Get(v) {
-						log.Printf("… But no conflicting values: %s and %s are equal…ignoring.", viper.GetString(k), viper.GetString(v))
+						complaints = append(complaints, fmt.Sprintf("… But no conflicting values: %s and %s are equal…ignoring.", viper.GetString(k), viper.GetString(v)))
+						continue
+					} else {
+						complaints = append(complaints, fmt.Sprintf("…conflicting values: %s and %s", viper.GetString(k), viper.GetString(v)))
+						errors = true
 						continue
 					}
-
-					return fmt.Errorf("…conflicting values: %s and %s", viper.GetString(k), viper.GetString(v))
 				}
 			}
 			// if this is a valid mapping due to deprecation, set the new key explicitly to the value of the deprecated key.
 			viper.Set(v, viper.Get(k))
+			// "unset" the deprecated setting so it will not show up in our config later
+			viper.Set(k, "")
+
 		}
+	}
+	for c := range complaints {
+		log.Println(complaints[c])
+	}
+	if errors {
+		log.Fatal("Cannot continue due to conflicts.")
 	}
 	return nil
 }
@@ -158,6 +181,29 @@ func checkMandatory() error {
 		return errors.New("one or more mandatory settings were not set")
 	}
 	return nil
+}
+
+func printSettings() {
+	s := []string{}
+
+	for k, v := range viper.AllSettings() {
+		if v != "" {
+			switch k {
+			case "etcd-password":
+				fallthrough
+			case "consul-token":
+				s = append(s, fmt.Sprintf("\t%s : *****\n", k))
+			default:
+				s = append(s, fmt.Sprintf("\t%s : %v\n", k, v))
+			}
+		}
+	}
+
+	sort.Strings(s)
+	log.Println("This is the config that will be used:")
+	for k := range s {
+		fmt.Print(s[k])
+	}
 }
 
 // NewConfig returns a new Config instance
@@ -234,32 +280,17 @@ func NewConfig() (*Config, error) {
 		}
 	}
 
-	conf := Config{
-		IP:           viper.GetString("ip"),
-		Mask:         viper.GetInt("netmask"),
-		Iface:        viper.GetString("interface"),
-		HostingType:  viper.GetString("manager-type"),
-		Key:          viper.GetString("trigger-key"),
-		Nodename:     viper.GetString("trigger-value"),
-		EndpointType: viper.GetString("dcs-type"),
-		Endpoints:    viper.GetStringSlice("dcs-endpoints"),
-		EtcdUser:     viper.GetString("etcd-user"),
-		EtcdPassword: viper.GetString("etcd-password"),
-		ConsulToken:  viper.GetString("consul-token"),
-		Interval:     viper.GetInt("interval"),
-		RetryAfter:   viper.GetInt("retry-after"),
-		RetryNum:     viper.GetInt("retry-num"),
-	}
-
 	if err = checkMandatory(); err != nil {
 		return nil, err
 	}
 
-	// this will print password and token, so need to reconsider...
-	// b, err := json.MarshalIndent(conf, "", "  ")
-	// if err == nil {
-	// 	log.Printf("This is the config that will be used:\n %v", string(b))
-	// }
+	conf := &Config{}
+	err = viper.Unmarshal(conf)
+	if err != nil {
+		log.Fatalf("unable to decode viper config into config struct, %v", err)
+	}
 
-	return &conf, nil
+	printSettings()
+
+	return conf, nil
 }
