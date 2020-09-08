@@ -112,8 +112,6 @@ func mapDeprecated() error {
 				testReplacer := strings.NewReplacer("", "") // just don't replace anything
 				viper.SetEnvKeyReplacer(testReplacer)
 				if viper.IsSet(v) {
-					//log.Printf("Conflicting settings: %s or %s and %s or %s are both specified…", k, "VIP_"+strings.ToUpper(k), v, "VIP_"+strings.ReplaceAll(strings.ToUpper(v), "-", "_"))
-
 					complaints = append(complaints, fmt.Sprintf("Conflicting settings: %s or %s and %s or %s are both specified…", k, "VIP_"+strings.ToUpper(k), v, "VIP_"+strings.ReplaceAll(strings.ToUpper(v), "-", "_")))
 
 					if viper.Get(k) == viper.Get(v) {
