@@ -26,7 +26,7 @@ type IPManager struct {
 }
 
 // NewIPManager returns a new instance of IPManager
-func NewIPManager(hostingType string, config *IPConfiguration, states <-chan bool) (m *IPManager, err error) {
+func NewIPManager(hostingType string, config *IPConfiguration, states <-chan bool, verbose bool) (m *IPManager, err error) {
 	m = &IPManager{
 		states:       states,
 		currentState: false,
@@ -34,7 +34,10 @@ func NewIPManager(hostingType string, config *IPConfiguration, states <-chan boo
 	m.recheck = sync.NewCond(&m.stateLock)
 	switch hostingType {
 	case "hetzner":
-		m.configurer, err = newHetznerConfigurer(config)
+		m.configurer, err = newHetznerConfigurer(config, verbose)
+		if err != nil {
+			return nil, err
+		}
 	case "basic":
 		fallthrough
 	default:

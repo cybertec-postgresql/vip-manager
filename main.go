@@ -70,6 +70,7 @@ func main() {
 			RetryAfter: conf.RetryAfter,
 		},
 		states,
+		conf.Verbose,
 	)
 	if err != nil {
 		log.Fatalf("Problems with generating the virtual ip manager: %s", err)

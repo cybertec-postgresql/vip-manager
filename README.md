@@ -18,6 +18,7 @@ Manages a virtual IP based on state kept in etcd or Consul. Monitors state in et
     - [Migration for Service Files using YAML config files](#Migration-for-Service-Files-using-YAML-config-files)
 - [Configuration - Hetzner](#Configuration---Hetzner)
     - [Credential File - Hetzmer](#Credential-File---Hetzner)
+- [Debugging](#Debugging)
 - [Author](#Author)
 
 ## Building
@@ -94,6 +95,7 @@ This is a list of all avaiable configuration items:
 `etcd-ca-file`      | `VIP_ETCD_CA_FILE`    | no        | /etc/etcd/ca.cert.pem     | A certificate authority file that can be used to verify the certificate provided by etcd endpoints.
 `etcd-cert-file`    | `VIP_ETCD_CERT_FILE`  | no        | /etc/etcd/client.cert.pem | A client certificate that is used to authenticate against etcd endpoints. Requires `etcd-ca-file` to be set as well.
 `etcd-key-file`     | `VIP_ETCD_KEY_FILE`   | no        | /etc/etcd/client.key.pem  | A private key for the client certificate, used to decrypt messages sent by etcd endpoints. Required when `etcd-cert-file` is specified.
+`verbose`           | `VIP_VERBOSE`         | no        | true                      | Enable more verbose logging. Currently only the manager-type=hetzner provides additional logs.
 
 
 ### Migrating configuration from releases before v1.0
@@ -147,6 +149,16 @@ Add the File `/etc/hetzner` with your Username and Password
 user="myUsername"
 pass="myPassword"
 ```
+
+## Debugging
+
+Either:
+
+* run `vip-manager` with `--verbose` flag or
+* set `verbose` to `true` in `/etc/default/vip-manager.yml`
+* set `VIP_VERBOSE=true`
+
+(currently only supported for `hetzner`)
 
 ## Author
 
