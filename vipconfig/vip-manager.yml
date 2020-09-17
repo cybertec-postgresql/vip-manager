@@ -26,6 +26,12 @@ dcs-endpoints:
 
 etcd-user: "patroni"
 etcd-password: "Julian's secret password"
+# when etcd-ca-file is specified, TLS connections to the etcd endpoints will be used.
+etcd-ca-file: "/path/to/etcd/trusted/ca/file"
+# when etcd-cert-file and etcd-key-file are specified, we will authenticate at the etcd endpoints using this certificate and key.
+etcd-cert-file: "/path/to/etcd/client/cert/file"
+etcd-key-file: "/path/to/etcd/client/key/file"
+
 # don't worry about parameter with a prefix that doesn't match the endpoint_type. You can write anything there, I won't even look at it.
 consul-token: "Julian's secret token"
 

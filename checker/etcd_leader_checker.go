@@ -2,7 +2,13 @@ package checker
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
+	"fmt"
+	"io/ioutil"
 	"log"
+	"net"
+	"net/http"
 	"time"
 
 	"github.com/coreos/etcd/client"
@@ -19,13 +25,66 @@ type EtcdLeaderChecker struct {
 //naming this c_conf to avoid conflict with conf in etcd_leader_checker.go
 var eConf *vipconfig.Config
 
-// NewEtcdLeaderChecker returns  a new EtcdLeaderChecker instance
+func getTransport(conf *vipconfig.Config) (client.CancelableTransport, error) {
+	var caCertPool *x509.CertPool
+
+	// create valid CertPool only if the ca certificate file exists
+	if conf.EtcdCAFile != "" {
+		caCert, err := ioutil.ReadFile(conf.EtcdCAFile)
+		if err != nil {
+			return nil, fmt.Errorf("cannot load CA file: %s", err)
+		}
+
+		caCertPool = x509.NewCertPool()
+		caCertPool.AppendCertsFromPEM(caCert)
+	}
+
+	var certificates []tls.Certificate
+
+	// create valid []Certificate only if the client cert and key files exists
+	if conf.EtcdCertFile != "" && conf.EtcdKeyFile != "" {
+		cert, err := tls.LoadX509KeyPair(conf.EtcdCertFile, conf.EtcdKeyFile)
+		if err != nil {
+			return nil, fmt.Errorf("cannot load client cert or key file: %s", err)
+		}
+
+		certificates = []tls.Certificate{cert}
+	}
+
+	tlsClientConfig := new(tls.Config)
+
+	if caCertPool != nil {
+		tlsClientConfig.RootCAs = caCertPool
+		if certificates != nil {
+			tlsClientConfig.Certificates = certificates
+		}
+	}
+
+	// TODO: make these timeouts adjustable
+	return &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+		Dial: (&net.Dialer{
+			Timeout:   30 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).Dial,
+		TLSClientConfig:     tlsClientConfig,
+		TLSHandshakeTimeout: 10 * time.Second,
+	}, nil
+}
+
+// NewEtcdLeaderChecker returns a new instance
 func NewEtcdLeaderChecker(con *vipconfig.Config) (*EtcdLeaderChecker, error) {
 	eConf = con
 	e := &EtcdLeaderChecker{key: eConf.Key, nodename: eConf.Nodename}
+
+	transport, err := getTransport(eConf)
+	if err != nil {
+		return nil, err
+	}
+
 	cfg := client.Config{
 		Endpoints:               eConf.Endpoints,
-		Transport:               client.DefaultTransport,
+		Transport:               transport,
 		HeaderTimeoutPerRequest: time.Second,
 		Username:                eConf.EtcdUser,
 		Password:                eConf.EtcdPassword,

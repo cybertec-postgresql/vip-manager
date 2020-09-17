@@ -25,8 +25,12 @@ type Config struct {
 
 	EndpointType string   `mapstructure:"dcs-type"`
 	Endpoints    []string `mapstructure:"dcs-endpoints"`
-	EtcdUser     string   `mapstructure:"etcd-user"`
-	EtcdPassword string   `mapstructure:"etcd-password"`
+
+	EtcdUser     string `mapstructure:"etcd-user"`
+	EtcdPassword string `mapstructure:"etcd-password"`
+	EtcdCAFile   string `mapstructure:"etcd-ca-file"`
+	EtcdCertFile string `mapstructure:"etcd-cert-file"`
+	EtcdKeyFile  string `mapstructure:"etcd-key-file"`
 
 	ConsulToken string `mapstructure:"consul-token"`
 
@@ -56,6 +60,10 @@ func defineFlags() {
 	pflag.String("dcs-endpoints", "", "DCS endpoint(s), separate multiple endpoints using commas. (default \"http://127.0.0.1:2379\" or \"http://127.0.0.1:8500\" depending on dcs-type.)")
 	pflag.String("etcd-user", "", "Username for etcd DCS endpoints.")
 	pflag.String("etcd-password", "", "Password for etcd DCS endpoints.")
+	pflag.String("etcd-ca-file", "", "Trusted CA certificate for the etcd server.")
+	pflag.String("etcd-cert-file", "", "Client certificate used for authentiaction with etcd.")
+	pflag.String("etcd-key-file", "", "Private key matching etcd-cert-file to decrypt messages sent from etcd.")
+
 	pflag.String("consul-token", "", "Token for consul DCS endpoints.")
 
 	pflag.String("interval", "1000", "DCS scan interval in milliseconds.")
@@ -183,6 +191,33 @@ func checkMandatory() error {
 	return nil
 }
 
+// if reason is set, but implied is not set, return false.
+func checkImpliedSetting(implied string, reason string) bool {
+	if viper.IsSet(reason) && !viper.IsSet(implied) {
+		log.Printf("Setting %s is mandatory when setting %s is specified.", implied, reason)
+		return false
+	}
+	return true
+}
+
+// Some settings imply that another setting must be set as well.
+func checkImpliedMandatory() error {
+	mandatory := map[string]string{
+		// "implied" : "reason"
+		"etcd-user":     "etcd-password",
+		"etcd-key-file": "etcd-cert-file",
+		"etcd-ca-file":  "etcd-cert-file",
+	}
+	success := true
+	for k, v := range mandatory {
+		success = checkImpliedSetting(k, v) && success
+	}
+	if !success {
+		return errors.New("one or more implied mandatory settings were not set")
+	}
+	return nil
+}
+
 func printSettings() {
 	s := []string{}
 
@@ -281,6 +316,10 @@ func NewConfig() (*Config, error) {
 	}
 
 	if err = checkMandatory(); err != nil {
+		return nil, err
+	}
+
+	if err = checkImpliedMandatory(); err != nil {
 		return nil, err
 	}
 
