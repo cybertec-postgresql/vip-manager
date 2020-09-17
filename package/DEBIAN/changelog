@@ -1,3 +1,14 @@
+vip-manager (1.0-1) unstable; urgency=low
+  * support managing VIP on windows    (pavlo.golub@cybertec.at)
+  * add TLS support for etcd connections    (gandalfmagic@libero.it)
+  * enable TLS configuration from cli flags and from yaml file    (gandalfmagic@libero.it)
+  * improved gratuitous arp request and reply sending    (julian.markwort@cybertec.at)
+  * unified config handling - flags, YAML file, environment variables    (julian.markwort@cybertec.at)
+  * add verbose logging to hetzner manager code    (tpo@sourcepole.ch)
+  * switched to go modules for dependency management    (pavlo.golub@cybertec.at)
+  * fix main loop refusing to exit    (igor.yanchenko@cybertec.at)
+ -- Julian Markwort <julian.markwort@cybertec.at> Sun, 17 Nov 2019 23:52:12 +0100
+
 vip-manager (0.6-1) unstable; urgency=low
 
   * switched to yaml file for config, still supporting all command line options from previous releases.
