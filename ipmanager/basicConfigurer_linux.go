@@ -18,7 +18,7 @@ var (
 	ethernetBroadcast = net.HardwareAddr{0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
 )
 
-// ConfigureAddress assigns virtual IP address
+// configureAddress assigns virtual IP address
 func (c *BasicConfigurer) configureAddress() bool {
 	if c.arpClient == nil {
 		err := c.createArpClient()
@@ -41,7 +41,7 @@ func (c *BasicConfigurer) configureAddress() bool {
 	return result
 }
 
-// DeconfigureAddress drops virtual IP address
+// deconfigureAddress drops virtual IP address
 func (c *BasicConfigurer) deconfigureAddress() bool {
 	log.Printf("Removing address %s on %s", c.getCIDR(), c.Iface.Name)
 	return c.runAddressConfiguration("delete")

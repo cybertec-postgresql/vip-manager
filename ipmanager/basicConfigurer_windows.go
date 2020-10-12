@@ -8,7 +8,7 @@ import (
 	"github.com/cybertec-postgresql/vip-manager/iphlpapi"
 )
 
-// ConfigureAddress assigns virtual IP address
+// configureAddress assigns virtual IP address
 func (c *BasicConfigurer) configureAddress() bool {
 	log.Printf("Configuring address %s on %s", c.getCIDR(), c.Iface.Name)
 	var (
@@ -33,7 +33,7 @@ func (c *BasicConfigurer) configureAddress() bool {
 	return true
 }
 
-// DeconfigureAddress drops virtual IP address
+// deconfigureAddress drops virtual IP address
 func (c *BasicConfigurer) deconfigureAddress() bool {
 	log.Printf("Removing address %s on %s", c.getCIDR(), c.Iface.Name)
 	err := iphlpapi.DeleteIPAddress(c.ntecontext)
