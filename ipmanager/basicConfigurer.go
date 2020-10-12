@@ -30,7 +30,7 @@ which prohibits sending of gratuitous ARP messages`)
 	return c, nil
 }
 
-// QueryAddress returns if the address is assigned
+// queryAddress returns if the address is assigned
 func (c *BasicConfigurer) queryAddress() bool {
 	iface, err := net.InterfaceByName(c.Iface.Name)
 	if err != nil {

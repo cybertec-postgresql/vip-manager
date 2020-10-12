@@ -257,7 +257,7 @@ func (c *HetznerConfigurer) deconfigureAddress() bool {
 func (c *HetznerConfigurer) runAddressConfiguration(action string) bool {
 	str, err := c.curlQueryFailover(true)
 	if err != nil {
-		log.Printf("Error while configuring Hetzner failover-ip! errormessage: %s", err)
+		log.Printf("Error while configuring Hetzner failover-ip! Error message: %s", err)
 		c.cachedState = unknown
 		return false
 	}
