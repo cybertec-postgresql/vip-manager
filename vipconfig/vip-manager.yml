@@ -19,7 +19,7 @@ dcs-type: etcd # etcd or consul
 # a list that contains all DCS endpoints to which vip-manager could talk.
 dcs-endpoints:
   - http://127.0.0.1:2379
-  - http://192.168.0.42:2379
+  - https://192.168.0.42:2379
   # A single list-item is also fine.
   # consul will always only use the first entry from this list.
   # For consul, you'll obviously need to change the port to 8500. Unless you're using a different one. Maybe you're a rebel and are running consul on port 2379? Just to confuse people? Why would you do that? Oh, I get it.
