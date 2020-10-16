@@ -8,6 +8,7 @@
 Manages a virtual IP based on state kept in etcd or Consul. Monitors state in etcd 
 
 ## Table of Contents
+
 - [Building](#building)
 - [Installing from package](#Installing-from-package)
 - [Installing by hand](#installing-by-hand)
@@ -22,16 +23,18 @@ Manages a virtual IP based on state kept in etcd or Consul. Monitors state in et
 - [Author](#Author)
 
 ## Building
+
 1. Make sure you have at least version 1.14 of Golang for proper module support. You can get by with go 1.12 or 1.13, but YMMV.
 2. To make sure that internal includes (the vipconfig and the checker package) are satisfied, place the base directory of this project properly into your `$GOPATH`.
-    The resulting location should be `$GOPATH/src/github.com/cybertec-postgresql/vip-manager/`. The easiest way to do this is:
-    ```go get github.com/cybertec-postgresql/vip-manager```
+   The resulting location should be `$GOPATH/src/github.com/cybertec-postgresql/vip-manager/`. The easiest way to do this is:
+   ```go get github.com/cybertec-postgresql/vip-manager```
 3. Build the binary using `make`.
 4. To build your own .deb or .rpm, `fpm` is required.
-    Install it, add it to your path and try running `make package`, which will generate a .deb package and will also convert that into a matching .rpm file.
+   Install it, add it to your path and try running `make package`, which will generate a .deb package and will also convert that into a matching .rpm file.
 > note: on debianoids, rpmbuild will be required to create the rpm package...
 
 ## Installing from package
+
 You can download .rpm or .deb packages here, on the [Releases](https://github.com/cybertec-postgresql/vip-manager/releases) page.
 On Debian and Ubuntu, the universe repositories should provide you with vip-manager, though the version may be not as recent.
 > NB! Our .deb is probably not compatible with the one from those repositories, do not try to install them side-by-side.
@@ -99,6 +102,7 @@ This is a list of all avaiable configuration items:
 
 
 ### Migrating configuration from releases before v1.0
+
 As stated above, the configuration method has been changed from v1.0 onwards.
 The breaking changes with regards to config handling are thus:
 - Config flags are no longer prefixed with a single dash `-`, but in POSIX style with double dashes `--`.
@@ -111,6 +115,7 @@ However, some consideration has been made to ease migration:
 This means that migration should be pretty straight forward.
 
 #### Migration for Service Files using Environment Variables
+
 > These Service Files have been published in releases <v0.4 and on Debian/Ubuntu in release v0.6 as well.
 In the "ENV style" Service Files, configuration was loaded in through an environment file and the values of the environment variables where shimmed in place of the flag values:
 ```bash
@@ -126,6 +131,7 @@ Since the environment variables are still there, the vip-manager (>=v1.0) will p
 > You could even consider another shim, that will take the environment variables using old keys, get their values and assign them to environment variables using the new keys. Then unset the old keys and you will no longer see deprecation messages.
 
 #### Migration for Service Files using YAML config files:
+
 > These Service FIles have been published in release v0.6
 In these "config file style" Service Files, the yaml configuration file was passed as a flag to the vip-manager.
 ```bash
@@ -138,12 +144,17 @@ ExecStart=/usr/bin/vip-manager --config=/etc/default/vip-manager.yml
 ```
 
 ## Configuration - Hetzner
-To use vip-manager with Hetzner Robot API you need a Credential file, set hosting_type to `hetzner` and your Floating-IP must be added on all Servers.
-The Floating-IP (VIP) will not be added or removed on the current Master node interface, Hetzner will route it to the current one.
 
-Set `hosting_type` to `hetzner` in `/etc/default/vip-manager.yml`
+To use vip-manager with Hetzner's "Robot API":
+
+* configure a credentials file (see below)
+* set `manager-type` to `hetzner` in `/etc/default/vip-manager.yml`
+* add the "Floating-IP" (aka the VIP or virtual IP) to the relevant network interface on each of your servers.
+
+vip-manager will *not* add the VIP to or remove it from the network interface of the current cluster leader; vip-manager will only tell Hetzner to route traffic for the VIP to the current cluster leader.
 
 ### Credential File - Hetzner
+
 Add the File `/etc/hetzner` with your Username and Password
 ```
 user="myUsername"
