@@ -67,9 +67,9 @@ func defineFlags() {
 	pflag.String("consul-token", "", "Token for consul DCS endpoints.")
 
 	pflag.String("interval", "1000", "DCS scan interval in milliseconds.")
-	pflag.String("manager-type", "basic", "Type of VIP-management to be used. Supported values: basic, hetzner.")
+	pflag.String("manager-type", "basic", "Type of VIP-management to be used. Supported values: basic, hetzner, hetzner_floating_ip.")
 
-	pflag.Bool("verbose", false, "Be verbose. Currently only implemented for manager-type=hetzner .")
+	pflag.Bool("verbose", false, "Be verbose. Currently only implemented for manager-type=hetzner and manager-type=hetzner_floating_ip.")
 
 	pflag.CommandLine.SortFlags = false
 }

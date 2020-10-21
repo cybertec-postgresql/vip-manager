@@ -83,7 +83,7 @@ This is a list of all avaiable configuration items:
 `interface`         | `VIP_INTERFACE`       | yes       | eth0                      | A local network interface on the machine that runs vip-manager. Required when using `manager-type=basic`. The vip will be added to and removed from this interface.
 `trigger-key`       | `VIP_TRIGGER_KEY`     | yes       | /service/pgcluster/leader | The key in the DCS that will be monitored by vip-manager. Must match `<namespace>/<scope>/leader` from Patroni config. When the value returned by the DCS equals `trigger-value`, vip-manager will make sure that the virtual IP is registered to this machine. If it does not match, vip-manager makes sure that the virtual IP is not registered to this machine.
 `trigger-value`     | `VIP_TRIGGER_VALUE`   | yes       | pgcluster_member_1        | The value that the DCS' answer for `trigger-key` will be matched to. Must match `<name>` from Patroni config. This is usually set to the name of the patroni cluster member that this vip-manager instance is associated with. Defaults to the machine's hostname.
-`manager-type`      | `VIP_MANAGER_TYPE`    | no        | basic                     | Either `basic` or `hetzner`. This describes the mechanism that is used to manage the virtual IP. Defaults to `basic`.
+`manager-type`      | `VIP_MANAGER_TYPE`    | no        | basic                     | Either `basic`, `hetzner` or `hetzner_floating_ip`. This describes the mechanism that is used to manage the virtual IP. Defaults to `basic`.
 `dcs-type`          | `VIP_DCS_TYPE`        | no        | etcd                      | The type of DCS that vip-manager will use to monitor the `trigger-key`. Defaults to `etcd`.
 `dcs-endpoints`     | `VIP_DCS_ENDPOINTS`   | no        | http://10.10.11.1:2379    | A url that defines where to reach the DCS. Multiple endpoints can be passed to the flag or env variable using a comma-separated-list. In the config file, a list can be specified, see the sample config for an example. Defaults to `http://127.0.0.1:2379` for `dcs-type=etcd` and `http://127.0.0.1:8500` for `dcs-type=consul`.
 `etcd-user`         | `VIP_ETCD_USER`       | no        | patroni                   | A username that is allowed to look at the `trigger-key` in an etcd DCS. Optional when using `dcs-type=etcd` .
@@ -95,7 +95,7 @@ This is a list of all avaiable configuration items:
 `etcd-ca-file`      | `VIP_ETCD_CA_FILE`    | no        | /etc/etcd/ca.cert.pem     | A certificate authority file that can be used to verify the certificate provided by etcd endpoints. Make sure to change `dcs-endpoints` to reflect that `https` is used.
 `etcd-cert-file`    | `VIP_ETCD_CERT_FILE`  | no        | /etc/etcd/client.cert.pem | A client certificate that is used to authenticate against etcd endpoints. Requires `etcd-ca-file` to be set as well.
 `etcd-key-file`     | `VIP_ETCD_KEY_FILE`   | no        | /etc/etcd/client.key.pem  | A private key for the client certificate, used to decrypt messages sent by etcd endpoints. Required when `etcd-cert-file` is specified.
-`verbose`           | `VIP_VERBOSE`         | no        | true                      | Enable more verbose logging. Currently only the manager-type=hetzner provides additional logs.
+`verbose`           | `VIP_VERBOSE`         | no        | true                      | Enable more verbose logging. Currently only `manager-type=hetzner` and `manager-type=hetzner_floating_ip` provide additional logs.
 
 
 ### Migrating configuration from releases before v1.0
@@ -138,16 +138,48 @@ ExecStart=/usr/bin/vip-manager --config=/etc/default/vip-manager.yml
 ```
 
 ## Configuration - Hetzner
-To use vip-manager with Hetzner Robot API you need a Credential file, set hosting_type to `hetzner` and your Floating-IP must be added on all Servers.
-The Floating-IP (VIP) will not be added or removed on the current Master node interface, Hetzner will route it to the current one.
 
-Set `hosting_type` to `hetzner` in `/etc/default/vip-manager.yml`
+To use vip-manager with Hetzner you need to configure the
+`/etc/hetzner` credentials file.
 
-### Credential File - Hetzner
-Add the File `/etc/hetzner` with your Username and Password
+Hetzner has two kinds of VIPs: the floating-IP and the failover-IP.
+
+For both kinds of VIPs you'll need to set up the failover-ip on all
+servers on the respective interface.
+
+vip-manager will not add or remove the VIP on the current master
+node interface, Hetzner will route it to the current one.
+
+#### FailoverIP
+
+[Hetzner failover-IP documentation](https://wiki.hetzner.de/index.php/Failover/en)
+[Hetzner Robot failover-IP API documentation](https://robot.your-server.de/doc/webservice/en.html#failover)
+
+* set `manager-type` to `hetzner` in `/etc/default/vip-manager.yml`
+* configure credentials in `/etc/hetzner`:
+
 ```
 user="myUsername"
 pass="myPassword"
+```
+
+#### FloatingIP
+
+[Hetzner floating-IP documentation](https://wiki.hetzner.de/index.php/CloudServer/en#What_are_floating_IPs_and_how_do_they_work.3F)
+[Hetzner Cloud failover-IP API documentation](https://docs.hetzner.cloud/#floating-ips)
+
+* set `manager-type` to `hetzner_floating_ip` in `/etc/default/vip-manager.yml`
+* configure credentials in `/etc/hetzner`:
+
+```
+# This is the API_TOKEN, that you need to get from console.hetzner.cloud -> project -> access
+tokn='DXuia61JJaLJ2Je2jZjrnQ4zm7VcLTYvoo9dV5hpNGwgvM8mI9790niVt1IbN0sE'
+# You can retrieve the IP ID with:
+# `curl -H "Authorization: Bearer $tokn" 'https://api.hetzner.cloud/v1/floating_ips'`
+ipid='123456'
+# You can retrieve the server ID with:
+# `curl -H "Authorization: Bearer $tokn" 'https://api.hetzner.cloud/v1/servers'`
+serv='7890123'
 ```
 
 ## Debugging
