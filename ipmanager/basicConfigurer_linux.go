@@ -27,7 +27,7 @@ func (c *BasicConfigurer) configureAddress() bool {
 		}
 	}
 
-	log.Printf("Configuring address %s on %s", c.getCIDR(), c.Iface.Name)
+	log.Printf("Configuring address %s on %s", c.config.ParsedCIDR, c.config.ParsedIface.Name)
 
 	result := c.runAddressConfiguration("add")
 
@@ -43,14 +43,14 @@ func (c *BasicConfigurer) configureAddress() bool {
 
 // deconfigureAddress drops virtual IP address
 func (c *BasicConfigurer) deconfigureAddress() bool {
-	log.Printf("Removing address %s on %s", c.getCIDR(), c.Iface.Name)
+	log.Printf("Removing address %s on %s", c.config.ParsedCIDR, c.config.ParsedIface.Name)
 	return c.runAddressConfiguration("delete")
 }
 
 func (c *BasicConfigurer) runAddressConfiguration(action string) bool {
 	cmd := exec.Command("ip", "addr", action,
-		c.getCIDR(),
-		"dev", c.Iface.Name)
+		c.config.ParsedCIDR,
+		"dev", c.config.ParsedIface.Name)
 	output, err := cmd.CombinedOutput()
 
 	switch err.(type) {
@@ -61,7 +61,7 @@ func (c *BasicConfigurer) runAddressConfiguration(action string) bool {
 	}
 	if err != nil {
 		log.Printf("Error running ip address %s %s on %s: %s",
-			action, c.VIP, c.Iface.Name, err)
+			action, c.config.ParsedIP, c.config.ParsedIface.Name, err)
 		return false
 	}
 	return true
@@ -70,14 +70,14 @@ func (c *BasicConfigurer) runAddressConfiguration(action string) bool {
 func (c *BasicConfigurer) createArpClient() error {
 	var err error
 	var arpClient *arp.Client
-	for i := 0; i < c.RetryNum; i++ {
-		arpClient, err = arp.Dial(&c.Iface)
+	for i := 0; i < c.config.RetryNum; i++ {
+		arpClient, err = arp.Dial(c.config.ParsedIface)
 		if err != nil {
 			log.Printf("Problems with producing the arp client: %s", err)
 		} else {
 			break
 		}
-		time.Sleep(time.Duration(c.RetryAfter) * time.Millisecond)
+		time.Sleep(time.Duration(c.config.RetryAfter) * time.Millisecond)
 	}
 	if err != nil {
 		log.Print("too many retries")
@@ -97,10 +97,10 @@ func (c *BasicConfigurer) arpSendGratuitous() error {
 	 */
 	gratuitousReplyPackage, err := arp.NewPacket(
 		arpReplyOp,
-		c.Iface.HardwareAddr,
-		c.VIP,
-		c.Iface.HardwareAddr,
-		c.VIP,
+		c.config.ParsedIface.HardwareAddr,
+		c.config.ParsedIP,
+		c.config.ParsedIface.HardwareAddr,
+		c.config.ParsedIP,
 	)
 	if err != nil {
 		log.Printf("Gratuitous arp reply package is malformed: %s", err)
@@ -116,22 +116,22 @@ func (c *BasicConfigurer) arpSendGratuitous() error {
 	arpRequestDestMac, err := net.ParseMAC("00:00:00:00:00:00")
 	if err != nil {
 		// not entirely RFC-2002 conform but better then nothing.
-		arpRequestDestMac = c.Iface.HardwareAddr
+		arpRequestDestMac = c.config.ParsedIface.HardwareAddr
 	}
 
 	gratuitousRequestPackage, err := arp.NewPacket(
 		arpRequestOp,
-		c.Iface.HardwareAddr,
-		c.VIP,
+		c.config.ParsedIface.HardwareAddr,
+		c.config.ParsedIP,
 		arpRequestDestMac,
-		c.VIP,
+		c.config.ParsedIP,
 	)
 	if err != nil {
 		log.Printf("Gratuitous arp request package is malformed: %s", err)
 		return err
 	}
 
-	for i := 0; i < c.RetryNum; i++ {
+	for i := 0; i < c.config.RetryNum; i++ {
 		errReply := c.arpClient.WriteTo(gratuitousReplyPackage, ethernetBroadcast)
 		if err != nil {
 			log.Printf("Couldn't write to the arpClient: %s", errReply)
@@ -155,7 +155,7 @@ func (c *BasicConfigurer) arpSendGratuitous() error {
 			//TODO: think about whether to leave this out to achieve simple repeat sending of GARP packages
 			break
 		}
-		time.Sleep(time.Duration(c.RetryAfter) * time.Millisecond)
+		time.Sleep(time.Duration(c.config.RetryAfter) * time.Millisecond)
 	}
 	if err != nil {
 		log.Print("too many retries")

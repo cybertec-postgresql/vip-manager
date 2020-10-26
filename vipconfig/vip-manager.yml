@@ -8,29 +8,29 @@ trigger-key: "/service/pgcluster/leader"
 # if the value of the above key matches the trigger-value (often the hostname of this host), vip-manager will try to add the virtual ip address to the interface specified in Iface
 trigger-value: "pgcluster_member1"
 
-ip: 192.168.0.123 # the virtual ip address to manage
-netmask: 24 # netmask for the virtual ip
-interface: enp0s3 #interface to which the virtual ip will be added
+ip: 123.123.123.123 # the virtual ip address to manage
+netmask: 32 # netmask for the virtual ip
+interface: enp33s0 #interface to which the virtual ip will be added
 
 # how the virtual ip should be managed. we currently support "ip addr add/remove" through shell commands or the Hetzner api
-hosting-type: basic # possible values: basic, hetzner or hetzner_floating_ip.
+manager-type: hetzner # possible values: basic, hetzner or hetzner_floating_ip.
 
 dcs-type: etcd # etcd or consul
 # a list that contains all DCS endpoints to which vip-manager could talk.
 dcs-endpoints:
   - http://127.0.0.1:2379
-  - https://192.168.0.42:2379
+#  - https://192.168.0.42:2379
   # A single list-item is also fine.
   # consul will always only use the first entry from this list.
   # For consul, you'll obviously need to change the port to 8500. Unless you're using a different one. Maybe you're a rebel and are running consul on port 2379? Just to confuse people? Why would you do that? Oh, I get it.
 
-etcd-user: "patroni"
-etcd-password: "Julian's secret password"
+#etcd-user: "patroni"
+#etcd-password: "Julian's secret password"
 # when etcd-ca-file is specified, TLS connections to the etcd endpoints will be used.
-etcd-ca-file: "/path/to/etcd/trusted/ca/file"
+#etcd-ca-file: "/path/to/etcd/trusted/ca/file"
 # when etcd-cert-file and etcd-key-file are specified, we will authenticate at the etcd endpoints using this certificate and key.
-etcd-cert-file: "/path/to/etcd/client/cert/file"
-etcd-key-file: "/path/to/etcd/client/key/file"
+#etcd-cert-file: "/path/to/etcd/client/cert/file"
+#etcd-key-file: "/path/to/etcd/client/key/file"
 
 # don't worry about parameter with a prefix that doesn't match the endpoint_type. You can write anything there, I won't even look at it.
 consul-token: "Julian's secret token"
@@ -41,3 +41,13 @@ retry-after: 250  #in milliseconds
 
 # verbose logs (currently only supported for hetzner and hetzner_floating_ip)
 verbose: false
+
+# these settings are only required when using vip-manager to route a "failover IP" via the "Hetzner Robot API"
+hetzner-robot-username: user
+hetzner-robot-password: password
+hetzner-robot-own-ip: 123.123.123.121 #The IP of this node itself. This identifies to which destination the "failover IP" needs to be routed. If not specified, we'll try to retrieve the preferred outbound IP address-
+
+# these settings are only required when using vip-manager to route a "floating IP" via the "Hetzner cloud API"
+hetzner-cloud-token: snakeoil-token
+hetzner-cloud-floating-ip-id: 987654321
+hetzner-cloud-server-id: 12345678

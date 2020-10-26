@@ -7,7 +7,6 @@ import (
 	// "flag"
 
 	"log"
-	"net"
 	"os"
 	"os/signal"
 	"sync"
@@ -21,21 +20,6 @@ var (
 	// vip-manager version definition
 	version string = "1.0"
 )
-
-func getMask(vip net.IP, mask int) net.IPMask {
-	if mask > 0 || mask < 33 {
-		return net.CIDRMask(mask, 32)
-	}
-	return vip.DefaultMask()
-}
-
-func getNetIface(iface string) *net.Interface {
-	netIface, err := net.InterfaceByName(iface)
-	if err != nil {
-		log.Fatalf("Obtaining the interface raised an error: %s", err)
-	}
-	return netIface
-}
 
 func main() {
 	if (len(os.Args) > 1) && (os.Args[1] == "--version") {
@@ -56,21 +40,10 @@ func main() {
 		log.Fatalf("Failed to initialize leader checker: %s", err)
 	}
 
-	vip := net.ParseIP(conf.IP)
-	vipMask := getMask(vip, conf.Mask)
-	netIface := getNetIface(conf.Iface)
 	states := make(chan bool)
 	manager, err := ipmanager.NewIPManager(
-		conf.HostingType,
-		&ipmanager.IPConfiguration{
-			VIP:        vip,
-			Netmask:    vipMask,
-			Iface:      *netIface,
-			RetryNum:   conf.RetryNum,
-			RetryAfter: conf.RetryAfter,
-		},
+		conf,
 		states,
-		conf.Verbose,
 	)
 	if err != nil {
 		log.Fatalf("Problems with generating the virtual ip manager: %s", err)

@@ -5,6 +5,7 @@ import (
 	"net"
 	"strings"
 
+	"github.com/cybertec-postgresql/vip-manager/vipconfig"
 	arp "github.com/mdlayher/arp"
 )
 
@@ -15,14 +16,15 @@ import (
 // a gratuitous ARP package is sent out to update the tables of
 // nearby routers and other devices.
 type BasicConfigurer struct {
-	*IPConfiguration
+	config     *vipconfig.Config
 	arpClient  *arp.Client
 	ntecontext uint32 //used by Windows to delete IP address
 }
 
-func newBasicConfigurer(config *IPConfiguration) (*BasicConfigurer, error) {
-	c := &BasicConfigurer{IPConfiguration: config, ntecontext: 0}
-	if c.Iface.HardwareAddr == nil || c.Iface.HardwareAddr.String() == "00:00:00:00:00:00" {
+func newBasicConfigurer(config *vipconfig.Config) (*BasicConfigurer, error) {
+	c := &BasicConfigurer{config: config, ntecontext: 0}
+	//TODO: move into config validator in vipconfig/config.go
+	if c.config.ParsedIface.HardwareAddr == nil || c.config.ParsedIface.HardwareAddr.String() == "00:00:00:00:00:00" {
 		return nil, errors.New(`Cannot run vip-manager on the loopback device
 as its hardware address is the local address (00:00:00:00:00:00),
 which prohibits sending of gratuitous ARP messages`)
@@ -30,9 +32,9 @@ which prohibits sending of gratuitous ARP messages`)
 	return c, nil
 }
 
-// queryAddress returns if the address is assigned
+// queryAddress returns true if the address is assigned
 func (c *BasicConfigurer) queryAddress() bool {
-	iface, err := net.InterfaceByName(c.Iface.Name)
+	iface, err := net.InterfaceByName(c.config.ParsedIface.Name)
 	if err != nil {
 		return false
 	}
@@ -41,7 +43,7 @@ func (c *BasicConfigurer) queryAddress() bool {
 		return false
 	}
 	for _, address := range addresses {
-		if strings.Contains(address.String(), c.VIP.String()) {
+		if strings.Contains(address.String(), c.config.ParsedIP.String()) {
 			return true
 		}
 	}

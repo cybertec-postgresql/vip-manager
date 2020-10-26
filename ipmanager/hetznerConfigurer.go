@@ -1,16 +1,19 @@
 package ipmanager
 
 import (
-	"bufio"
 	"encoding/json"
 	"errors"
+	"io/ioutil"
 	"log"
 	"net"
-	"os"
-	"os/exec"
+	"net/http"
+	"strings"
 	"time"
+
+	"github.com/cybertec-postgresql/vip-manager/vipconfig"
 )
 
+// type to track cached state
 const (
 	unknown    = iota // c0 == 0
 	configured = iota // c1 == 1
@@ -22,22 +25,23 @@ const (
 // Since Hetzner provides an API that handles failover-ip routing,
 // this API is used to manage the vip, whenever hostintype `hetzner` is set.
 type HetznerConfigurer struct {
-	*IPConfiguration
+	config       *vipconfig.Config
 	cachedState  int
 	lastAPICheck time.Time
 	verbose      bool
 }
 
-func newHetznerConfigurer(config *IPConfiguration, verbose bool) (*HetznerConfigurer, error) {
+func newHetznerConfigurer(config *vipconfig.Config) (*HetznerConfigurer, error) {
 	c := &HetznerConfigurer{
-		IPConfiguration: config,
-		cachedState:     unknown,
-		lastAPICheck:    time.Unix(0, 0),
-		verbose:         verbose}
+		config:       config,
+		cachedState:  unknown,
+		lastAPICheck: time.Unix(0, 0),
+	}
 
 	return c, nil
 }
 
+//TODO: obsolete this and instead make the "outbound ip" configurable, maybe with a default set in vipconfig/config.go ?
 /**
  * In order to tell the Hetzner API to route the failover-ip to
  * this machine, we must attach our own IP address to the API request.
@@ -56,37 +60,10 @@ func getOutboundIP() net.IP {
 }
 
 func (c *HetznerConfigurer) curlQueryFailover(post bool) (string, error) {
-	/**
-	 * The credentials for the API are loaded from a file stored in /etc/hetzner .
-	 */
-	//TODO: make credentialsFile dynamically changeable?
-	credentialsFile := "/etc/hetzner"
-	f, err := os.Open(credentialsFile)
-	if err != nil {
-		log.Println("can't open passwordfile", err)
-		return "", err
-	}
-	defer f.Close()
 
-	/**
-	 * The retrieval of username and password from the file is rather static,
-	 * so the credentials file must conform to the offsets down below perfectly.
-	 */
-	var user string
-	var password string
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		line := scanner.Text()
-		switch line[:4] {
-		case "user":
-			user = line[6 : len(line)-1]
-		case "pass":
-			password = line[6 : len(line)-1]
-		}
-	}
-	if user == "" || password == "" {
-		log.Println("Couldn't retrieve username or password from file", credentialsFile)
-		return "", errors.New("Couldn't retrieve username or password from file")
+	if c.config.HetznerRobotUsername == "" || c.config.HetznerRobotPassword == "" {
+		//TODO: move to config validation block in config.go
+		return "", nil
 	}
 
 	/**
@@ -98,7 +75,9 @@ func (c *HetznerConfigurer) curlQueryFailover(post bool) (string, error) {
 	 * If it is set to false, the current state (i.e. route)
 	 * for the failover-ip will be retrieved.
 	 */
-	var cmd *exec.Cmd
+	var req *http.Request
+	var err error
+
 	if post {
 		myOwnIP := getOutboundIP()
 		if myOwnIP == nil {
@@ -107,42 +86,70 @@ func (c *HetznerConfigurer) curlQueryFailover(post bool) (string, error) {
 		}
 		log.Printf("my_own_ip: %s\n", myOwnIP.String())
 
-		cmd = exec.Command("curl",
-			"--ipv4",
-			"-u", user+":"+password,
-			"https://robot-ws.your-server.de/failover/"+c.IPConfiguration.VIP.String(),
-			"-d", "active_server_ip="+myOwnIP.String())
+		body := "\"active_server_ip\"=" + myOwnIP.String()
 
-		if c.verbose {
-			log.Printf("%s %s %s '%s' %s %s %s",
-				"curl",
-				"--ipv4",
-				"-u", user+":XXXXXX",
-				"https://robot-ws.your-server.de/failover/"+c.IPConfiguration.VIP.String(),
-				"-d", "active_server_ip="+myOwnIP.String())
-		}
+		req, err = http.NewRequest("POST",
+			"https://robot-ws.your-server.de/failover/"+c.config.IP,
+			strings.NewReader(body))
+
+		// cmd = exec.Command("curl",
+		// 	"--ipv4",
+		// 	"-u", user+":"+password,
+		// 	"https://robot-ws.your-server.de/failover/"+c.IPConfiguration.VIP.String(),
+		// 	"-d", "active_server_ip="+myOwnIP.String())
+
+		// if c.verbose {
+		// 	log.Printf("%s %s %s '%s' %s %s %s",
+		// 		"curl",
+		// 		"--ipv4",
+		// 		"-u", user+":XXXXXX",
+		// 		"https://robot-ws.your-server.de/failover/"+c.IPConfiguration.VIP.String(),
+		// 		"-d", "active_server_ip="+myOwnIP.String())
+		// }
 	} else {
-		cmd = exec.Command("curl",
-			"--ipv4",
-			"-u", user+":"+password,
-			"https://robot-ws.your-server.de/failover/"+c.IPConfiguration.VIP.String())
+		req, err = http.NewRequest("GET",
+			"https://robot-ws.your-server.de/failover/"+c.config.IP,
+			nil)
 
-		if c.verbose {
-			log.Printf("%s %s %s %s %s",
-				"curl",
-				"--ipv4",
-				"-u", user+":XXXXXX",
-				"https://robot-ws.your-server.de/failover/"+c.IPConfiguration.VIP.String())
-		}
+		// cmd = exec.Command("curl",
+		// 	"--ipv4",
+		// 	"-u", user+":"+password,
+		// 	"https://robot-ws.your-server.de/failover/"+c.IPConfiguration.VIP.String())
+
+		// if c.verbose {
+		// 	log.Printf("%s %s %s %s %s",
+		// 		"curl",
+		// 		"--ipv4",
+		// 		"-u", user+":XXXXXX",
+		// 		"https://robot-ws.your-server.de/failover/"+c.IPConfiguration.VIP.String())
+		// }
 	}
 
-	out, err := cmd.Output()
+	if err != nil {
+		log.Printf("Failed to create a HTTP request to retrieve the current target for the failover IP: %e", err)
+		return "", err
+	}
+
+	req.SetBasicAuth(c.config.HetznerRobotUsername, c.config.HetznerRobotPassword)
+
+	client := &http.Client{
+		Timeout: time.Second * 5,
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Printf("Failed to send a HTTP request to retrieve the current target for the failover IP: %e", err)
+		return "", err
+	}
+
+	defer resp.Body.Close()
+	bytes, err := ioutil.ReadAll(resp.Body)
 
 	if err != nil {
 		return "", err
 	}
 
-	retStr := string(out[:])
+	retStr := string(bytes)
 
 	return retStr, nil
 }

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net"
 	"os"
 	"sort"
 	"strings"
@@ -40,6 +41,21 @@ type Config struct {
 	RetryNum   int `mapstructure:"retry-num"`
 
 	Verbose bool `mapstructure:"verbose"`
+
+	HetznerRobotUsername string `mapstructure:"hetzner-robot-username"`
+	HetznerRobotPassword string `mapstructure:"hetzner-robot-password"`
+
+	HetznerCloudToken        string `mapstructure:"hetzner-cloud-token"`
+	HetznerCloudFloatingIPID int    `mapstructure:"hetzner-cloud-floating-ip-id"`
+	HetznerCloudServerID     int    `mapstructure:"hetzner-cloud-server-id"`
+
+	// the following fields are not set by Marshalling the viper config into the struct.
+	// Instead, these fields are set aftwerwards by casting some of the string values into specific types.
+	// For this reason, all fields begin with "p" for "parsed".
+	ParsedCIDR  string
+	ParsedIP    net.IP
+	ParsedMask  net.IPMask
+	ParsedIface *net.Interface
 }
 
 func defineFlags() {
@@ -71,6 +87,13 @@ func defineFlags() {
 
 	pflag.Bool("verbose", false, "Be verbose. Currently only implemented for manager-type=hetzner and manager-type=hetzner_floating_ip.")
 
+	pflag.String("hetzner-robot-username", "", "Username for Hetzner Robot API.")
+	pflag.String("hetzner-robot-password", "", "Password for Hetzner Robot API.")
+
+	pflag.String("hetzner-cloud-token", "", "Token for Hetzner Cloud API.")
+	pflag.Int("hetzner-cloud--floating-ip-id", 0, "The floating IP ID for Hetzner Cloud API.")
+	pflag.Int("hetzner-cloud-server-id", 0, "This servers' ID for Hetzner Cloud API.")
+
 	pflag.CommandLine.SortFlags = false
 }
 
@@ -88,6 +111,7 @@ func mapDeprecated() error {
 		"endpoints":     "dcs-endpoints",
 		"hostingtype":   "manager-type",
 		"hosting_type":  "manager-type",
+		"hosting-type":  "manager-type",
 		"endpoint_type": "dcs-type",
 		"retry_num":     "retry-num",
 		"retry_after":   "retry-after",
@@ -243,6 +267,31 @@ func printSettings() {
 	}
 }
 
+func (conf *Config) parseConfig() {
+	conf.ParsedIP = net.ParseIP(conf.IP)
+	if conf.ParsedIP == nil {
+		log.Fatalf("The specified virtual IP address is not valid: %s.", conf.IP)
+	}
+
+	if conf.Mask > 0 || conf.Mask < 33 {
+		conf.ParsedMask = net.CIDRMask(conf.Mask, 32)
+	} else {
+		log.Fatalf("The specified netmask is not valid: %d.", conf.Mask)
+	}
+
+	var err error
+	conf.ParsedIface, err = net.InterfaceByName(conf.Iface)
+	if err != nil {
+		log.Fatalf("Obtaining the interface raised an error: %s", err)
+	}
+
+	ones, _ := conf.ParsedMask.Size()
+
+	conf.ParsedCIDR = fmt.Sprintf("%s/%d", conf.ParsedIP, ones)
+	log.Printf("This is the parsed CIRD: %v", conf.ParsedCIDR)
+
+}
+
 // NewConfig returns a new Config instance
 func NewConfig() (*Config, error) {
 	var err error
@@ -330,6 +379,8 @@ func NewConfig() (*Config, error) {
 	if err != nil {
 		log.Fatalf("unable to decode viper config into config struct, %v", err)
 	}
+
+	conf.parseConfig()
 
 	printSettings()
 

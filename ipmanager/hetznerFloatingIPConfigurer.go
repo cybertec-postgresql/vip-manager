@@ -1,14 +1,15 @@
 package ipmanager
 
 import (
-	"bufio"
 	"encoding/json"
 	"errors"
+	"io/ioutil"
 	"log"
-	"os"
-	"os/exec"
+	"net/http"
+	"strings"
 	"time"
-	"strconv"
+
+	"github.com/cybertec-postgresql/vip-manager/vipconfig"
 )
 
 /**
@@ -29,21 +30,17 @@ import (
  */
 
 type HetznerFloatingIPConfigurer struct {
-	*IPConfiguration
+	config       *vipconfig.Config
 	cachedState  int
-	serverID     int64
 	lastAPICheck time.Time
-	verbose      bool
 }
 
-func newHetznerFloatingIPConfigurer(config *IPConfiguration, verbose bool) (*HetznerFloatingIPConfigurer, error) {
+func newHetznerFloatingIPConfigurer(config *vipconfig.Config) (*HetznerFloatingIPConfigurer, error) {
 	c := &HetznerFloatingIPConfigurer{
-		IPConfiguration: config,
-		cachedState:     unknown,
-		serverID:        0,
-		lastAPICheck:    time.Unix(0, 0),
-		verbose:         verbose}
-
+		config:       config,
+		cachedState:  unknown,
+		lastAPICheck: time.Unix(0, 0),
+	}
 	return c, nil
 }
 
@@ -53,47 +50,17 @@ func newHetznerFloatingIPConfigurer(config *IPConfiguration, verbose bool) (*Het
  */
 
 func (c *HetznerFloatingIPConfigurer) curlQueryFloatingIP(post bool) (string, error) {
-	/**
-	 * The credentials for the API are loaded from a file stored in /etc/hetzner .
-	 */
-	//TODO: make credentialsFile dynamically changeable?
-	credentialsFile := "/etc/hetzner"
-	f, err := os.Open(credentialsFile)
-	if err != nil {
-		log.Println("can't open passwordfile", err)
-		return "", err
-	}
-	defer f.Close()
+	//TODO: add appropriate config validators in config.go
+	// if token == "" || ip_id == "" || server_id == "" {
+	// 	log.Println("Couldn't retrieve API token, IP ID or server ID from file", credentialsFile)
+	// 	return "", errors.New("Couldn't retrieve API token, IP ID or server ID from file")
+	// }
 
-	/**
-	 * The retrieval of username and password from the file is rather static,
-	 * so the credentials file must conform to the offsets down below perfectly.
-	 */
-	var token string
-	var ip_id string
-	var server_id string
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		line := scanner.Text()
-		switch line[:4] {
-		case "tokn":
-			token     = line[6 : len(line)-1]
-		case "serv":
-			server_id = line[6 : len(line)-1]
-		case "ipid":
-			ip_id     = line[6 : len(line)-1]
-		}
-	}
-	if token == "" || ip_id == "" || server_id == "" {
-		log.Println("Couldn't retrieve API token, IP ID or server ID from file", credentialsFile)
-		return "", errors.New("Couldn't retrieve API token, IP ID or server ID from file")
-	}
-
-	c.serverID, err = strconv.ParseInt(server_id, 10, 64)
-	if err != nil {
-		log.Println("Couldn't convert server id (serv) to number from file", credentialsFile)
-		return "", errors.New("Couldn't convert server id to number from file")
-	}
+	// c.serverID, err = strconv.ParseInt(server_id, 10, 64)
+	// if err != nil {
+	// 	log.Println("Couldn't convert server id (serv) to number from file", credentialsFile)
+	// 	return "", errors.New("Couldn't convert server id to number from file")
+	// }
 
 	/**
 	 * The hetznerFloatingIPConfigurer was copy/paste/modify adopted from the
@@ -106,50 +73,81 @@ func (c *HetznerFloatingIPConfigurer) curlQueryFloatingIP(post bool) (string, er
 	 * If it is set to false, the current state (i.e. route)
 	 * for the floating-ip will be retrieved.
 	 */
-	var cmd *exec.Cmd
+	var req *http.Request
+	var err error
+
 	if post {
-		log.Printf("my_own_id: %s\n", c.serverID)
+		log.Printf("my_own_id: %d\n", c.config.HetznerCloudServerID)
 
-		cmd = exec.Command("curl",
-		                   "--ipv4",
-		                   "-X", "POST",
-		                   "-H", "Content-Type: application/json",
-		                   "-H", "Authorization: Bearer "+token,
-		                   "-d", "{\"server\": "+server_id+"}",
-		                   "https://api.hetzner.cloud/v1/floating_ips/"+ip_id+"/actions/assign")
+		body := "{\"server\":" + string(c.config.HetznerCloudServerID) + "}"
 
-		if c.verbose {
-			log.Printf("%s %s %s %s %s %s %s %s %s %s",
-			           "curl",
-			           "--ipv4",
-			           "-X", "POST",
-			           "-H", "'Content-Type: application/json'",
-			           "-H", "'Authorization: Bearer "+token[:8]+"...'",
-			           "-d", "{\"server\": "+server_id+"}'",
-			           "https://api.hetzner.cloud/v1/floating_ips/"+ip_id+"/actions/assign")
-		}
+		req, err = http.NewRequest("POST",
+			"https://api.hetzner.cloud/v1/floating_ips/"+c.config.IP+"/actions/assign",
+			strings.NewReader(body))
+
+		// cmd = exec.Command("curl",
+		// 	"--ipv4",
+		// 	"-X", "POST",
+		// 	"-H", "Content-Type: application/json",
+		// 	"-H", "Authorization: Bearer "+token,
+		// 	"-d", "{\"server\": "+server_id+"}",
+		// 	"https://api.hetzner.cloud/v1/floating_ips/"+ip_id+"/actions/assign")
+
+		// if c.config.Verbose {
+		// 	log.Printf("%s %s %s %s %s %s %s %s %s %s",
+		// 		"curl",
+		// 		"--ipv4",
+		// 		"-X", "POST",
+		// 		"-H", "'Content-Type: application/json'",
+		// 		"-H", "'Authorization: Bearer "+token[:8]+"...'",
+		// 		"-d", "{\"server\": "+server_id+"}'",
+		// 		"https://api.hetzner.cloud/v1/floating_ips/"+ip_id+"/actions/assign")
+		// }
 	} else {
-		cmd = exec.Command("curl",
-		                   "--ipv4",
-		                   "-H", "Authorization: Bearer "+token,
-		                   "https://api.hetzner.cloud/v1/floating_ips/"+ip_id)
+		req, err = http.NewRequest("GET",
+			"https://api.hetzner.cloud/v1/floating_ips/"+c.config.IP,
+			nil)
 
-		if c.verbose {
-			log.Printf("%s %s %s %s %s",
-			           "curl",
-			           "--ipv4",
-			           "-H", "'Authorization: Bearer "+token[:8]+"...'",
-			           "https://api.hetzner.cloud/v1/floating_ips/"+ip_id)
-		}
+		// cmd = exec.Command("curl",
+		// 	"--ipv4",
+		// 	"-H", "Authorization: Bearer "+token,
+		// 	"https://api.hetzner.cloud/v1/floating_ips/"+ip_id)
+
+		// if c.config.Verbose {
+		// 	log.Printf("%s %s %s %s %s",
+		// 		"curl",
+		// 		"--ipv4",
+		// 		"-H", "'Authorization: Bearer "+token[:8]+"...'",
+		// 		"https://api.hetzner.cloud/v1/floating_ips/"+ip_id)
+		// }
 	}
 
-	out, err := cmd.Output()
+	if err != nil {
+		log.Printf("Failed to create a HTTP request to retrieve the current target for the failover IP: %e", err)
+		return "", err
+	}
+
+	req.Header.Add("Authorization", "Bearer "+c.config.HetznerCloudToken)
+	req.Header.Add("Content-Type", "application/json")
+
+	client := &http.Client{
+		Timeout: time.Second * 5,
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Printf("Failed to send a HTTP request to retrieve the current target for the failover IP: %e", err)
+		return "", err
+	}
+
+	defer resp.Body.Close()
+	bytes, err := ioutil.ReadAll(resp.Body)
 
 	if err != nil {
 		return "", err
 	}
 
-	retStr := string(out[:])
+	retStr := string(bytes)
 
 	return retStr, nil
 }
@@ -158,10 +156,10 @@ func (c *HetznerFloatingIPConfigurer) curlQueryFloatingIP(post bool) (string, er
  * This function is used to parse the response which comes from the
  * curlQueryFloatingIP function and in turn from the curl calls to the API.
  */
-func (c *HetznerFloatingIPConfigurer) getActiveServerIDFromJson(str string) (int64, error) {
+func (c *HetznerFloatingIPConfigurer) getActiveServerIDFromJSON(str string) (int, error) {
 	var f map[string]interface{}
 
-	if c.verbose {
+	if c.config.Verbose {
 		log.Printf("JSON response: %s\n", str)
 	}
 
@@ -174,27 +172,28 @@ func (c *HetznerFloatingIPConfigurer) getActiveServerIDFromJson(str string) (int
 	if f["error"] != nil {
 		/* just print the original JSON error */
 		log.Printf("There was an error accessing the Hetzner API!\n %s\n", str)
-		return 0, errors.New("Hetzner API returned error response.")
+		return 0, errors.New("hetzner API returned error response")
 	}
 
 	if f["floating_ip"] != nil {
-		var server_number int64
+		//TODO: maybe find a source for the int size of hetzner server ids?
+		var serverNumber int
 
-		floating_ip_map := f["floating_ip"].(map[string]interface{})
+		floatingIPMap := f["floating_ip"].(map[string]interface{})
 
-		ip := floating_ip_map["ip"].(string)
-		if floating_ip_map["server"] != nil {
-			server_number = int64(floating_ip_map["server"].(float64))
+		ip := floatingIPMap["ip"].(string)
+		if floatingIPMap["server"] != nil {
+			serverNumber = floatingIPMap["server"].(int)
 		} else {
 			return 0, errors.New("VIP is not assigned yet")
 		}
 
 		log.Println("Result of the failover query was: ",
-			"failover-ip=",   ip,
-			"server_number=", server_number,
+			"failover-ip=", ip,
+			"server_number=", serverNumber,
 		)
 
-		return server_number, nil
+		return serverNumber, nil
 	}
 
 	return 0, errors.New("why did we end up here?")
@@ -210,7 +209,7 @@ func (c *HetznerFloatingIPConfigurer) queryAddress() bool {
 		c.cachedState = unknown
 	} else {
 		/** no need to check, we can use "cached" state if set.
-		 * if it is set to UNKOWN, a check will be done.
+		 * if it is set to UNKNOWN, a check will be done.
 		 */
 		if c.cachedState == configured {
 			return true
@@ -227,20 +226,19 @@ func (c *HetznerFloatingIPConfigurer) queryAddress() bool {
 		c.lastAPICheck = time.Now()
 	}
 
-	currentFailoverDestinationServerID, err := c.getActiveServerIDFromJson(str)
+	currentFailoverDestinationServerID, err := c.getActiveServerIDFromJSON(str)
 	if err != nil {
 		//TODO
 		c.cachedState = unknown
 	}
 
-	if c.serverID != 0 &&
-	   currentFailoverDestinationServerID == c.serverID {
+	if c.config.HetznerCloudServerID != 0 &&
+		currentFailoverDestinationServerID == c.config.HetznerCloudServerID {
 		//We "are" the current failover destination.
 		c.cachedState = configured
 		return true
-	} else {
-		c.cachedState = released
 	}
+	c.cachedState = released
 
 	return false
 }
@@ -252,8 +250,8 @@ func (c *HetznerFloatingIPConfigurer) configureAddress() bool {
 }
 
 func (c *HetznerFloatingIPConfigurer) deconfigureAddress() bool {
-	//The adress doesn't need deconfiguring since Hetzner API
-	// is used to point the VIP adress somewhere else.
+	//The address doesn't need deconfiguring since Hetzner API
+	// is used to point the VIP address somewhere else.
 	c.cachedState = released
 	return true
 }
@@ -265,7 +263,7 @@ func (c *HetznerFloatingIPConfigurer) runAddressConfiguration(action string) boo
 		c.cachedState = unknown
 		return false
 	}
-	currentFailoverDestinationServerID, err := c.getActiveServerIDFromJson(str)
+	currentFailoverDestinationServerID, err := c.getActiveServerIDFromJSON(str)
 	if err != nil {
 		c.cachedState = unknown
 		return false
@@ -274,7 +272,7 @@ func (c *HetznerFloatingIPConfigurer) runAddressConfiguration(action string) boo
 	c.lastAPICheck = time.Now()
 
 	if currentFailoverDestinationServerID != 0 &&
-	   currentFailoverDestinationServerID == c.serverID {
+		currentFailoverDestinationServerID == c.config.HetznerCloudServerID {
 		//We "are" the current failover destination.
 		log.Printf("Failover was successfully executed!")
 		c.cachedState = configured
@@ -282,8 +280,8 @@ func (c *HetznerFloatingIPConfigurer) runAddressConfiguration(action string) boo
 	}
 
 	log.Printf("The failover command was issued, but the current Failover destination (%d) is different from what it should be (%d).",
-	           currentFailoverDestinationServerID,
-		   c.serverID)
+		currentFailoverDestinationServerID,
+		c.config.HetznerCloudServerID)
 	//Something must have gone wrong while trying to switch IP's...
 	c.cachedState = unknown
 	return false
@@ -293,4 +291,3 @@ func (c *HetznerFloatingIPConfigurer) cleanupArp() {
 	// dummy function as the usage of interfaces requires us to have this function.
 	// It is sufficient for the leader to tell Hetzner to switch the IP, no cleanup needed.
 }
-

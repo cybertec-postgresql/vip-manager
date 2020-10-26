@@ -5,18 +5,20 @@ import (
 	"log"
 	"sync"
 	"time"
+
+	"github.com/cybertec-postgresql/vip-manager/vipconfig"
 )
 
 type ipConfigurer interface {
 	queryAddress() bool
 	configureAddress() bool
 	deconfigureAddress() bool
-	getCIDR() string
 	cleanupArp()
 }
 
 // IPManager implements the main functionality of the VIP manager
 type IPManager struct {
+	config     *vipconfig.Config
 	configurer ipConfigurer
 
 	states       <-chan bool
@@ -26,20 +28,21 @@ type IPManager struct {
 }
 
 // NewIPManager returns a new instance of IPManager
-func NewIPManager(hostingType string, config *IPConfiguration, states <-chan bool, verbose bool) (m *IPManager, err error) {
+func NewIPManager(config *vipconfig.Config, states <-chan bool) (m *IPManager, err error) {
 	m = &IPManager{
+		config:       config,
 		states:       states,
 		currentState: false,
 	}
 	m.recheck = sync.NewCond(&m.stateLock)
-	switch hostingType {
+	switch config.HostingType {
 	case "hetzner":
-		m.configurer, err = newHetznerConfigurer(config, verbose)
+		m.configurer, err = newHetznerConfigurer(config)
 		if err != nil {
 			return nil, err
 		}
 	case "hetzner_floating_ip":
-		m.configurer, err = newHetznerFloatingIPConfigurer(config, verbose)
+		m.configurer, err = newHetznerFloatingIPConfigurer(config)
 		if err != nil {
 			return nil, err
 		}
@@ -66,7 +69,7 @@ func (m *IPManager) applyLoop(ctx context.Context) {
 			actualState := m.configurer.queryAddress()
 			m.stateLock.Lock()
 			desiredState := m.currentState
-			log.Printf("IP address %s state is %t, desired %t", m.configurer.getCIDR(), actualState, desiredState)
+			log.Printf("IP address %s state is %t, desired %t", m.config.ParsedCIDR, actualState, desiredState)
 			if actualState != desiredState {
 				m.stateLock.Unlock()
 				var configureState bool
