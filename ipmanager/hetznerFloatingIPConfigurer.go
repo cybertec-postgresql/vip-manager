@@ -3,6 +3,7 @@ package ipmanager
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -79,7 +80,7 @@ func (c *HetznerFloatingIPConfigurer) curlQueryFloatingIP(post bool) (string, er
 	if post {
 		log.Printf("my_own_id: %d\n", c.config.HetznerCloudServerID)
 
-		body := "{\"server\":" + string(c.config.HetznerCloudServerID) + "}"
+		body := "{\"server\":" + fmt.Sprint(c.config.HetznerCloudServerID) + "}"
 
 		req, err = http.NewRequest("POST",
 			"https://api.hetzner.cloud/v1/floating_ips/"+c.config.IP+"/actions/assign",
