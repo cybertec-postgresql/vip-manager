@@ -83,8 +83,16 @@ func (c *HetznerFloatingIPConfigurer) curlQueryFloatingIP(post bool) (string, er
 		body := "{\"server\":" + fmt.Sprint(c.config.HetznerCloudServerID) + "}"
 
 		req, err = http.NewRequest("POST",
-			"https://api.hetzner.cloud/v1/floating_ips/"+c.config.IP+"/actions/assign",
+			"https://api.hetzner.cloud/v1/floating_ips/"+fmt.Sprint(c.config.HetznerCloudFloatingIPID)+"/actions/assign",
 			strings.NewReader(body))
+
+		if err != nil {
+			log.Printf("Failed to create a HTTP request to update the current target for the floating IP: %e", err)
+			return "", err
+		}
+
+		req.Header.Add("Authorization", "Bearer "+c.config.HetznerCloudToken)
+		req.Header.Add("Content-Type", "application/json")
 
 		// cmd = exec.Command("curl",
 		// 	"--ipv4",
@@ -106,8 +114,15 @@ func (c *HetznerFloatingIPConfigurer) curlQueryFloatingIP(post bool) (string, er
 		// }
 	} else {
 		req, err = http.NewRequest("GET",
-			"https://api.hetzner.cloud/v1/floating_ips/"+c.config.IP,
+			"https://api.hetzner.cloud/v1/floating_ips/"+fmt.Sprint(c.config.HetznerCloudFloatingIPID),
 			nil)
+
+		if err != nil {
+			log.Printf("Failed to create a HTTP request to retrieve the current target for the floating IP: %e", err)
+			return "", err
+		}
+
+		req.Header.Add("Authorization", "Bearer "+c.config.HetznerCloudToken)
 
 		// cmd = exec.Command("curl",
 		// 	"--ipv4",
@@ -122,14 +137,6 @@ func (c *HetznerFloatingIPConfigurer) curlQueryFloatingIP(post bool) (string, er
 		// 		"https://api.hetzner.cloud/v1/floating_ips/"+ip_id)
 		// }
 	}
-
-	if err != nil {
-		log.Printf("Failed to create a HTTP request to retrieve the current target for the failover IP: %e", err)
-		return "", err
-	}
-
-	req.Header.Add("Authorization", "Bearer "+c.config.HetznerCloudToken)
-	req.Header.Add("Content-Type", "application/json")
 
 	client := &http.Client{
 		Timeout: time.Second * 5,
