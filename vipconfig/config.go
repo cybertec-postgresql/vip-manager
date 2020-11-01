@@ -49,7 +49,7 @@ type Config struct {
 	HetznerCloudFloatingIPID int    `mapstructure:"hetzner-cloud-floating-ip-id"`
 	HetznerCloudServerID     int    `mapstructure:"hetzner-cloud-server-id"`
 
-	// the following fields are not set by Marshalling the viper config into the struct.
+	// the following fields are not set by marshalling the viper config into the struct.
 	// Instead, these fields are set aftwerwards by casting some of the string values into specific types.
 	// For this reason, all fields begin with "p" for "parsed".
 	ParsedCIDR  string

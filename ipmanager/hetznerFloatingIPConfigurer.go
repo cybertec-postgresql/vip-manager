@@ -180,7 +180,7 @@ func (c *HetznerFloatingIPConfigurer) getActiveServerIDFromJSON(str string) (int
 	if f["error"] != nil {
 		/* just print the original JSON error */
 		log.Printf("There was an error accessing the Hetzner API!\n %s\n", str)
-		return 0, errors.New("hetzner API returned error response")
+		return 0, errors.New("Hetzner API returned error response")
 	}
 
 	if f["floating_ip"] != nil {
