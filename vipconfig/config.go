@@ -91,7 +91,7 @@ func defineFlags() {
 	pflag.String("hetzner-robot-password", "", "Password for Hetzner Robot API.")
 
 	pflag.String("hetzner-cloud-token", "", "Token for Hetzner Cloud API.")
-	pflag.Int("hetzner-cloud--floating-ip-id", 0, "The floating IP ID for Hetzner Cloud API.")
+	pflag.Int("hetzner-cloud-floating-ip-id", 0, "The floating IP ID for Hetzner Cloud API.")
 	pflag.Int("hetzner-cloud-server-id", 0, "This servers' ID for Hetzner Cloud API.")
 
 	pflag.CommandLine.SortFlags = false
