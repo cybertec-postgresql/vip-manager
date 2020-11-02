@@ -50,7 +50,7 @@ func newHetznerFloatingIPConfigurer(config *vipconfig.Config) (*HetznerFloatingI
  * this machine, we must attach our own server ID to the API request.
  */
 
-func (c *HetznerFloatingIPConfigurer) curlQueryFloatingIP(post bool) (string, error) {
+func (c *HetznerFloatingIPConfigurer) queryFloatingIP(post bool) (string, error) {
 	//TODO: add appropriate config validators in config.go
 	// if token == "" || ip_id == "" || server_id == "" {
 	// 	log.Println("Couldn't retrieve API token, IP ID or server ID from file", credentialsFile)
@@ -65,10 +65,7 @@ func (c *HetznerFloatingIPConfigurer) curlQueryFloatingIP(post bool) (string, er
 
 	/**
 	 * The hetznerFloatingIPConfigurer was copy/paste/modify adopted from the
-	 * hetznerConfigurer. hetznerConfigurer claims that the Hetzner API only
-	 * allows IPv4 connections, and therefore curl is being used instead of
-	 * instead of GO's own http package. I did not verify this for the
-	 * Hetzner Cloud/FloatingIP API so we're also using curl here.
+	 * hetznerConfigurer.
 	 *
 	 * If post is set to true, a failover will be triggered.
 	 * If it is set to false, the current state (i.e. route)
@@ -162,7 +159,7 @@ func (c *HetznerFloatingIPConfigurer) curlQueryFloatingIP(post bool) (string, er
 
 /**
  * This function is used to parse the response which comes from the
- * curlQueryFloatingIP function and in turn from the curl calls to the API.
+ * queryFloatingIP function and in turn from the calls to the API.
  */
 func (c *HetznerFloatingIPConfigurer) getActiveServerIDFromJSON(str string) (int, error) {
 	var f map[string]interface{}
@@ -226,7 +223,7 @@ func (c *HetznerFloatingIPConfigurer) queryAddress() bool {
 		}
 	}
 
-	str, err := c.curlQueryFloatingIP(false)
+	str, err := c.queryFloatingIP(false)
 	if err != nil {
 		//TODO
 		c.cachedState = unknown
@@ -265,7 +262,7 @@ func (c *HetznerFloatingIPConfigurer) deconfigureAddress() bool {
 }
 
 func (c *HetznerFloatingIPConfigurer) runAddressConfiguration(action string) bool {
-	str, err := c.curlQueryFloatingIP(true)
+	str, err := c.queryFloatingIP(true)
 	if err != nil {
 		log.Printf("Error while configuring Hetzner floating-ip! Error message: %s", err)
 		c.cachedState = unknown

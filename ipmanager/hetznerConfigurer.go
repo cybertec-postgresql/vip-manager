@@ -59,7 +59,7 @@ func getOutboundIP() net.IP {
 	return localAddr.IP
 }
 
-func (c *HetznerConfigurer) curlQueryFailover(post bool) (string, error) {
+func (c *HetznerConfigurer) queryFailover(post bool) (string, error) {
 
 	if c.config.HetznerRobotUsername == "" || c.config.HetznerRobotPassword == "" {
 		//TODO: move to config validation block in config.go
@@ -67,10 +67,6 @@ func (c *HetznerConfigurer) curlQueryFailover(post bool) (string, error) {
 	}
 
 	/**
-	 * As Hetzner API only allows IPv4 connections, we rely on curl
-	 * instead of GO's own http package,
-	 * as selecting IPv4 transport there doesn't seem trivial.
-	 *
 	 * If post is set to true, a failover will be triggered.
 	 * If it is set to false, the current state (i.e. route)
 	 * for the failover-ip will be retrieved.
@@ -156,7 +152,7 @@ func (c *HetznerConfigurer) curlQueryFailover(post bool) (string, error) {
 
 /**
  * This function is used to parse the response which comes from the
- * curlQueryFailover function and in turn from the curl calls to the API.
+ * queryFailover function and in turn from the calls to the API.
  */
 func (c *HetznerConfigurer) getActiveIPFromJSON(str string) (net.IP, error) {
 	var f map[string]interface{}
@@ -224,7 +220,7 @@ func (c *HetznerConfigurer) queryAddress() bool {
 		}
 	}
 
-	str, err := c.curlQueryFailover(false)
+	str, err := c.queryFailover(false)
 	if err != nil {
 		//TODO
 		c.cachedState = unknown
@@ -262,7 +258,7 @@ func (c *HetznerConfigurer) deconfigureAddress() bool {
 }
 
 func (c *HetznerConfigurer) runAddressConfiguration(action string) bool {
-	str, err := c.curlQueryFailover(true)
+	str, err := c.queryFailover(true)
 	if err != nil {
 		log.Printf("Error while configuring Hetzner failover-ip! Error message: %s", err)
 		c.cachedState = unknown
