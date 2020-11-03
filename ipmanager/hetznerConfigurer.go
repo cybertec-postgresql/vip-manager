@@ -59,7 +59,7 @@ func getOutboundIP() net.IP {
 	return localAddr.IP
 }
 
-func (c *HetznerConfigurer) queryFailover(post bool) (string, error) {
+func (c *HetznerConfigurer) callFailoverAPI(post bool) (string, error) {
 
 	if c.config.HetznerRobotUsername == "" || c.config.HetznerRobotPassword == "" {
 		//TODO: move to config validation block in config.go
@@ -152,7 +152,7 @@ func (c *HetznerConfigurer) queryFailover(post bool) (string, error) {
 
 /**
  * This function is used to parse the response which comes from the
- * queryFailover function and in turn from the calls to the API.
+ * callFailoverAPI function and in turn from the calls to the API.
  */
 func (c *HetznerConfigurer) getActiveIPFromJSON(str string) (net.IP, error) {
 	var f map[string]interface{}
@@ -220,7 +220,7 @@ func (c *HetznerConfigurer) queryAddress() bool {
 		}
 	}
 
-	str, err := c.queryFailover(false)
+	str, err := c.callFailoverAPI(false)
 	if err != nil {
 		//TODO
 		c.cachedState = unknown
@@ -258,7 +258,7 @@ func (c *HetznerConfigurer) deconfigureAddress() bool {
 }
 
 func (c *HetznerConfigurer) runAddressConfiguration(action string) bool {
-	str, err := c.queryFailover(true)
+	str, err := c.callFailoverAPI(true)
 	if err != nil {
 		log.Printf("Error while configuring Hetzner failover-ip! Error message: %s", err)
 		c.cachedState = unknown

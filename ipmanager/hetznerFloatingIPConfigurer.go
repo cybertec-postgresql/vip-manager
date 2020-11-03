@@ -50,7 +50,7 @@ func newHetznerFloatingIPConfigurer(config *vipconfig.Config) (*HetznerFloatingI
  * this machine, we must attach our own server ID to the API request.
  */
 
-func (c *HetznerFloatingIPConfigurer) queryFloatingIP(post bool) (string, error) {
+func (c *HetznerFloatingIPConfigurer) callFloatingAPI(post bool) (string, error) {
 	//TODO: add appropriate config validators in config.go
 	// if token == "" || ip_id == "" || server_id == "" {
 	// 	log.Println("Couldn't retrieve API token, IP ID or server ID from file", credentialsFile)
@@ -159,7 +159,7 @@ func (c *HetznerFloatingIPConfigurer) queryFloatingIP(post bool) (string, error)
 
 /**
  * This function is used to parse the response which comes from the
- * queryFloatingIP function and in turn from the calls to the API.
+ * callFloatingAPI function and in turn from the calls to the API.
  */
 func (c *HetznerFloatingIPConfigurer) getActiveServerIDFromJSON(str string) (int, error) {
 	var f map[string]interface{}
@@ -223,7 +223,7 @@ func (c *HetznerFloatingIPConfigurer) queryAddress() bool {
 		}
 	}
 
-	str, err := c.queryFloatingIP(false)
+	str, err := c.callFloatingAPI(false)
 	if err != nil {
 		//TODO
 		c.cachedState = unknown
@@ -262,7 +262,7 @@ func (c *HetznerFloatingIPConfigurer) deconfigureAddress() bool {
 }
 
 func (c *HetznerFloatingIPConfigurer) runAddressConfiguration(action string) bool {
-	str, err := c.queryFloatingIP(true)
+	str, err := c.callFloatingAPI(true)
 	if err != nil {
 		log.Printf("Error while configuring Hetzner floating-ip! Error message: %s", err)
 		c.cachedState = unknown
