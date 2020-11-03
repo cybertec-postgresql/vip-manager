@@ -1,18 +1,20 @@
 NAME=vip-manager
 VERSION=1.0-1
+# when specifying a beta version or something, make sure to stay compatible with .deb conventions, e.g. "1.0~beta3-1"
 ARCH=amd64
 LICENSE="BSD 2-Clause License"
-MAINTAINER="Ants Aasma <ants@cybertec.at>"
+MAINTAINER="Julian Markwort <julian.markwort@cybertec.at>"
 DESCRIPTION="Manages a virtual IP based on state kept in etcd/consul."
 HOMEPAGE="http://www.cybertec.at/"
 GIT="git://github.com/cybertec-postgresql/vip-manager.git"
 GITBROWSER="https://github.com/cybertec-postgresql/vip-manager"
 
+GOENV=CGO_ENABLED=0
 
 all: vip-manager
 
 vip-manager: *.go */*.go
-	go build -ldflags="-s -w" .
+	$(GOENV) go build -ldflags="-s -w" .
 
 install:
 	install -d $(DESTDIR)/usr/bin
