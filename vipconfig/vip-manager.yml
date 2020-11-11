@@ -13,7 +13,7 @@ netmask: 24 # netmask for the virtual ip
 interface: enp0s3 #interface to which the virtual ip will be added
 
 # how the virtual ip should be managed. we currently support "ip addr add/remove" through shell commands or the Hetzner api
-hosting-type: basic # possible values: basic, or hetzner.
+hosting-type: basic # possible values: basic, hetzner or hetzner_floating_ip.
 
 dcs-type: etcd # etcd or consul
 # a list that contains all DCS endpoints to which vip-manager could talk.
@@ -39,5 +39,5 @@ consul-token: "Julian's secret token"
 retry-num: 2
 retry-after: 250  #in milliseconds
 
-# verbose logs (currently only supported for hetzner)
+# verbose logs (currently only supported for hetzner and hetzner_floating_ip)
 verbose: false
