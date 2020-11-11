@@ -1,5 +1,5 @@
 NAME=vip-manager
-VERSION=1.0-1
+VERSION=1.0.1-1
 # when specifying a beta version or something, make sure to stay compatible with .deb conventions, e.g. "1.0~beta3-1"
 ARCH=amd64
 LICENSE="BSD 2-Clause License"

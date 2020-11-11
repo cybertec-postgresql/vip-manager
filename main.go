@@ -19,7 +19,7 @@ import (
 
 var (
 	// vip-manager version definition
-	version string = "1.0"
+	version string = "1.0.1"
 )
 
 func getMask(vip net.IP, mask int) net.IPMask {
