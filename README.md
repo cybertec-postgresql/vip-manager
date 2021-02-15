@@ -50,6 +50,21 @@ For any virtual IP based solutions to work in general with Postgres you need to 
 to all found network interfaces. So something like `*` or `0.0.0.0` (IPv4 only) is needed for the `listen_addresses` parameter
 to activate the automatic binding. This again might not be suitable for all use cases where security is paramount for example.
 
+### nonlocal bind
+If you can't set `listen_addresses` to a wildcard address, you can explicitly specify only those adresses that you want to listen to.
+However, if you add the virtual IP to those addresses, PostgreSQL will fail to start when that address is not yet registered on one of the interfaces of the machine.
+You need to configure the kernel to allow "nonlocal bind" of IP (v4) addresses:
+- temporarily:
+```bash
+sysctl -w net.ipv4.ip_nonlocal_bind=1
+```
+
+- permanently:
+```bash
+echo "net.ipv4.ip_nonlocal_bind = 1"  >> /etc/sysctl.conf
+sysctl -p
+```
+
 ## Configuration
 
 The configuration can be passed to the executable through argument flags, environment variables or through a YAML config file. Run `vip-manager --help` to see the available flags.
