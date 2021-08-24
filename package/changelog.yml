@@ -1,0 +1,747 @@
+- semver: 1.0.1
+  date: 2020-11-11T12:37:23+01:00
+  packager: Julian Markwort <julian.markwort@cybertec.at>
+  changes:
+  - commit: 0bb4dbc1eed4f83462c379a0f7682e9883760c6a
+    note: |-
+      - fix #63 (--config in service file)
+      - change to v1.0.1
+    author:
+      name: Julian Markwort
+      email: julian.markwort@cybertec.at
+    committer:
+      name: Julian Markwort
+      email: julian.markwort@cybertec.at
+  - commit: a9fcf1244dc99bc0a121cc9c7cad997893180f8c
+    note: make sure to build without CGO to stay GLIBC version independent, add note about version numbering for beta releases, update maintainer note
+    author:
+      name: Julian Markwort
+      email: julian.markwort@cybertec.at
+    committer:
+      name: Julian Markwort
+      email: julian.markwort@cybertec.at
+  - commit: e9cd29e4defe8bed863090886a86a7b044f7972c
+    note: |-
+      Merge pull request #59 from tpo/various_minor_nitpicks
+
+      Various minor nitpicks
+    author:
+      name: Pavlo Golub
+      email: pavlo.golub@gmail.com
+    committer:
+      name: GitHub
+      email: noreply@github.com
+- semver: 1.0.0
+  date: 2020-09-17T22:35:35+02:00
+  packager: Julian Markwort <julian.markwort@cybertec.at>
+  changes:
+  - commit: dfc264abc58c686af43381af08178ad9d4beba45
+    note: Update version in Makefile to 1.0 as well.
+    author:
+      name: Julian Markwort
+      email: julian.markwort@cybertec.at
+    committer:
+      name: Julian Markwort
+      email: julian.markwort@cybertec.at
+  - commit: 880b0babcad7edbf1ad36e1f1511d1569181a161
+    note: |-
+      - update changelog to v1.0
+      - added small remark in README
+    author:
+      name: Julian Markwort
+      email: julian.markwort@cybertec.at
+    committer:
+      name: Julian Markwort
+      email: julian.markwort@cybertec.at
+  - commit: 827149e21285342e0c206f756da69253068ab69e
+    note: Merge branch 'tpo-add_verbose_curl_logging' into master
+    author:
+      name: Julian Markwort
+      email: julian.markwort@cybertec.at
+    committer:
+      name: Julian Markwort
+      email: julian.markwort@cybertec.at
+  - commit: 86db6ec88a31f0732bd7e77b1c155f94be6e4fde
+    note: |-
+      Merge branch 'tpo-etcd_tls_auth' into master
+      - add simple testing scripts, including certificate files for testing
+      - improve README.md
+    author:
+      name: Julian Markwort
+      email: julian.markwort@cybertec.at
+    committer:
+      name: Julian Markwort
+      email: julian.markwort@cybertec.at
+  - commit: 9cd9ba1b58919c89744a4c52f53b4301ea4d62ff
+    note: |-
+      Merge pull request #55 from cybertec-postgresql/more-config-improvements
+
+      More config improvements
+
+      - improve deprecation handling
+      - add printing of the config that we ended up cobbling together
+      - update reference vip-manager.yml config file to reflect new config key names
+    author:
+      name: markwort
+      email: 38984608+markwort@users.noreply.github.com
+    committer:
+      name: GitHub
+      email: noreply@github.com
+  - commit: f1f52ee8709c171500ba911aefdf31579b66a9c5
+    note: |-
+      Merge pull request #53 from cybertec-postgresql/viper-config
+
+      Adding of viper-config, see README.md#Configuration for all the details.
+    author:
+      name: markwort
+      email: 38984608+markwort@users.noreply.github.com
+    committer:
+      name: GitHub
+      email: noreply@github.com
+  - commit: 1e62637daccab22f731f72cd5c6ab42ae219f62c
+    note: |-
+      Merge pull request #50 from cybertec-postgresql/49_windows
+
+      Add windows support
+    author:
+      name: Pavlo Golub
+      email: pavlo.golub@gmail.com
+    committer:
+      name: GitHub
+      email: noreply@github.com
+  - commit: 73c94caec594500dec958a99bcb2e706d8e6b44c
+    note: |-
+      Merge pull request #52 from cybertec-postgresql/better-systemd-service
+
+      A better SystemD service template
+    author:
+      name: markwort
+      email: 38984608+markwort@users.noreply.github.com
+    committer:
+      name: GitHub
+      email: noreply@github.com
+  - commit: 3c08ef3a2bcab0b95c97e3854d4e508ccc502603
+    note: |-
+      Readme: note that VIP based solutions need special listen_addresses values
+
+      As per issue #51
+    author:
+      name: Kaarel Moppel
+      email: kaarel.moppel@gmail.com
+    committer:
+      name: Kaarel Moppel
+      email: kaarel.moppel@gmail.com
+  - commit: ef1c6dcef35ddf46e8eb5e4b3fef1306f0f60dee
+    note: Fix release badge link
+    author:
+      name: Pavlo Golub
+      email: pavlo.golub@gmail.com
+    committer:
+      name: GitHub
+      email: noreply@github.com
+  - commit: 512fcd13acb5c9a57f86a45617cb96f207dd88bb
+    note: Add some badges
+    author:
+      name: Pavlo Golub
+      email: pavlo.golub@gmail.com
+    committer:
+      name: GitHub
+      email: noreply@github.com
+  - commit: 83e77647259fa6e77ce99f9aa6cb3eb8f647f2dc
+    note: |-
+      Merge pull request #43 from tpo/patch-2
+
+      Document dependency on Golang >= 1.12
+    author:
+      name: markwort
+      email: 38984608+markwort@users.noreply.github.com
+    committer:
+      name: GitHub
+      email: noreply@github.com
+  - commit: e3f7082c780fd5f2f33d7e531cfc29ddd6f5ef79
+    note: |-
+      Merge pull request #29 from cybertec-postgresql/improve_gratuitous_arp
+
+      Improve gratuitous arp
+    author:
+      name: Kaarel Moppel
+      email: kmoppel@users.noreply.github.com
+    committer:
+      name: GitHub
+      email: noreply@github.com
+  - commit: 281f3b9e74ea1e8ae05dc7357bcd7cf991cd4ba3
+    note: |-
+      Merge pull request #32 from tpo/fix_multiple_endpoints
+
+      split endpoint string before using it
+    author:
+      name: Kaarel Moppel
+      email: kmoppel@users.noreply.github.com
+    committer:
+      name: GitHub
+      email: noreply@github.com
+  - commit: bd597f2f998e2a68a2e67f92381bb25ef932f71b
+    note: |-
+      Merge pull request #30 from tpo/fix_init_script
+
+      fix more copy/paste bugs in init script
+    author:
+      name: Kaarel Moppel
+      email: kmoppel@users.noreply.github.com
+    committer:
+      name: GitHub
+      email: noreply@github.com
+  - commit: 33ad52d0d57b66af05d3dd803eab8eabef14a037
+    note: |-
+      Merge pull request #36 from tpo/add_whitespace
+
+      add whitespace - makes the config file uniform
+    author:
+      name: Kaarel Moppel
+      email: kmoppel@users.noreply.github.com
+    committer:
+      name: GitHub
+      email: noreply@github.com
+  - commit: c98501181d4cfb0504357d1841028d260569b478
+    note: |-
+      Merge pull request #27 from tpo/fix_password_parameter
+
+      thanks @tpo !
+      > fix password parameter
+    author:
+      name: markwort
+      email: 38984608+markwort@users.noreply.github.com
+    committer:
+      name: GitHub
+      email: noreply@github.com
+  - commit: 12c676fe4881a93d45eb62e6832acc466b499ae0
+    note: |-
+      Merge pull request #26 from tpo/fix_init_script_description
+
+      thanks @tpo !
+      > fix init script description
+    author:
+      name: markwort
+      email: 38984608+markwort@users.noreply.github.com
+    committer:
+      name: GitHub
+      email: noreply@github.com
+  - commit: 53e4c0724a07e7a65c524b78b4af1ffaa018653d
+    note: |-
+      Merge pull request #25 from tpo/patch-2
+
+      thanks @tpo !
+      > mention that `vip-manager --help` will list the available flags
+    author:
+      name: markwort
+      email: 38984608+markwort@users.noreply.github.com
+    committer:
+      name: GitHub
+      email: noreply@github.com
+  - commit: 1870003e1a87c0acc526db781fad90949e80dc70
+    note: |-
+      Merge pull request #24 from tpo/patch-1
+
+      thanks @tpo !
+      > document that VIP_ENDPOINT can contain multiple endpoints
+    author:
+      name: markwort
+      email: 38984608+markwort@users.noreply.github.com
+    committer:
+      name: GitHub
+      email: noreply@github.com
+  - commit: 58207ad1011966e880ba252ba3648445cf514a6d
+    note: Fixed problem when retry_num is set to 0. (Happens whenever it's not specified.)
+    author:
+      name: Julian Markwort
+      email: julian.markwort@cybertec.at
+    committer:
+      name: Julian Markwort
+      email: julian.markwort@cybertec.at
+  - commit: 328554ac5acb3b8dbb2619fc5e9fbf1ab6b227ce
+    note: |-
+      Merge pull request #21 from cybertec-postgresql/Hetzner-Docu
+
+      Hetzner Configuration Documentation
+    author:
+      name: markwort
+      email: 38984608+markwort@users.noreply.github.com
+    committer:
+      name: GitHub
+      email: noreply@github.com
+  - commit: 8bcac1f43160e4857ee61450b0e420a729bc2be1
+    note: "Merge pull request #22 from cybertec-postgresql/small_fixes\n\n- fixed error message from ip addr calls\n- actually exit apply loop on keyboard interrupt\n    - cancelling was not working previously while the actualState and desiredState differed (i.e. when constantly failing to register ip address for example) \n    - cancelling did not work due to sleeping. select + time.After improves this"
+    author:
+      name: markwort
+      email: 38984608+markwort@users.noreply.github.com
+    committer:
+      name: GitHub
+      email: noreply@github.com
+- semver: 1.0.0-beta3
+  date: 2020-09-17T22:35:35+02:00
+  packager: Julian Markwort <julian.markwort@cybertec.at>
+- semver: 1.0.0-beta2
+  date: 2020-09-17T22:35:35+02:00
+  packager: Julian Markwort <julian.markwort@cybertec.at>
+- semver: 0.6.0
+  date: 2019-09-16T19:06:17+02:00
+  packager: Julian Markwort <julian.markwort@cybertec.at>
+  changes:
+  - commit: 04191eaba5333447b1ce5ac398b46cb89eb21d70
+    note: |-
+      Merge pull request #17 from cybertec-postgresql/experimental_hetzner_support_w_interfaces
+
+      Version 0.6
+    author:
+      name: markwort
+      email: 38984608+markwort@users.noreply.github.com
+    committer:
+      name: GitHub
+      email: noreply@github.com
+  - commit: 31b91a482ee04adf16c8780ff44d1d362ebb4389
+    note: |-
+      Merge pull request #11 from cultcom/fix-config-path
+
+      Streamline config file location (as used in the Service File).
+    author:
+      name: markwort
+      email: 38984608+markwort@users.noreply.github.com
+    committer:
+      name: GitHub
+      email: noreply@github.com
+- semver: 0.4.0
+  date: 2019-09-16T18:31:12+02:00
+  packager: Julian Markwort <julian.markwort@cybertec.at>
+  changes:
+  - commit: 90a9530034004d9d7d1dc371627f79db3ecf6e17
+    note: |-
+      Revert "Create config.yml"
+
+      This reverts commit 2d7e3b210630a8a8d8c2dfcd073237969c7624b5.
+    author:
+      name: Julian Markwort
+      email: julian.markwort@cybertec.at
+    committer:
+      name: Julian Markwort
+      email: julian.markwort@cybertec.at
+  - commit: ca0c4b163802d7ee52418f896426f571784aa9b0
+    note: |-
+      Revert "Update config.yml"
+
+      This reverts commit 2334f0aacab0dd1d9c22022a770d3aa763439474.
+    author:
+      name: Julian Markwort
+      email: julian.markwort@cybertec.at
+    committer:
+      name: Julian Markwort
+      email: julian.markwort@cybertec.at
+  - commit: 2334f0aacab0dd1d9c22022a770d3aa763439474
+    note: Update config.yml
+    author:
+      name: markwort
+      email: 38984608+markwort@users.noreply.github.com
+    committer:
+      name: GitHub
+      email: noreply@github.com
+  - commit: 2d7e3b210630a8a8d8c2dfcd073237969c7624b5
+    note: Create config.yml
+    author:
+      name: markwort
+      email: 38984608+markwort@users.noreply.github.com
+    committer:
+      name: GitHub
+      email: noreply@github.com
+  - commit: 5b41515f8698b864a275e51483af5ab2e5a0e3ee
+    note: |-
+      Merge pull request #10 from bjoernalbers/master
+
+      Add VIP_MASK to sample config
+    author:
+      name: Kaarel Moppel
+      email: kmoppel@users.noreply.github.com
+    committer:
+      name: GitHub
+      email: noreply@github.com
+  - commit: ea53d680d20f4fd9e0ec9e2c745773b590d3762f
+    note: Add link to cybertec to readme
+    author:
+      name: Ants Aasma
+      email: ants.aasma@eesti.ee
+    committer:
+      name: GitHub
+      email: noreply@github.com
+  - commit: e7137b72154885c9a584d301926f599193e2d898
+    note: Fix broken service file for real this time
+    author:
+      name: Ants Aasma
+      email: ants.aasma@eesti.ee
+    committer:
+      name: Ants Aasma
+      email: ants.aasma@eesti.ee
+  - commit: adc9404d5aef810e5750b2aba983801fb6c9a4e5
+    note: Bump version to 0.4
+    author:
+      name: Ants Aasma
+      email: ants.aasma@eesti.ee
+    committer:
+      name: Ants Aasma
+      email: ants.aasma@eesti.ee
+  - commit: 6b838e1eb9b153b19eed5b9e4d3d549a445f2825
+    note: Remove SystemV init script from debian packaging
+    author:
+      name: Ants Aasma
+      email: ants.aasma@eesti.ee
+    committer:
+      name: Ants Aasma
+      email: ants.aasma@eesti.ee
+  - commit: 22fafe0acd29411d825f3b07dc6c8e4fd05fa9b2
+    note: Add netmask parameter to service file and readme
+    author:
+      name: Ants Aasma
+      email: ants@cybertec.at
+    committer:
+      name: Ants Aasma
+      email: ants@cybertec.at
+  - commit: 665a2da88eeca8b1e9a3091864699950cca9768c
+    note: 1s default DCS interval. Also after errors.
+    author:
+      name: Kaarel Moppel
+      email: kaarel.moppel@gmail.com
+    committer:
+      name: Kaarel Moppel
+      email: kaarel.moppel@gmail.com
+  - commit: b5eb519602ce24a2fb7dea5dfd778e7d6576e495
+    note: Removing IP on DCS connection/read errors
+    author:
+      name: Kaarel Moppel
+      email: kaarel.moppel@gmail.com
+    committer:
+      name: Kaarel Moppel
+      email: kaarel.moppel@gmail.com
+  - commit: 9f71396f4fb6ef661b2f2d8d56f15642a634003c
+    note: DCS check interval param introduced (50ms default)
+    author:
+      name: Kaarel Moppel
+      email: kaarel.moppel@gmail.com
+    committer:
+      name: Kaarel Moppel
+      email: kaarel.moppel@gmail.com
+  - commit: 69f74e5d1180310ac03775c24bce99b923513539
+    note: Endpoint parameter allows now multiple etcd hosts
+    author:
+      name: Kaarel Moppel
+      email: kaarel.moppel@gmail.com
+    committer:
+      name: Kaarel Moppel
+      email: kaarel.moppel@gmail.com
+  - commit: 5351096b8a9fa4c03bfb6710080662c1aebf22b4
+    note: |-
+      Dockerfile added
+
+      Image also available on Dockerhub
+    author:
+      name: Kaarel Moppel
+      email: kaarel.moppel@gmail.com
+    committer:
+      name: Kaarel Moppel
+      email: kaarel.moppel@gmail.com
+  - commit: 1167e26d12742fc359c0a5ab04ce741756ca84b5
+    note: |-
+      Ignore cancel error from leader checker.
+
+      Created a race that prevented IP from getting deconfigured when shutting down
+    author:
+      name: Ants Aasma
+      email: ants.aasma@eesti.ee
+    committer:
+      name: GitHub
+      email: noreply@github.com
+  - commit: 112b26521b4f41ee57a3f13bf0e0780c70d6b0ec
+    note: Misprint fixed in VIP_TYPE description
+    author:
+      name: Pavel Golub
+      email: pavlo.golub@gmail.com
+    committer:
+      name: GitHub
+      email: noreply@github.com
+  - commit: 7323f7f48c941dacb7fb7c11bf723e1df34e6a08
+    note: Created some preliminary documentation
+    author:
+      name: Ants Aasma
+      email: ants.aasma@eesti.ee
+    committer:
+      name: GitHub
+      email: noreply@github.com
+  - commit: ecdf8ea734f5ce253840ee1911ef2eb95c9366db
+    note: |-
+      Merge pull request #5 from Faffnir/master
+
+      Small improvements and adding the gratuitous arp
+    author:
+      name: Ants Aasma
+      email: ants.aasma@eesti.ee
+    committer:
+      name: GitHub
+      email: noreply@github.com
+  - commit: 1f6ef79dce5576223a6f87a4998248c305835804
+    note: |-
+      Merge pull request #4 from Faffnir/master
+
+      Adding netmask argument and fixing vip-manager patroni failover bug
+    author:
+      name: Ants Aasma
+      email: ants.aasma@eesti.ee
+    committer:
+      name: GitHub
+      email: noreply@github.com
+  - commit: eb80c812209883c3da195b445496f40cf4386ab5
+    note: |-
+      Merge pull request #3 from Faffnir/master
+
+      Adding packaging
+    author:
+      name: Ants Aasma
+      email: ants.aasma@eesti.ee
+    committer:
+      name: GitHub
+      email: noreply@github.com
+  - commit: 9bbbfb180fc5c613bb863d99b51ce07e23256271
+    note: |-
+      Merge pull request #2 from tobischo/feature/support_consul
+
+      Feature/support consul
+    author:
+      name: Ants Aasma
+      email: ants.aasma@eesti.ee
+    committer:
+      name: GitHub
+      email: noreply@github.com
+  - commit: 4e77b332a7f164408c9aa92737eac5b06bb965e4
+    note: Initial checkin
+    author:
+      name: Ants Aasma
+      email: ants.aasma@eesti.ee
+    committer:
+      name: Ants Aasma
+      email: ants.aasma@eesti.ee
+  - commit: d82bda76fab9ab709bd31bf1af5c3f67ec7fa38b
+    note: Initial commit
+    author:
+      name: Ants Aasma
+      email: ants.aasma@eesti.ee
+    committer:
+      name: Ants Aasma
+      email: ants.aasma@eesti.ee
+  - commit: 72d693b67934da6430816772e72ad1732a7d9832
+    note: Improve makefile
+    author:
+      name: Tobias Schoknecht
+      email: tobias.schoknecht@barzahlen.de
+    committer:
+      name: Tobias Schoknecht
+      email: tobias.schoknecht@barzahlen.de
+  - commit: eef2e85239d8e9aee11be5b714f901df52c7f3cf
+    note: Follow go naming conventions
+    author:
+      name: Tobias Schoknecht
+      email: tobias.schoknecht@barzahlen.de
+    committer:
+      name: Tobias Schoknecht
+      email: tobias.schoknecht@barzahlen.de
+  - commit: 463a0e1334156c0bf3fa1627f04bde11d4a8df3e
+    note: Remove unused dependency stuff
+    author:
+      name: Tobias Schoknecht
+      email: tobias.schoknecht@barzahlen.de
+    committer:
+      name: Tobias Schoknecht
+      email: tobias.schoknecht@barzahlen.de
+  - commit: 32cd0fffdb354938b48f6b59bb62e74f4892bfde
+    note: Add consul lib dependency
+    author:
+      name: Tobias Schoknecht
+      email: tobias.schoknecht@barzahlen.de
+    committer:
+      name: Tobias Schoknecht
+      email: tobias.schoknecht@barzahlen.de
+  - commit: a082952ddcf6b4c7a70988d43053369d8d867b77
+    note: |-
+      Add support for consul as KV store to check
+
+      Following the example for etcd this adds support for consul
+    author:
+      name: Tobias Schoknecht
+      email: tobias.schoknecht@barzahlen.de
+    committer:
+      name: Tobias Schoknecht
+      email: tobias.schoknecht@barzahlen.de
+  - commit: b7d33e25d852de343c80bf004cacc310f43bcf09
+    note: Follow go variable naming conventions
+    author:
+      name: Tobias Schoknecht
+      email: tobias.schoknecht@barzahlen.de
+    committer:
+      name: Tobias Schoknecht
+      email: tobias.schoknecht@barzahlen.de
+  - commit: f85dd7a2d215ab8c1d5c84575f56d32547d1afc7
+    note: |-
+      Initialize vendoring using go dep
+
+      https://github.com/golang/dep
+    author:
+      name: Tobias Schoknecht
+      email: tobias.schoknecht@barzahlen.de
+    committer:
+      name: Tobias Schoknecht
+      email: tobias.schoknecht@barzahlen.de
+  - commit: dc03034e9bd3123ed99f0da0ca9b4e051d647c7b
+    note: Ignore built binary in git
+    author:
+      name: Tobias Schoknecht
+      email: tobias.schoknecht@barzahlen.de
+    committer:
+      name: Tobias Schoknecht
+      email: tobias.schoknecht@barzahlen.de
+  - commit: ee9bcfc6815d7267114b547abc7b3fbb4d1b3ab9
+    note: |-
+      Split up code into multiple files
+
+      It greatly helps if the main function is at the top of the main method
+    author:
+      name: Tobias Schoknecht
+      email: tobias.schoknecht@barzahlen.de
+    committer:
+      name: Tobias Schoknecht
+      email: tobias.schoknecht@barzahlen.de
+  - commit: e249136316920bcd00e85a2d44a21d2dbc22b28e
+    note: 'Execute go fmt/go '
+    author:
+      name: Tobias Schoknecht
+      email: tobias.schoknecht@barzahlen.de
+    committer:
+      name: Tobias Schoknecht
+      email: tobias.schoknecht@barzahlen.de
+  - commit: 194339525d5de4ba88fe809514af3bf678dc6f62
+    note: Raised the version because of the consul functionality prior to this
+    author:
+      name: David Leib
+      email: david.leib@barzahlen.de
+    committer:
+      name: David Leib
+      email: david.leib@barzahlen.de
+  - commit: d4bb0a08f3674d72a7fcd1e4bcb89836f476d529
+    note: The control file is now build with fpm
+    author:
+      name: David Leib
+      email: david.leib@barzahlen.de
+    committer:
+      name: David Leib
+      email: david.leib@barzahlen.de
+  - commit: 4f86f69d987407d70447db9cd86bf309336c40af
+    note: Added package generation to vip-manager
+    author:
+      name: David Leib
+      email: david.leib@barzahlen.de
+    committer:
+      name: David Leib
+      email: david.leib@barzahlen.de
+  - commit: d6f571eabc6affb4f3e953b053b7683aaa35c0a3
+    note: |-
+      Moved some files around for a clear seperation
+
+      Put all files which are used for generating a package into a seperate directory. This seperates the repository contents from go-code and deployment specific files.
+      Added/Updated sysvinit and systemd scripts
+    author:
+      name: David Leib
+      email: david.leib@barzahlen.de
+    committer:
+      name: David Leib
+      email: david.leib@barzahlen.de
+  - commit: 6283e5d42fef935fbe394e629b8533ecadf479fc
+    note: |-
+      Fixing a bug which leads to a panic when the key isn't available at all in consul/etc
+
+      During testing I experienced that vip-manager is failing totally if the key is not available and also set the status variable explicitly to false which could lead to an ip change. I think in the occasion that something goes wrong and consul/etcd is not reachable it would be nice if vip-manager just does nothing and is also able to revive from such an issue especially because patroni, which this tool most likely is used for, deletes the leader variable during a failover which leads to a failing vip-manager during a patroni failover.
+    author:
+      name: David Leib
+      email: david.leib@barzahlen.de
+    committer:
+      name: David Leib
+      email: david.leib@barzahlen.de
+  - commit: dda701017b9c33111cbe3e921042f92d1cb78d5d
+    note: Adding argument to explicitly specify netmask
+    author:
+      name: David Leib
+      email: david.leib@barzahlen.de
+    committer:
+      name: David Leib
+      email: david.leib@barzahlen.de
+  - commit: 7577332586ed7ac6016fe934db3f00713b85de17
+    note: |-
+      Updated gitignore
+
+      Unfortunately the gitignore file ignored also the start-up script which caused the packaging to fail
+    author:
+      name: David Leib
+      email: david.leib@barzahlen.de
+    committer:
+      name: David Leib
+      email: david.leib@barzahlen.de
+  - commit: 49e50bdaa067fc9ced97cfc08d46b7426b33839e
+    note: Updated the changelog
+    author:
+      name: David Leib
+      email: david.leib@barzahlen.de
+    committer:
+      name: David Leib
+      email: david.leib@barzahlen.de
+  - commit: dce042db83015e4e9c427350827c92398f066cf6
+    note: Adding all dependencies
+    author:
+      name: David Leib
+      email: david.leib@barzahlen.de
+    committer:
+      name: David Leib
+      email: david.leib@barzahlen.de
+  - commit: cfe10cb580ecada21241c14ab7bd8d20d0e99425
+    note: |-
+      Removed the arpqueryduplicates check
+
+      We investigated the issue that a virtual ip get's moved from one server to another while the first server keeps it's virtual ip (malfunctioning). The new server assigns itself the new address and sends a gratuitous arp which will direct every new traffic to that server. Somehow if the second server unassigns the virtual ip again it can be possible that other servers will fallback to the first server again (also with no gratuitous arp) because the arp table cache is 60 seconds and will keep former assignments this long.
+      After we figured this out, we decided that even a malfunctioning vip-manager which keeps the ip address cannot prevent that another server will take over. After something like this has happened, an engineer has to look what happened and can also take down the server with the same ip address hours later.
+    author:
+      name: David Leib
+      email: david.leib@barzahlen.de
+    committer:
+      name: David Leib
+      email: david.leib@barzahlen.de
+  - commit: 77380e0fdba27efd5bb2fcfb5b022be5e75f76d6
+    note: To publish the movement of a virtual ip from host to host faster a gratuitous arp is send
+    author:
+      name: David Leib
+      email: david.leib@barzahlen.de
+    committer:
+      name: David Leib
+      email: david.leib@barzahlen.de
+  - commit: 6b164f20ae2c0baab6aef4714554f9608e5a3a75
+    note: |-
+      Changed the interface type to net.Interface to have all the information about this interface
+
+      Later this is useful for getting also the mac-address for example and not going through the hassle of always search for the interface with the net package.
+    author:
+      name: David Leib
+      email: david.leib@barzahlen.de
+    committer:
+      name: David Leib
+      email: david.leib@barzahlen.de
+  - commit: 8f41a58787e0e27d2e03d24836a0b480fbbedb31
+    note: |-
+      Add VIP_MASK to sample config
+
+      The shipped sample config has no value for VIP_MASK which is mandatory.
+    author:
+      name: Björn Albers
+      email: bjoernalbers@gmail.com
+    committer:
+      name: Björn Albers
+      email: bjoernalbers@gmail.com

@@ -17,6 +17,7 @@ description: |
 vendor: "Julian Markwort <julian.markwort@cybertec.at>"
 homepage: https://www.cybertec.at
 license: BSD 2-Clause License
+changelog: package/changelog.yml
 contents:
   - src: vip-manager
     dst: /usr/bin/vip-manager

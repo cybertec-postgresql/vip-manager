@@ -1,0 +1,8 @@
+conventional-commits: false
+deb:
+  distribution:
+    - unstable
+  urgency: low
+debug: false
+owner: "Julian Markwort <julian.markwort@cybertec.at>"
+package-name: vip-manager
