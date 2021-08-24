@@ -4,3 +4,4 @@
 *.exe
 tmp/
 .vscode/
+dist/
