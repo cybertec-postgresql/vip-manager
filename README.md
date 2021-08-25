@@ -5,7 +5,7 @@
 
 # vip-manager
 
-Manages a virtual IP based on state kept in etcd or Consul. Monitors state in etcd 
+Manages a virtual IP based on state kept in etcd or Consul. Monitors state in etcd
 
 ## Table of Contents
 - [Building](#building)
@@ -27,9 +27,7 @@ Manages a virtual IP based on state kept in etcd or Consul. Monitors state in et
     The resulting location should be `$GOPATH/src/github.com/cybertec-postgresql/vip-manager/`. The easiest way to do this is:
     ```go get github.com/cybertec-postgresql/vip-manager```
 3. Build the binary using `make`.
-4. To build your own .deb or .rpm, `fpm` is required.
-    Install it, add it to your path and try running `make package`, which will generate a .deb package and will also convert that into a matching .rpm file.
-> note: on debianoids, rpmbuild will be required to create the rpm package...
+4. To build your own .deb or .rpm, `nfpm` is required. Install it, add it to your path and try running `make package`, which will generate a .deb and .rpm package.
 
 ## Installing from package
 You can download .rpm or .deb packages here, on the [Releases](https://github.com/cybertec-postgresql/vip-manager/releases) page.

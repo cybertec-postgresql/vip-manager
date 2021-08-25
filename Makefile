@@ -1,14 +1,3 @@
-NAME=vip-manager
-VERSION=1.0.1-1
-# when specifying a beta version or something, make sure to stay compatible with .deb conventions, e.g. "1.0~beta3-1"
-ARCH=amd64
-LICENSE="BSD 2-Clause License"
-MAINTAINER="Julian Markwort <julian.markwort@cybertec.at>"
-DESCRIPTION="Manages a virtual IP based on state kept in etcd/consul."
-HOMEPAGE="http://www.cybertec.at/"
-GIT="git://github.com/cybertec-postgresql/vip-manager.git"
-GITBROWSER="https://github.com/cybertec-postgresql/vip-manager"
-
 GOENV=CGO_ENABLED=0
 
 all: vip-manager
@@ -33,29 +22,11 @@ DESTDIR=tmp
 package: package-deb package-rpm
 
 package-deb: vip-manager
-	install -d $(DESTDIR)/usr/bin
-	install vip-manager $(DESTDIR)/usr/bin/vip-manager
-	install -d $(DESTDIR)/usr/share/doc/$(NAME)
-	install --mode=644 package/DEBIAN/copyright $(DESTDIR)/usr/share/doc/$(NAME)/copyright
-	fpm -f -s dir -t deb -n $(NAME) -v $(VERSION) -C $(DESTDIR) \
-	-p $(NAME)_$(VERSION)_$(ARCH).deb \
-	--license $(LICENSE) \
-	--maintainer $(MAINTAINER) \
-	--vendor $(MAINTAINER) \
-	--description $(DESCRIPTION) \
-	--url $(HOMEPAGE) \
-	--deb-field 'Vcs-Git: $(GIT)' \
-	--deb-field 'Vcs-Browser: $(GITBROWSER)' \
-	--deb-upstream-changelog package/DEBIAN/changelog \
-	--deb-no-default-config-files \
-	--deb-default vipconfig/vip-manager.yml \
-	--deb-systemd package/scripts/vip-manager.service \
-	usr/bin usr/share/doc/
+	nfpm package --config package/nfpm.yml --packager deb
 
-package-rpm: package-deb
-	fpm -f -s deb -t rpm -n $(NAME) -v $(VERSION) -C $(DESTDIR) \
-	-p $(NAME)_$(VERSION)_$(ARCH).rpm \
-	$(NAME)_$(VERSION)_$(ARCH).deb
+package-rpm: vip-manager
+	nfpm package --config package/nfpm.yml --packager rpm
+
 
 clean:
 	rm -f vip-manager
