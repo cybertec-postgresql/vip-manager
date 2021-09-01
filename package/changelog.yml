@@ -1,4 +1,8 @@
-- semver: 1.0.1
+- deb:
+    urgency: low
+    distributions:
+    - unstable
+  semver: 1.0.1
   date: 2020-11-11T12:37:23+01:00
   packager: Julian Markwort <julian.markwort@cybertec.at>
   changes:
@@ -31,7 +35,11 @@
     committer:
       name: GitHub
       email: noreply@github.com
-- semver: 1.0.0
+- deb:
+    urgency: low
+    distributions:
+    - unstable
+  semver: 1.0.0
   date: 2020-09-17T22:35:35+02:00
   packager: Julian Markwort <julian.markwort@cybertec.at>
   changes:
@@ -283,7 +291,11 @@
 - semver: 1.0.0-beta2
   date: 2020-09-17T22:35:35+02:00
   packager: Julian Markwort <julian.markwort@cybertec.at>
-- semver: 0.6.0
+- deb:
+    urgency: low
+    distributions:
+    - unstable
+  semver: 0.6.0
   date: 2019-09-16T19:06:17+02:00
   packager: Julian Markwort <julian.markwort@cybertec.at>
   changes:
@@ -309,7 +321,11 @@
     committer:
       name: GitHub
       email: noreply@github.com
-- semver: 0.4.0
+- deb:
+    urgency: low
+    distributions:
+    - unstable
+  semver: 0.4.0
   date: 2019-09-16T18:31:12+02:00
   packager: Julian Markwort <julian.markwort@cybertec.at>
   changes:

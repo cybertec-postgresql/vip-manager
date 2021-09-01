@@ -17,18 +17,18 @@ install:
 
 DESTDIR=tmp
 
-.PHONY: package package-changelog
+.PHONY: package package/changelog.yml
 
 package: package-deb package-rpm
 
-package-deb: vip-manager
+package-deb: vip-manager package/changelog.yml
 	nfpm package --config package/nfpm.yml --packager deb
 
-package-rpm: vip-manager
+package-rpm: vip-manager package/changelog.yml
 	nfpm package --config package/nfpm.yml --packager rpm
 
-package-changelog:
-	chglog init --config-file package/chglog.yml --output package/changelog.yml
+package/changelog.yml:
+	chglog init --config-file package/chglog.yml --deb-distribution unstable --deb-urgency low --output $@
 
 clean:
 	rm -f vip-manager
