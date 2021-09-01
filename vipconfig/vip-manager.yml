@@ -35,6 +35,8 @@ etcd-key-file: "/path/to/etcd/client/key/file"
 # don't worry about parameter with a prefix that doesn't match the endpoint_type. You can write anything there, I won't even look at it.
 consul-token: "Julian's secret token"
 
+hetzner-user: "hetzner-user-name"
+hetzner-password: "secret-hetzner-password"
 hetzner-cloud-token: "secret token"
 hetzner-cloud-server-id: "ID or name of server to manage"
 hetzner-cloud-ip-id: "ID or name of floating IP to manage"

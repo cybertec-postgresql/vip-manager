@@ -36,7 +36,7 @@ func NewIPManager(config *vipconfig.Config, ipConfig *IPConfiguration, states <-
 	m.recheck = sync.NewCond(&m.stateLock)
 	switch config.HostingType {
 	case "hetzner":
-		m.configurer, err = newHetznerConfigurer(ipConfig, config.Verbose)
+		m.configurer, err = newHetznerConfigurer(config, ipConfig)
 		if err != nil {
 			return nil, err
 		}

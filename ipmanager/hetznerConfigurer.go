@@ -1,14 +1,14 @@
 package ipmanager
 
 import (
-	"bufio"
 	"encoding/json"
 	"errors"
 	"log"
 	"net"
-	"os"
 	"os/exec"
 	"time"
+
+	"github.com/cybertec-postgresql/vip-manager/vipconfig"
 )
 
 const (
@@ -25,15 +25,20 @@ type HetznerConfigurer struct {
 	*IPConfiguration
 	cachedState  int
 	lastAPICheck time.Time
+	username     string
+	password     string
 	verbose      bool
 }
 
-func newHetznerConfigurer(config *IPConfiguration, verbose bool) (*HetznerConfigurer, error) {
+func newHetznerConfigurer(config *vipconfig.Config, ipConfig *IPConfiguration) (*HetznerConfigurer, error) {
 	c := &HetznerConfigurer{
-		IPConfiguration: config,
+		IPConfiguration: ipConfig,
 		cachedState:     unknown,
 		lastAPICheck:    time.Unix(0, 0),
-		verbose:         verbose}
+		username:        config.HetznerUser,
+		password:        config.HetznerPassword,
+		verbose:         config.Verbose,
+	}
 
 	return c, nil
 }
@@ -57,39 +62,6 @@ func getOutboundIP() net.IP {
 
 func (c *HetznerConfigurer) curlQueryFailover(post bool) (string, error) {
 	/**
-	 * The credentials for the API are loaded from a file stored in /etc/hetzner .
-	 */
-	//TODO: make credentialsFile dynamically changeable?
-	credentialsFile := "/etc/hetzner"
-	f, err := os.Open(credentialsFile)
-	if err != nil {
-		log.Println("can't open passwordfile", err)
-		return "", err
-	}
-	defer f.Close()
-
-	/**
-	 * The retrieval of username and password from the file is rather static,
-	 * so the credentials file must conform to the offsets down below perfectly.
-	 */
-	var user string
-	var password string
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		line := scanner.Text()
-		switch line[:4] {
-		case "user":
-			user = line[6 : len(line)-1]
-		case "pass":
-			password = line[6 : len(line)-1]
-		}
-	}
-	if user == "" || password == "" {
-		log.Println("Couldn't retrieve username or password from file", credentialsFile)
-		return "", errors.New("Couldn't retrieve username or password from file")
-	}
-
-	/**
 	 * As Hetzner API only allows IPv4 connections, we rely on curl
 	 * instead of GO's own http package,
 	 * as selecting IPv4 transport there doesn't seem trivial.
@@ -109,7 +81,7 @@ func (c *HetznerConfigurer) curlQueryFailover(post bool) (string, error) {
 
 		cmd = exec.Command("curl",
 			"--ipv4",
-			"-u", user+":"+password,
+			"-u", c.username+":"+c.password,
 			"https://robot-ws.your-server.de/failover/"+c.IPConfiguration.VIP.String(),
 			"-d", "active_server_ip="+myOwnIP.String())
 
@@ -117,21 +89,21 @@ func (c *HetznerConfigurer) curlQueryFailover(post bool) (string, error) {
 			log.Printf("%s %s %s '%s' %s %s %s",
 				"curl",
 				"--ipv4",
-				"-u", user+":XXXXXX",
+				"-u", c.username+":XXXXXX",
 				"https://robot-ws.your-server.de/failover/"+c.IPConfiguration.VIP.String(),
 				"-d", "active_server_ip="+myOwnIP.String())
 		}
 	} else {
 		cmd = exec.Command("curl",
 			"--ipv4",
-			"-u", user+":"+password,
+			"-u", c.username+":"+c.password,
 			"https://robot-ws.your-server.de/failover/"+c.IPConfiguration.VIP.String())
 
 		if c.verbose {
 			log.Printf("%s %s %s %s %s",
 				"curl",
 				"--ipv4",
-				"-u", user+":XXXXXX",
+				"-u", c.username+":XXXXXX",
 				"https://robot-ws.your-server.de/failover/"+c.IPConfiguration.VIP.String())
 		}
 	}

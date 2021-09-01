@@ -34,6 +34,8 @@ type Config struct {
 
 	ConsulToken string `mapstructure:"consul-token"`
 
+	HetznerUser          string `mapstructure:"hetzner-user"`
+	HetznerPassword      string `mapstructure:"hetzner-password"`
 	HetznerCloudToken    string `mapstructure:"hetzner-cloud-token"`
 	HetznerCloudIpId     string `mapstructure:"hetzner-cloud-ip-id"`
 	HetznerCloudServerId string `mapstructure:"hetzner-cloud-server-id"`
@@ -70,6 +72,8 @@ func defineFlags() {
 
 	pflag.String("consul-token", "", "Token for consul DCS endpoints.")
 
+	pflag.String("hetzner-user", "", "Username for authenticating with the Hetzner Robot API.")
+	pflag.String("hetzner-password", "", "Password for authenticating with the Hetzner Robot API.")
 	pflag.String("hetzner-cloud-token", "", "Token for accessing Hetzner Cloud.")
 	pflag.String("hetzner-cloud-ip-id", "", "ID of the Hetzner Floating IP to be managed.")
 	pflag.String("hetzner-cloud-server-id", "", "ID of the Hetzner Cloud server to be managed.")
@@ -237,6 +241,8 @@ func printSettings() {
 			case "etcd-password":
 				fallthrough
 			case "consul-token":
+			    fallthrough
+			case "hetzner-password":
 			    fallthrough
 			case "hetzner-cloud-token":
 				s = append(s, fmt.Sprintf("\t%s : *****\n", k))

@@ -17,7 +17,6 @@ Manages a virtual IP based on state kept in etcd or Consul. Monitors state in et
     - [Migration for Service Files using Environment Variables](#Migration-for-Service-Files-using-Environment-Variables)
     - [Migration for Service Files using YAML config files](#Migration-for-Service-Files-using-YAML-config-files)
 - [Configuration - Hetzner](#Configuration---Hetzner)
-    - [Credential File - Hetzmer](#Credential-File---Hetzner)
 - [Debugging](#Debugging)
 - [Author](#Author)
 
@@ -102,6 +101,8 @@ This is a list of all available configuration items:
 `etcd-user`               | `VIP_ETCD_USER`               | no        | patroni                   | A username that is allowed to look at the `trigger-key` in an etcd DCS. Optional when using `dcs-type=etcd` .
 `etcd-password`           | `VIP_ETCD_PASSWORD`           | no        | snakeoil                  | The password for `etcd-user`. Optional when using `dcs-type=etcd` . Requires that `etcd-user` is also set.
 `consul-token`            | `VIP_CONSUL_TOKEN`            | no        | snakeoil                  | A token that can be used with the consul-API for authentication. Optional when using `dcs-type=consul` .
+`hetzner-user`            | `VIP_HETZNER_USER`            | no        | snakeoil                  | Username to authenticate as with the Hetzner Robot API.
+`hetzner-password`        | `VIP_HETZNER_PASSWORD`        | no        | secret-snakeoil           | Password to authenticate with the Hetzner Robot API.
 `hetzner-cloud-token`     | `VIP_HETZNER_CLOUD_TOKEN`     | no        | snakeoil                  | A token which is used to authenticate to the Hetzner Cloud API.
 `hetzner-cloud-server-id` | `VIP_HETZNER_CLOUD_SERVER_ID` | no        | 123456                    | Unique ID or name of the Hetzner Cloud server to manage.
 `hetzner-cloud-ip-id`     | `VIP_HETZNER_CLOUD_IP_ID`     | no        | 123456                    | Unique ID or name of the Hetzner Cloud Floating IP to manage.
@@ -157,13 +158,6 @@ ExecStart=/usr/bin/vip-manager --config=/etc/default/vip-manager.yml
 Hetzner has two different kind of APIs: Floating IPs for Cloud servers and Failover IPs for dedicated (Robot) servers.
 
 vip-manager will not add or remove the VIP on the current node interface, it will simply tell Hetzner how to route traffic for the VIP to the current Patroni cluster leader.
-
-### Credential File - Hetzner
-Add the File `/etc/hetzner` with your Username and Password
-```
-user="myUsername"
-pass="myPassword"
-```
 
 To use the Robot API, `hetzner-user` and `hetzner-password` must be specified and `hosting_type` set to `hetzner` in the config file.
 For Cloud servers, `hetzner-cloud-token`, `hetzner-cloud-server-id` and `hetzner-cloud-ip-id` must be set accordingly.
