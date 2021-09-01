@@ -87,28 +87,31 @@ If you put a flag or file entry into uppercase and replace dashes with underscor
 
 > e.g. `VIP_RETRY_NUM`
 
-This is a list of all avaiable configuration items:
+This is a list of all available configuration items:
 
-| flag/yaml key     | env notation          | required  | example                   | description |
-| ----------------- | --------------------- | --------- | ------------------------- | ----------- |
-`ip`                | `VIP_IP`              | yes       | 10.10.10.123              | The virtual IP address that will be managed.
-`netmask`           | `VIP_NETMASK`         | yes       | 24                        | The netmask that is associated with the subnet that the virtual IP `vip` is part of.
-`interface`         | `VIP_INTERFACE`       | yes       | eth0                      | A local network interface on the machine that runs vip-manager. Required when using `manager-type=basic`. The vip will be added to and removed from this interface.
-`trigger-key`       | `VIP_TRIGGER_KEY`     | yes       | /service/pgcluster/leader | The key in the DCS that will be monitored by vip-manager. Must match `<namespace>/<scope>/leader` from Patroni config. When the value returned by the DCS equals `trigger-value`, vip-manager will make sure that the virtual IP is registered to this machine. If it does not match, vip-manager makes sure that the virtual IP is not registered to this machine.
-`trigger-value`     | `VIP_TRIGGER_VALUE`   | no        | pgcluster_member_1        | The value that the DCS' answer for `trigger-key` will be matched to. Must match `<name>` from Patroni config. This is usually set to the name of the patroni cluster member that this vip-manager instance is associated with. Defaults to the machine's hostname.
-`manager-type`      | `VIP_MANAGER_TYPE`    | no        | basic                     | Either `basic` or `hetzner`. This describes the mechanism that is used to manage the virtual IP. Defaults to `basic`.
-`dcs-type`          | `VIP_DCS_TYPE`        | no        | etcd                      | The type of DCS that vip-manager will use to monitor the `trigger-key`. Defaults to `etcd`.
-`dcs-endpoints`     | `VIP_DCS_ENDPOINTS`   | no        | http://10.10.11.1:2379    | A url that defines where to reach the DCS. Multiple endpoints can be passed to the flag or env variable using a comma-separated-list. In the config file, a list can be specified, see the sample config for an example. Defaults to `http://127.0.0.1:2379` for `dcs-type=etcd` and `http://127.0.0.1:8500` for `dcs-type=consul`.
-`etcd-user`         | `VIP_ETCD_USER`       | no        | patroni                   | A username that is allowed to look at the `trigger-key` in an etcd DCS. Optional when using `dcs-type=etcd` .
-`etcd-password`     | `VIP_ETCD_PASSWORD`   | no        | snakeoil                  | The password for `etcd-user`. Optional when using `dcs-type=etcd` . Requires that `etcd-user` is also set.
-`consul-token`      | `VIP_CONSUL_TOKEN`    | no        | snakeoil                  | A token that can be used with the consul-API for authentication. Optional when using `dcs-type=consul` .
-`interval`          | `VIP_INTERVAL`        | no        | 1000                      | The time vip-manager main loop sleeps before checking for changes. Measured in ms. Defaults to `1000`.
-`retry-after`       | `VIP_RETRY_AFTER`     | no        | 250                       | The time to wait before retrying interactions with components outside of vip-manager. Measured in ms. Defaults to `250`.
-`retry-num`         | `VIP_RETRY_NUM`       | no        | 3                         | The number of times interactions with components outside of vip-manager are retried. Defaults to `3`.
-`etcd-ca-file`      | `VIP_ETCD_CA_FILE`    | no        | /etc/etcd/ca.cert.pem     | A certificate authority file that can be used to verify the certificate provided by etcd endpoints. Make sure to change `dcs-endpoints` to reflect that `https` is used.
-`etcd-cert-file`    | `VIP_ETCD_CERT_FILE`  | no        | /etc/etcd/client.cert.pem | A client certificate that is used to authenticate against etcd endpoints. Requires `etcd-ca-file` to be set as well.
-`etcd-key-file`     | `VIP_ETCD_KEY_FILE`   | no        | /etc/etcd/client.key.pem  | A private key for the client certificate, used to decrypt messages sent by etcd endpoints. Required when `etcd-cert-file` is specified.
-`verbose`           | `VIP_VERBOSE`         | no        | true                      | Enable more verbose logging. Currently only the manager-type=hetzner provides additional logs.
+| flag/yaml key           | env notation                  | required  | example                   | description |
+| ----------------------- | ----------------------------- | --------- | ------------------------- | ----------- |
+`ip`                      | `VIP_IP`                      | yes       | 10.10.10.123              | The virtual IP address that will be managed.
+`netmask`                 | `VIP_NETMASK`                 | yes       | 24                        | The netmask that is associated with the subnet that the virtual IP `vip` is part of.
+`interface`               | `VIP_INTERFACE`               | yes       | eth0                      | A local network interface on the machine that runs vip-manager. Required when using `manager-type=basic`. The vip will be added to and removed from this interface.
+`trigger-key`             | `VIP_TRIGGER_KEY`             | yes       | /service/pgcluster/leader | The key in the DCS that will be monitored by vip-manager. Must match `<namespace>/<scope>/leader` from Patroni config. When the value returned by the DCS equals `trigger-value`, vip-manager will make sure that the virtual IP is registered to this machine. If it does not match, vip-manager makes sure that the virtual IP is not registered to this machine.
+`trigger-value`           | `VIP_TRIGGER_VALUE`           | no        | pgcluster_member_1        | The value that the DCS' answer for `trigger-key` will be matched to. Must match `<name>` from Patroni config. This is usually set to the name of the patroni cluster member that this vip-manager instance is associated with. Defaults to the machine's hostname.
+`manager-type`            | `VIP_MANAGER_TYPE`            | no        | basic                     | Either `basic`, `hetzner` or `hetzner_floating_ip`. This describes the mechanism that is used to manage the virtual IP. Defaults to `basic`.
+`dcs-type`                | `VIP_DCS_TYPE`                | no        | etcd                      | The type of DCS that vip-manager will use to monitor the `trigger-key`. Defaults to `etcd`.
+`dcs-endpoints`           | `VIP_DCS_ENDPOINTS`           | no        | http://10.10.11.1:2379    | A url that defines where to reach the DCS. Multiple endpoints can be passed to the flag or env variable using a comma-separated-list. In the config file, a list can be specified, see the sample config for an example. Defaults to `http://127.0.0.1:2379` for `dcs-type=etcd` and `http://127.0.0.1:8500` for `dcs-type=consul`.
+`etcd-user`               | `VIP_ETCD_USER`               | no        | patroni                   | A username that is allowed to look at the `trigger-key` in an etcd DCS. Optional when using `dcs-type=etcd` .
+`etcd-password`           | `VIP_ETCD_PASSWORD`           | no        | snakeoil                  | The password for `etcd-user`. Optional when using `dcs-type=etcd` . Requires that `etcd-user` is also set.
+`consul-token`            | `VIP_CONSUL_TOKEN`            | no        | snakeoil                  | A token that can be used with the consul-API for authentication. Optional when using `dcs-type=consul` .
+`hetzner-cloud-token`     | `VIP_HETZNER_CLOUD_TOKEN`     | no        | snakeoil                  | A token which is used to authenticate to the Hetzner Cloud API.
+`hetzner-cloud-server-id` | `VIP_HETZNER_CLOUD_SERVER_ID` | no        | 123456                    | Unique ID or name of the Hetzner Cloud server to manage.
+`hetzner-cloud-ip-id`     | `VIP_HETZNER_CLOUD_IP_ID`     | no        | 123456                    | Unique ID or name of the Hetzner Cloud Floating IP to manage.
+`interval`                | `VIP_INTERVAL`                | no        | 1000                      | The time vip-manager main loop sleeps before checking for changes. Measured in ms. Defaults to `1000`.
+`retry-after`             | `VIP_RETRY_AFTER`             | no        | 250                       | The time to wait before retrying interactions with components outside of vip-manager. Measured in ms. Defaults to `250`.
+`retry-num`               | `VIP_RETRY_NUM`               | no        | 3                         | The number of times interactions with components outside of vip-manager are retried. Defaults to `3`.
+`etcd-ca-file`            | `VIP_ETCD_CA_FILE`            | no        | /etc/etcd/ca.cert.pem     | A certificate authority file that can be used to verify the certificate provided by etcd endpoints. Make sure to change `dcs-endpoints` to reflect that `https` is used.
+`etcd-cert-file`          | `VIP_ETCD_CERT_FILE`          | no        | /etc/etcd/client.cert.pem | A client certificate that is used to authenticate against etcd endpoints. Requires `etcd-ca-file` to be set as well.
+`etcd-key-file`           | `VIP_ETCD_KEY_FILE`           | no        | /etc/etcd/client.key.pem  | A private key for the client certificate, used to decrypt messages sent by etcd endpoints. Required when `etcd-cert-file` is specified.
+`verbose`                 | `VIP_VERBOSE`                 | no        | true                      | Enable more verbose logging. Currently only the manager-type=hetzner provides additional logs.
 
 
 ### Migrating configuration from releases before v1.0
@@ -151,10 +154,9 @@ ExecStart=/usr/bin/vip-manager --config=/etc/default/vip-manager.yml
 ```
 
 ## Configuration - Hetzner
-To use vip-manager with Hetzner Robot API you need a Credential file, set hosting_type to `hetzner` and your Floating-IP must be added on all Servers.
-The Floating-IP (VIP) will not be added or removed on the current Master node interface, Hetzner will route it to the current one.
+Hetzner has two different kind of APIs: Floating IPs for Cloud servers and Failover IPs for dedicated (Robot) servers.
 
-Set `hosting_type` to `hetzner` in `/etc/default/vip-manager.yml`
+vip-manager will not add or remove the VIP on the current node interface, it will simply tell Hetzner how to route traffic for the VIP to the current Patroni cluster leader.
 
 ### Credential File - Hetzner
 Add the File `/etc/hetzner` with your Username and Password
@@ -162,6 +164,12 @@ Add the File `/etc/hetzner` with your Username and Password
 user="myUsername"
 pass="myPassword"
 ```
+
+To use the Robot API, `hetzner-user` and `hetzner-password` must be specified and `hosting_type` set to `hetzner` in the config file.
+For Cloud servers, `hetzner-cloud-token`, `hetzner-cloud-server-id` and `hetzner-cloud-ip-id` must be set accordingly.
+
+[Failover IPs](https://docs.hetzner.com/robot/dedicated-server/ip/failover/)
+[Floating IPs](https://docs.hetzner.com/cloud/floating-ips/faq)
 
 ## Debugging
 
@@ -171,7 +179,7 @@ Either:
 * set `verbose` to `true` in `/etc/default/vip-manager.yml`
 * set `VIP_VERBOSE=true`
 
-(currently only supported for `hetzner`)
+(currently only supported for `hetzner` and `hetzner_floating_ip`)
 
 ## Author
 

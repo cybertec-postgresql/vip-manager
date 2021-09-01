@@ -5,6 +5,8 @@ import (
 	"log"
 	"sync"
 	"time"
+
+	"github.com/cybertec-postgresql/vip-manager/vipconfig"
 )
 
 type ipConfigurer interface {
@@ -26,22 +28,27 @@ type IPManager struct {
 }
 
 // NewIPManager returns a new instance of IPManager
-func NewIPManager(hostingType string, config *IPConfiguration, states <-chan bool, verbose bool) (m *IPManager, err error) {
+func NewIPManager(config *vipconfig.Config, ipConfig *IPConfiguration, states <-chan bool) (m *IPManager, err error) {
 	m = &IPManager{
 		states:       states,
 		currentState: false,
 	}
 	m.recheck = sync.NewCond(&m.stateLock)
-	switch hostingType {
+	switch config.HostingType {
 	case "hetzner":
-		m.configurer, err = newHetznerConfigurer(config, verbose)
+		m.configurer, err = newHetznerConfigurer(ipConfig, config.Verbose)
+		if err != nil {
+			return nil, err
+		}
+	case "hetzner_floating_ip":
+	    m.configurer, err = newHetznerFloatingIpConfigurer(config, ipConfig)
 		if err != nil {
 			return nil, err
 		}
 	case "basic":
 		fallthrough
 	default:
-		m.configurer, err = newBasicConfigurer(config)
+		m.configurer, err = newBasicConfigurer(ipConfig)
 	}
 	if err != nil {
 		m = nil

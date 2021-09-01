@@ -34,6 +34,10 @@ type Config struct {
 
 	ConsulToken string `mapstructure:"consul-token"`
 
+	HetznerCloudToken    string `mapstructure:"hetzner-cloud-token"`
+	HetznerCloudIpId     string `mapstructure:"hetzner-cloud-ip-id"`
+	HetznerCloudServerId string `mapstructure:"hetzner-cloud-server-id"`
+
 	Interval int `mapstructure:"interval"` //milliseconds
 
 	RetryAfter int `mapstructure:"retry-after"` //milliseconds
@@ -66,10 +70,14 @@ func defineFlags() {
 
 	pflag.String("consul-token", "", "Token for consul DCS endpoints.")
 
+	pflag.String("hetzner-cloud-token", "", "Token for accessing Hetzner Cloud.")
+	pflag.String("hetzner-cloud-ip-id", "", "ID of the Hetzner Floating IP to be managed.")
+	pflag.String("hetzner-cloud-server-id", "", "ID of the Hetzner Cloud server to be managed.")
+
 	pflag.String("interval", "1000", "DCS scan interval in milliseconds.")
 	pflag.String("manager-type", "basic", "Type of VIP-management to be used. Supported values: basic, hetzner.")
 
-	pflag.Bool("verbose", false, "Be verbose. Currently only implemented for manager-type=hetzner .")
+	pflag.Bool("verbose", false, "Be verbose. Currently only implemented for manager-type=hetzner and manager-type=hetzner_floating_ip.")
 
 	pflag.CommandLine.SortFlags = false
 }
@@ -229,6 +237,8 @@ func printSettings() {
 			case "etcd-password":
 				fallthrough
 			case "consul-token":
+			    fallthrough
+			case "hetzner-cloud-token":
 				s = append(s, fmt.Sprintf("\t%s : *****\n", k))
 			default:
 				s = append(s, fmt.Sprintf("\t%s : %v\n", k, v))

@@ -61,7 +61,7 @@ func main() {
 	netIface := getNetIface(conf.Iface)
 	states := make(chan bool)
 	manager, err := ipmanager.NewIPManager(
-		conf.HostingType,
+		conf,
 		&ipmanager.IPConfiguration{
 			VIP:        vip,
 			Netmask:    vipMask,
@@ -70,7 +70,6 @@ func main() {
 			RetryAfter: conf.RetryAfter,
 		},
 		states,
-		conf.Verbose,
 	)
 	if err != nil {
 		log.Fatalf("Problems with generating the virtual ip manager: %s", err)
