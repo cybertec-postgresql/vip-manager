@@ -95,7 +95,9 @@ func (c *HetznerFloatingIpConfigurer) queryAddress() bool {
 }
 
 func (c *HetznerFloatingIpConfigurer) configureAddress() bool {
-	// log.Printf("Configuring address %s on %s", m.GetCIDR(), m.iface.Name)
+	if c.verbose {
+		log.Printf("configuring floating ip %s on server %s", c.floatingIpId, c.server.Name)
+	}
 
 	floatingIp, _, err := c.client.FloatingIP.Get(context.Background(), c.floatingIpId)
 	if err != nil {
@@ -103,74 +105,86 @@ func (c *HetznerFloatingIpConfigurer) configureAddress() bool {
 		return false
 	}
 
-	// action, _, err := c.client.FloatingIP.Assign(context.Background(), floatingIp, c.server)
-	_, _, err = c.client.FloatingIP.Assign(context.Background(), floatingIp, c.server)
+	action, _, err := c.client.FloatingIP.Assign(context.Background(), floatingIp, c.server)
 	if err != nil {
 		log.Printf("failed to assign floating ip: %v\n", err)
 		return false
 	}
 
-	return true
-	// progressCh, errCh := c.client.Action.WatchProgress(context.Background(), action)
+	progressCh, errCh := c.client.Action.WatchProgress(context.Background(), action)
 
-	// for {
-	//     log.Println("configureAddress: loop");
-	//     select {
-	//         case progress := <-progressCh:
-	//             log.Printf("configureAddress: progress=%d\n", progress)
-	//             break
+	for {
+		select {
+		case progress := <-progressCh:
+			if c.verbose {
+				log.Printf("configureAddress: progress=%d\n", progress)
+			}
 
-	//         case err := <-errCh:
-	//             log.Printf("configureAddress: err=%v\n", err)
-	//             if err == nil {
-	//                 // Indicates the action was successful
-	//                 return true
-	//             }
+			if progress == 100 {
+				c.cachedState = configured
+				return true
+			}
 
-	//             log.Printf("failed to assign floating ip (action): %v\n", err)
-	//             return false
-	//     }
-	// }
+			break
+
+		case err := <-errCh:
+			if err == nil {
+				// Indicates also the action was successful
+				c.cachedState = configured
+				return true
+			}
+
+			c.cachedState = unknown
+			log.Printf("failed to assign floating ip (action): %v\n", err)
+			return false
+		}
+	}
 }
 
 func (c *HetznerFloatingIpConfigurer) deconfigureAddress() bool {
+	if c.verbose {
+		log.Printf("deconfiguring floating ip %s on server %s", c.floatingIpId, c.server.Name)
+	}
+
 	floatingIp, _, err := c.client.FloatingIP.Get(context.Background(), c.floatingIpId)
 	if err != nil {
 		log.Printf("failed to query floating ip: %v\n", err)
 		return false
 	}
 
-	// action, _, err := c.client.FloatingIP.Unassign(context.Background(), floatingIp)
-	_, _, err = c.client.FloatingIP.Unassign(context.Background(), floatingIp)
+	action, _, err := c.client.FloatingIP.Unassign(context.Background(), floatingIp)
 	if err != nil {
 		log.Printf("failed to unassign floating ip: %v\n", err)
 		return false
 	}
 
-	c.cachedState = released
-	return true
-	// progressCh, errCh := c.client.Action.WatchProgress(context.Background(), action)
+	progressCh, errCh := c.client.Action.WatchProgress(context.Background(), action)
 
-	// for {
-	//     log.Println("deconfigureAddress: loop");
-	//     select {
-	//         case progress := <-progressCh:
-	//             log.Printf("deconfigureAddress: progress=%d\n", progress)
-	//             break
+	for {
+		select {
+		case progress := <-progressCh:
+			if c.verbose {
+				log.Printf("deconfigureAddress: progress=%d\n", progress)
+			}
 
-	//         case err := <-errCh:
-	//             log.Printf("deconfigureAddress: err=%v\n", err)
-	//             if err == nil {
-	//                 // Indicates the action was successful
-	//             	c.cachedState = released
-	//                 return true
-	//             }
+			if progress == 100 {
+				c.cachedState = released
+				return true
+			}
+			break
 
-	//         	c.cachedState = unknown
-	//             log.Printf("failed to unassign floating ip (action): %v\n", err)
-	//             return false
-	//     }
-	// }
+		case err := <-errCh:
+			if err == nil {
+				// Indicates also the action was successful
+				c.cachedState = released
+				return true
+			}
+
+			c.cachedState = unknown
+			log.Printf("failed to unassign floating ip (action): %v\n", err)
+			return false
+		}
+	}
 }
 
 func (c *HetznerFloatingIpConfigurer) cleanupArp() {
