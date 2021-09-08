@@ -7,8 +7,28 @@ GREEN='\033[0;32m'
 NC='\033[0m' # No Color
 
 # testing parameters
-dev=`ip link show | grep -B1 ether | cut -d ":" -f2 | head -n1 | cut -d " " -f2`
 vip=10.0.2.123
+
+function get_dev {
+    # select a suitable device for testing purposes
+    # * a device that is an "ether"
+    # * and isn't a nil hardware address
+
+    # https://www.kernel.org/doc/Documentation/ABI/testing/sysfs-class-net
+    ARPHRD_ETHER=1
+
+    for dev in /sys/class/net/* ; do
+        test ! -e "$dev/address" && continue
+        test "`cat $dev/address`" = "00:00:00:00:00:00" && continue
+        test "`cat $dev/type`" != "$ARPHRD_ETHER" && continue
+        basename "$dev"
+        break
+    done
+}
+
+dev="`get_dev`"
+# prerequisite test: do we have a suitable device?
+test -n "$dev"
 
 #cleanup
 function cleanup {
@@ -35,7 +55,7 @@ function cleanup {
 }
 trap cleanup EXIT
 
-# prerequisite test 0: vip should not yet be registered
+# prerequisite test: vip should not yet be registered
 ! ip address show dev $dev | grep $vip
 
 # run etcd with podman/docker maybe?
