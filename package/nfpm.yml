@@ -1,0 +1,33 @@
+#
+# nfpm config file for vip-manager
+#
+
+name: vip-manager
+arch: amd64
+platform: linux
+version: v1.0.1
+release: 1
+section: default
+priority: extra
+provides:
+  - vip-manager
+maintainer: "Julian Markwort <julian.markwort@cybertec.at>"
+description: |
+  Manages a virtual IP based on state kept in etcd/consul.
+vendor: "Julian Markwort <julian.markwort@cybertec.at>"
+homepage: https://www.cybertec.at
+license: BSD 2-Clause License
+changelog: package/changelog.yml
+contents:
+  - src: vip-manager
+    dst: /usr/bin/vip-manager
+
+  - src: vipconfig/vip-manager.yml
+    dst: /etc/default/vip-manager.yml
+    type: config
+
+  - src: package/scripts/vip-manager.service
+    dst: /lib/systemd/system/vip-manager.service
+
+  - src: LICENSE
+    dst: /usr/share/doc/vip-manager/LICENSE

@@ -4,3 +4,5 @@
 *.exe
 tmp/
 .vscode/
+dist/
+package/changelog.yml
