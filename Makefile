@@ -35,3 +35,4 @@ clean:
 	rm -f vip-manager*.deb
 	rm -f vip-manager*.rpm
 	rm -fr $(DESTDIR)
+	rm -f package/changelog.yml
