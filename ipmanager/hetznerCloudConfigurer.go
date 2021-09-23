@@ -46,7 +46,7 @@ func newHetznerCloudConfigurer(config *vipconfig.Config, ipConfig *IPConfigurati
 }
 
 func (c *HetznerCloudConfigurer) queryAddress() bool {
-	if (time.Since(c.lastAPICheck) / time.Second) > 1 {
+	if (time.Since(c.lastAPICheck) / time.Hour) > 1 {
 		/**We need to recheck the status!
 		 * Don't check too often because of stupid API rate limits
 		 */
