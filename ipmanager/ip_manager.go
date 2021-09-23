@@ -41,7 +41,7 @@ func NewIPManager(config *vipconfig.Config, ipConfig *IPConfiguration, states <-
 			return nil, err
 		}
 	case "hetzner-cloud":
-		m.configurer, err = newHetznerCloudConfigurer(config, ipConfig)
+		m.configurer, err = newHetznerCloudConfigurer(config)
 		if err != nil {
 			return nil, err
 		}
