@@ -40,8 +40,8 @@ func NewIPManager(config *vipconfig.Config, ipConfig *IPConfiguration, states <-
 		if err != nil {
 			return nil, err
 		}
-	case "hetzner_floating_ip":
-	    m.configurer, err = newHetznerFloatingIpConfigurer(config, ipConfig)
+	case "hetzner-cloud":
+		m.configurer, err = newHetznerCloudConfigurer(config, ipConfig)
 		if err != nil {
 			return nil, err
 		}

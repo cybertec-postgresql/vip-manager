@@ -95,7 +95,7 @@ This is a list of all available configuration items:
 `interface`               | `VIP_INTERFACE`               | yes       | eth0                      | A local network interface on the machine that runs vip-manager. Required when using `manager-type=basic`. The vip will be added to and removed from this interface.
 `trigger-key`             | `VIP_TRIGGER_KEY`             | yes       | /service/pgcluster/leader | The key in the DCS that will be monitored by vip-manager. Must match `<namespace>/<scope>/leader` from Patroni config. When the value returned by the DCS equals `trigger-value`, vip-manager will make sure that the virtual IP is registered to this machine. If it does not match, vip-manager makes sure that the virtual IP is not registered to this machine.
 `trigger-value`           | `VIP_TRIGGER_VALUE`           | no        | pgcluster_member_1        | The value that the DCS' answer for `trigger-key` will be matched to. Must match `<name>` from Patroni config. This is usually set to the name of the patroni cluster member that this vip-manager instance is associated with. Defaults to the machine's hostname.
-`manager-type`            | `VIP_MANAGER_TYPE`            | no        | basic                     | Either `basic`, `hetzner` or `hetzner_floating_ip`. This describes the mechanism that is used to manage the virtual IP. Defaults to `basic`.
+`manager-type`            | `VIP_MANAGER_TYPE`            | no        | basic                     | Either `basic`, `hetzner`, or `hetzner-cloud`. This describes the mechanism that is used to manage the virtual IP. Defaults to `basic`.
 `dcs-type`                | `VIP_DCS_TYPE`                | no        | etcd                      | The type of DCS that vip-manager will use to monitor the `trigger-key`. Defaults to `etcd`.
 `dcs-endpoints`           | `VIP_DCS_ENDPOINTS`           | no        | http://10.10.11.1:2379    | A url that defines where to reach the DCS. Multiple endpoints can be passed to the flag or env variable using a comma-separated-list. In the config file, a list can be specified, see the sample config for an example. Defaults to `http://127.0.0.1:2379` for `dcs-type=etcd` and `http://127.0.0.1:8500` for `dcs-type=consul`.
 `etcd-user`               | `VIP_ETCD_USER`               | no        | patroni                   | A username that is allowed to look at the `trigger-key` in an etcd DCS. Optional when using `dcs-type=etcd` .
@@ -157,10 +157,12 @@ ExecStart=/usr/bin/vip-manager --config=/etc/default/vip-manager.yml
 ## Configuration - Hetzner
 Hetzner has two different kind of APIs: [Floating IPs](https://docs.hetzner.com/cloud/floating-ips/faq) for Cloud servers and [Failover IPs](https://docs.hetzner.com/robot/dedicated-server/ip/failover/) for dedicated (Robot) servers.
 
-To use the Robot API, `hetzner-user` and `hetzner-password` must be specified and `hosting_type` set to `hetzner` in the config file.
-For Cloud servers, `hetzner-cloud-token`, `hetzner-cloud-server-id` and `hetzner-cloud-ip-id` must be set accordingly.
+To use the Robot API, `hetzner-user` and `hetzner-password` must be specified and `manager-type` set to `hetzner` in the config file.
+For Cloud servers, `hetzner-cloud-token`, `hetzner-cloud-server-id` and `hetzner-cloud-ip-id` must be set accordingly, and `manager-type` to `hetzner-cloud`.
 
 vip-manager will not add or remove the VIP on the current node interface, it will simply tell Hetzner how to route traffic for the VIP to the current Patroni cluster leader.
+As a result of that, you will have to add the VIP on the interfaces of your Hetzner (cloud or robot) machines in advance, or you will not receive any traffic, despite the VIP pointing to your machine.
+
 Assigning the Floating/Failover IP itself to the network interface on each node can be done as described [here](https://docs.hetzner.com/cloud/floating-ips/persistent-configuration/).
 
 ## Debugging
@@ -171,7 +173,7 @@ Either:
 * set `verbose` to `true` in `/etc/default/vip-manager.yml`
 * set `VIP_VERBOSE=true`
 
-(currently only supported for `hetzner` and `hetzner_floating_ip`)
+(currently only supported for `hetzner` and `hetzner-cloud`)
 
 ## Author
 

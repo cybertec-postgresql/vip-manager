@@ -11,7 +11,7 @@ import (
 	"github.com/hetznercloud/hcloud-go/hcloud"
 )
 
-type HetznerFloatingIpConfigurer struct {
+type HetznerCloudConfigurer struct {
 	*IPConfiguration
 	client       *hcloud.Client
 	server       *hcloud.Server
@@ -21,7 +21,7 @@ type HetznerFloatingIpConfigurer struct {
 	verbose      bool
 }
 
-func newHetznerFloatingIpConfigurer(config *vipconfig.Config, ipConfig *IPConfiguration) (*HetznerFloatingIpConfigurer, error) {
+func newHetznerCloudConfigurer(config *vipconfig.Config, ipConfig *IPConfiguration) (*HetznerCloudConfigurer, error) {
 	client := hcloud.NewClient(hcloud.WithToken(config.HetznerCloudToken))
 	if client == nil {
 		return nil, errors.New("Failed to connect to hetzner cloud")
@@ -32,7 +32,7 @@ func newHetznerFloatingIpConfigurer(config *vipconfig.Config, ipConfig *IPConfig
 		return nil, err
 	}
 
-	c := &HetznerFloatingIpConfigurer{
+	c := &HetznerCloudConfigurer{
 		IPConfiguration: ipConfig,
 		client:          client,
 		server:          server,
@@ -45,7 +45,7 @@ func newHetznerFloatingIpConfigurer(config *vipconfig.Config, ipConfig *IPConfig
 	return c, nil
 }
 
-func (c *HetznerFloatingIpConfigurer) queryAddress() bool {
+func (c *HetznerCloudConfigurer) queryAddress() bool {
 	if (time.Since(c.lastAPICheck) / time.Second) > 1 {
 		/**We need to recheck the status!
 		 * Don't check too often because of stupid API rate limits
@@ -94,7 +94,7 @@ func (c *HetznerFloatingIpConfigurer) queryAddress() bool {
 	return false
 }
 
-func (c *HetznerFloatingIpConfigurer) configureAddress() bool {
+func (c *HetznerCloudConfigurer) configureAddress() bool {
 	if c.verbose {
 		log.Printf("configuring floating ip %s on server %s", c.floatingIpId, c.server.Name)
 	}
@@ -141,7 +141,7 @@ func (c *HetznerFloatingIpConfigurer) configureAddress() bool {
 	}
 }
 
-func (c *HetznerFloatingIpConfigurer) deconfigureAddress() bool {
+func (c *HetznerCloudConfigurer) deconfigureAddress() bool {
 	if c.verbose {
 		log.Printf("deconfiguring floating ip %s on server %s", c.floatingIpId, c.server.Name)
 	}
@@ -187,7 +187,7 @@ func (c *HetznerFloatingIpConfigurer) deconfigureAddress() bool {
 	}
 }
 
-func (c *HetznerFloatingIpConfigurer) cleanupArp() {
+func (c *HetznerCloudConfigurer) cleanupArp() {
 	// dummy function as the usage of interfaces requires us to have this function.
 	// It is sufficient for the leader to tell Hetzner to switch the IP, no cleanup needed.
 }
