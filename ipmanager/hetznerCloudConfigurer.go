@@ -43,7 +43,10 @@ func (c *HetznerCloudConfigurer) queryAddress() bool {
 		/**We need to recheck the status!
 		 * Don't check too often because of stupid API rate limits
 		 */
-		log.Println("Cached state was too old.")
+		if c.verbose {
+			log.Println("Cached state was too old.")
+		}
+
 		c.cachedState = unknown
 	} else {
 		/** no need to check, we can use "cached" state if set.
