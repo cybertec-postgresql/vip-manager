@@ -155,15 +155,13 @@ ExecStart=/usr/bin/vip-manager --config=/etc/default/vip-manager.yml
 ```
 
 ## Configuration - Hetzner
-Hetzner has two different kind of APIs: Floating IPs for Cloud servers and Failover IPs for dedicated (Robot) servers.
-
-vip-manager will not add or remove the VIP on the current node interface, it will simply tell Hetzner how to route traffic for the VIP to the current Patroni cluster leader.
+Hetzner has two different kind of APIs: [Floating IPs](https://docs.hetzner.com/cloud/floating-ips/faq) for Cloud servers and [Failover IPs](https://docs.hetzner.com/robot/dedicated-server/ip/failover/) for dedicated (Robot) servers.
 
 To use the Robot API, `hetzner-user` and `hetzner-password` must be specified and `hosting_type` set to `hetzner` in the config file.
 For Cloud servers, `hetzner-cloud-token`, `hetzner-cloud-server-id` and `hetzner-cloud-ip-id` must be set accordingly.
 
-[Failover IPs](https://docs.hetzner.com/robot/dedicated-server/ip/failover/)
-[Floating IPs](https://docs.hetzner.com/cloud/floating-ips/faq)
+vip-manager will not add or remove the VIP on the current node interface, it will simply tell Hetzner how to route traffic for the VIP to the current Patroni cluster leader.
+Assigning the Floating/Failover IP itself to the network interface on each node can be done as described [here](https://docs.hetzner.com/cloud/floating-ips/persistent-configuration/).
 
 ## Debugging
 
