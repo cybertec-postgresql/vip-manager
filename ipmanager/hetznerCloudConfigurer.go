@@ -76,6 +76,7 @@ func (c *HetznerCloudConfigurer) queryAddress() bool {
 		}
 
 		c.cachedState = unknown
+		c.tryRecreateHetznerClient()
 		return false
 	} else {
 		c.lastAPICheck = time.Now()
@@ -104,6 +105,7 @@ func (c *HetznerCloudConfigurer) configureAddress() bool {
 	action, _, err := c.client.FloatingIP.Assign(context.Background(), c.floatingIP, c.server)
 	if err != nil {
 		log.Printf("failed to assign floating ip: %v\n", err)
+		c.tryRecreateHetznerClient()
 		return false
 	}
 
@@ -150,6 +152,7 @@ func (c *HetznerCloudConfigurer) deconfigureAddress() bool {
 	action, _, err := c.client.FloatingIP.Unassign(context.Background(), c.floatingIP)
 	if err != nil {
 		log.Printf("failed to unassign floating ip: %v\n", err)
+		c.tryRecreateHetznerClient()
 		return false
 	}
 
@@ -209,6 +212,12 @@ func (c *HetznerCloudConfigurer) createHetznerClient() error {
 
 	c.server = server
 	return nil
+}
+
+func (c *HetznerCloudConfigurer) tryRecreateHetznerClient() {
+	if err := c.createHetznerClient(); err != nil {
+		log.Printf("Failed to recreate Hetzner Cloud client: %+v", err)
+	}
 }
 
 func floatingIPMask(fip *hcloud.FloatingIP) net.IPMask {
