@@ -71,7 +71,7 @@ func (c *BasicConfigurer) createArpClient() error {
 	var err error
 	var arpClient *arp.Client
 	for i := 0; i < c.RetryNum; i++ {
-		arpClient, err = arp.Dial(&c.Iface)
+		arpClient, err = arp.Dial(c.Iface)
 		if err != nil {
 			log.Printf("Problems with producing the arp client: %s", err)
 		} else {

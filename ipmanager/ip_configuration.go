@@ -9,7 +9,7 @@ import (
 type IPConfiguration struct {
 	VIP        net.IP
 	Netmask    net.IPMask
-	Iface      net.Interface
+	Iface      *net.Interface
 	RetryNum   int
 	RetryAfter int
 }

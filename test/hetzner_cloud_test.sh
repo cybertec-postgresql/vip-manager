@@ -5,10 +5,6 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 NC='\033[0m' # No Color
 
-# testing parameters
-dev=`ip link show | grep -B1 ether | cut -d ":" -f2 | head -n1 | cut -d " " -f2`
-vip=192.168.1.12
-
 HETZNER_TOKEN=
 HETZNER_SERVER_ID=
 HETZNER_IP_ID=
@@ -51,8 +47,8 @@ sleep 2
 curl -s -XDELETE http://127.0.0.1:2379/v2/keys/service/pgcluster/leader ||true
 
 touch .failed
-./vip-manager --interface $dev --ip $vip --netmask 32 --trigger-key service/pgcluster/leader \
-              --trigger-value $HOSTNAME --manager-type hetzner_floating_ip \
+./vip-manager --verbose --trigger-key service/pgcluster/leader \
+              --trigger-value $HOSTNAME --manager-type hetzner-cloud \
               --hetzner-cloud-token=$HETZNER_TOKEN --hetzner-cloud-server-id=$HETZNER_SERVER_ID \
               --hetzner-cloud-ip-id=$HETZNER_IP_ID & #2>&1 &
 echo $! > .vipPid

@@ -21,6 +21,10 @@ type BasicConfigurer struct {
 }
 
 func newBasicConfigurer(config *IPConfiguration) (*BasicConfigurer, error) {
+	if config.Iface == nil {
+		return nil, errors.New("invalid network interface")
+	}
+
 	c := &BasicConfigurer{IPConfiguration: config, ntecontext: 0}
 	if c.Iface.HardwareAddr == nil || c.Iface.HardwareAddr.String() == "00:00:00:00:00:00" {
 		return nil, errors.New(`Cannot run vip-manager on the loopback device

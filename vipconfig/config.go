@@ -55,7 +55,7 @@ func defineFlags() {
 	pflag.Bool("version", false, "Show the version number.")
 
 	pflag.String("ip", "", "Virtual IP address to configure.")
-	pflag.String("netmask", "", "The netmask used for the IP address. Defaults to -1 which assigns ipv4 default mask.")
+	pflag.String("netmask", "-1", "The netmask used for the IP address. Defaults to -1 which assigns ipv4 default mask.")
 	pflag.String("interface", "", "Network interface to configure on .")
 
 	pflag.String("trigger-key", "", "Key in the DCS to monitor, e.g. \"/service/batman/leader\".")
@@ -188,13 +188,15 @@ func checkSetting(name string) bool {
 
 func checkMandatory() error {
 	mandatory := []string{
-		"ip",
-		"netmask",
-		"interface",
 		"trigger-key",
 		"trigger-value",
 		"dcs-endpoints",
 	}
+
+	if viper.Get("manager-type") != "hetzner-cloud" {
+		mandatory = append(mandatory, "ip", "netmask", "interface")
+	}
+
 	success := true
 	for _, v := range mandatory {
 		success = checkSetting(v) && success

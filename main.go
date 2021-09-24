@@ -32,7 +32,8 @@ func getMask(vip net.IP, mask int) net.IPMask {
 func getNetIface(iface string) *net.Interface {
 	netIface, err := net.InterfaceByName(iface)
 	if err != nil {
-		log.Fatalf("Obtaining the interface raised an error: %s", err)
+		log.Printf("Obtaining the interface raised an error: %s", err)
+		return nil
 	}
 	return netIface
 }
@@ -65,7 +66,7 @@ func main() {
 		&ipmanager.IPConfiguration{
 			VIP:        vip,
 			Netmask:    vipMask,
-			Iface:      *netIface,
+			Iface:      netIface,
 			RetryNum:   conf.RetryNum,
 			RetryAfter: conf.RetryAfter,
 		},
