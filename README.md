@@ -8,9 +8,10 @@
 Manages a virtual IP based on state kept in etcd or Consul. Monitors state in etcd
 
 ## Table of Contents
+- [Prerequisites](#prerequisites)
 - [Building](#building)
 - [Installing from package](#Installing-from-package)
-- [Installing by hand](#installing-by-hand)
+- [Installing from source](#installing-by-hand)
 - [PostgreSQL prerequisites](#PostgreSQL-prerequisites)
 - [Configuration](#Configuration)
 - [Migrating configuration from releases before v1.0](#migrating-configuration-from-releases-before-v10)
@@ -21,26 +22,43 @@ Manages a virtual IP based on state kept in etcd or Consul. Monitors state in et
 - [Debugging](#Debugging)
 - [Author](#Author)
 
+## Prerequisites
+
+- `go` >= 1.14
+- `make`
+- [`nfpm`](https://github.com/goreleaser/nfpm) for building .rpm and .deb packages
+- [`chglog`](https://github.com/goreleaser/chglog) for changelog and packaging
+
 ## Building
-1. Make sure you have at least version 1.14 of Golang for proper module support. You can get by with go 1.12 or 1.13, but YMMV.
-2. To make sure that internal includes (the vipconfig and the checker package) are satisfied, place the base directory of this project properly into your `$GOPATH`.
-    The resulting location should be `$GOPATH/src/github.com/cybertec-postgresql/vip-manager/`. The easiest way to do this is:
-    ```go get github.com/cybertec-postgresql/vip-manager```
-3. Build the binary using `make`.
-4. To build your own .deb or .rpm, [`nfpm`](https://github.com/goreleaser/nfpm) and [`chglog`](https://github.com/goreleaser/chglog) are required. Install it, add it to your path and try running `make package`, which will generate a .deb and .rpm package.
+1. clone this repo
+```
+git clone https://github.com/cybertec-postgresql/vip-manager.git
+```
+2. get the (optional) requirements
+```
+# packaging:
+go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
+# changelog, also packaging:
+go get github.com/goreleaser/chglog/cmd/chglog
+```
+3. (optionally) set PATH to find those dependencies
+```
+PATH="$HOME/go/bin:$PATH"
+```
+4. Build the binary using `make`.
+5. To build your own .deb or .rpm, run `make package`, which will generate a .deb and .rpm package.
 
 ## Installing from package
 You can download .rpm or .deb packages here, on the [Releases](https://github.com/cybertec-postgresql/vip-manager/releases) page.
 On Debian and Ubuntu, the universe repositories should provide you with vip-manager, though the version may be not as recent.
 > NB! Our .deb is probably not compatible with the one from those repositories, do not try to install them side-by-side.
 
-## Installing by hand
+## Installing from source
 
-* Build the vip-manager binary using `make`.
-* Copy the resulting `vip-manager` binary to `/usr/bin/vip-manager`.
-* Install service file from `package/scripts/vip-manager.service` to `/etc/systemd/system/`
-* Install configuration file from `vipconfig/vip-manager.yml`  `/etc/default/vip-manager.yml`
-* Edit config to your needs, then `systemctl daemon-reload`, then `systemctl start vip-manager`.
+- Follow the steps to [build](#building) vip-manager.
+- Run `DESTDIR=/tmp make install` to copy the binary, service files and config file into the destination of your choice.
+- Edit config to your needs, then run `systemctl daemon-reload`, then `systemctl start vip-manager`.
+> systemd will only pick the service files up if you chose a `DESTDIR` so that it can find it. Usually `DESTDIR=''` should work.
 
 ## PostgreSQL prerequisites
 
