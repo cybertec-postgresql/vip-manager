@@ -60,6 +60,15 @@ On Debian and Ubuntu, the universe repositories should provide you with vip-mana
 - Edit config to your needs, then run `systemctl daemon-reload`, then `systemctl start vip-manager`.
 > systemd will only pick the service files up if you chose a `DESTDIR` so that it can find it. Usually `DESTDIR=''` should work.
 
+## Environment prerequisites
+
+When vip-manager is in charge of registering and deregistering the VIP locally, it needs superuser privileges to do so.
+This is not required when vip-manager is used to manage a VIP through some API, e.g. Hetzner Robot API or Hetzner Cloud API.
+
+> At some point it would be great to reduce this requirement to only the `CAP_NET_RAW` and `CAP_NET_ADMIN` capabilities, which could be added by a superuser to the vip-manager binary _once_.
+> Right now, this is not possible since vip-manager launches plain shell commands to register and deregister virtual IP addresses locally (at least on linux), so the whole user would need these privileges.
+> When vip-manager is eventually taught to directly use a library that directly uses the linux kernel's API to register/deregister the VIP, the capabilities set for the binary will suffice.
+
 ## PostgreSQL prerequisites
 
 For any virtual IP based solutions to work in general with Postgres you need to make sure that it is configured to automatically scan and bind
