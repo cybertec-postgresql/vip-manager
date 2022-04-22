@@ -12,6 +12,7 @@ Manages a virtual IP based on state kept in etcd or Consul. Monitors state in et
 - [Building](#building)
 - [Installing from package](#Installing-from-package)
 - [Installing from source](#installing-by-hand)
+- [Environment prerequisites](#environment-prerequisites)
 - [PostgreSQL prerequisites](#PostgreSQL-prerequisites)
 - [Configuration](#Configuration)
 - [Migrating configuration from releases before v1.0](#migrating-configuration-from-releases-before-v10)
