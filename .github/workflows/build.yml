@@ -30,12 +30,10 @@ jobs:
         rm -r iphlpapi
 
     - name: GolangCI-Lint
+      if: runner.os == 'Linux'
       uses: golangci/golangci-lint-action@v3
       with:
-        # Required: the version of golangci-lint is required and must be specified without patch version: we always use the latest patch version.
         version: latest
-
-        # Optional: golangci-lint command line arguments.
         args: --verbose
 
     - name: Get dependencies
