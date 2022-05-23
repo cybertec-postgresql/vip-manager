@@ -27,8 +27,7 @@ func getMask(vip netip.Addr, mask int) net.IPMask {
 	if mask > 0 || mask < 33 {
 		return net.CIDRMask(mask, 32)
 	}
-	var ip net.IP
-	ip = vip.AsSlice()
+	var ip net.IP = vip.AsSlice()
 	return ip.DefaultMask()
 }
 
