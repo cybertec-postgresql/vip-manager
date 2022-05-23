@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/netip"
 
 	// "flag"
 
@@ -19,14 +20,16 @@ import (
 
 var (
 	// vip-manager version definition
-	version string = "1.0.2"
+	version string = "2.0.0"
 )
 
-func getMask(vip net.IP, mask int) net.IPMask {
+func getMask(vip netip.Addr, mask int) net.IPMask {
 	if mask > 0 || mask < 33 {
 		return net.CIDRMask(mask, 32)
 	}
-	return vip.DefaultMask()
+	var ip net.IP
+	ip = vip.AsSlice()
+	return ip.DefaultMask()
 }
 
 func getNetIface(iface string) *net.Interface {
@@ -56,7 +59,7 @@ func main() {
 		log.Fatalf("Failed to initialize leader checker: %s", err)
 	}
 
-	vip := net.ParseIP(conf.IP)
+	vip := netip.MustParseAddr(conf.IP)
 	vipMask := getMask(vip, conf.Mask)
 	netIface := getNetIface(conf.Iface)
 	states := make(chan bool)

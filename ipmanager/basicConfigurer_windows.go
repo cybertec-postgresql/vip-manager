@@ -12,7 +12,7 @@ import (
 func (c *BasicConfigurer) configureAddress() bool {
 	log.Printf("Configuring address %s on %s", c.getCIDR(), c.Iface.Name)
 	var (
-		ip          uint32 = binary.LittleEndian.Uint32(c.VIP.To4())
+		ip          uint32 = binary.LittleEndian.Uint32(c.VIP.AsSlice())
 		mask        uint32 = binary.LittleEndian.Uint32(c.Netmask)
 		nteinstance uint32
 	)

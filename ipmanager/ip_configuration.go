@@ -3,11 +3,12 @@ package ipmanager
 import (
 	"fmt"
 	"net"
+	"net/netip"
 )
 
 // IPConfiguration holds the configuration for VIP manager
 type IPConfiguration struct {
-	VIP        net.IP
+	VIP        netip.Addr
 	Netmask    net.IPMask
 	Iface      net.Interface
 	RetryNum   int
