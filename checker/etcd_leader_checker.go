@@ -7,25 +7,23 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
-	"net"
-	"net/http"
 	"time"
 
-	"github.com/coreos/etcd/client"
 	"github.com/cybertec-postgresql/vip-manager/vipconfig"
+	client "go.etcd.io/etcd/client/v3"
 )
 
 // EtcdLeaderChecker is used to check state of the leader key in Etcd
 type EtcdLeaderChecker struct {
 	key      string
 	nodename string
-	kapi     client.KeysAPI
+	kapi     client.KV
 }
 
 //naming this c_conf to avoid conflict with conf in etcd_leader_checker.go
 var eConf *vipconfig.Config
 
-func getTransport(conf *vipconfig.Config) (client.CancelableTransport, error) {
+func getTransport(conf *vipconfig.Config) (*tls.Config, error) {
 	var caCertPool *x509.CertPool
 
 	// create valid CertPool only if the ca certificate file exists
@@ -60,16 +58,7 @@ func getTransport(conf *vipconfig.Config) (client.CancelableTransport, error) {
 		}
 	}
 
-	// TODO: make these timeouts adjustable
-	return &http.Transport{
-		Proxy: http.ProxyFromEnvironment,
-		Dial: (&net.Dialer{
-			Timeout:   30 * time.Second,
-			KeepAlive: 30 * time.Second,
-		}).Dial,
-		TLSClientConfig:     tlsClientConfig,
-		TLSHandshakeTimeout: 10 * time.Second,
-	}, nil
+	return tlsClientConfig, nil
 }
 
 // NewEtcdLeaderChecker returns a new instance
@@ -77,36 +66,32 @@ func NewEtcdLeaderChecker(con *vipconfig.Config) (*EtcdLeaderChecker, error) {
 	eConf = con
 	e := &EtcdLeaderChecker{key: eConf.Key, nodename: eConf.Nodename}
 
-	transport, err := getTransport(eConf)
+	tlsConfig, err := getTransport(eConf)
 	if err != nil {
 		return nil, err
 	}
 
 	cfg := client.Config{
-		Endpoints:               eConf.Endpoints,
-		Transport:               transport,
-		HeaderTimeoutPerRequest: time.Second,
-		Username:                eConf.EtcdUser,
-		Password:                eConf.EtcdPassword,
+		Endpoints:            eConf.Endpoints,
+		TLS:                  tlsConfig,
+		DialKeepAliveTimeout: time.Second,
+		Username:             eConf.EtcdUser,
+		Password:             eConf.EtcdPassword,
 	}
 	c, err := client.New(cfg)
 	if err != nil {
 		return nil, err
 	}
-	e.kapi = client.NewKeysAPI(c)
+	e.kapi = c.KV
 	return e, nil
 }
 
 // GetChangeNotificationStream checks the status in the loop
 func (e *EtcdLeaderChecker) GetChangeNotificationStream(ctx context.Context, out chan<- bool) error {
-	clientOptions := &client.GetOptions{
-		Quorum:    true,
-		Recursive: false,
-	}
-
+	var state bool
 checkLoop:
 	for {
-		resp, err := e.kapi.Get(ctx, e.key, clientOptions)
+		resp, err := e.kapi.Get(ctx, e.key)
 
 		if err != nil {
 			if ctx.Err() != nil {
@@ -118,7 +103,9 @@ checkLoop:
 			continue
 		}
 
-		state := resp.Node.Value == e.nodename
+		for _, kv := range resp.Kvs {
+			state = string(kv.Value) == e.nodename
+		}
 
 		select {
 		case <-ctx.Done():
