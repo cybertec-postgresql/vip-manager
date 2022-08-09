@@ -6,7 +6,7 @@ require (
 	github.com/hashicorp/consul/api v1.13.1
 	github.com/mdlayher/arp v0.0.0-20220512170110-6706a2966875
 	github.com/spf13/pflag v1.0.5
-	github.com/spf13/viper v1.11.0
+	github.com/spf13/viper v1.12.0
 	go.etcd.io/etcd/client/v3 v3.5.4
 	golang.org/x/sys v0.0.0-20220520151302-bc2c85ada10a
 )
@@ -43,7 +43,7 @@ require (
 	github.com/spf13/afero v1.8.2 // indirect
 	github.com/spf13/cast v1.5.0 // indirect
 	github.com/spf13/jwalterweatherman v1.1.0 // indirect
-	github.com/subosito/gotenv v1.2.0 // indirect
+	github.com/subosito/gotenv v1.3.0 // indirect
 	go.etcd.io/etcd/api/v3 v3.5.4 // indirect
 	go.etcd.io/etcd/client/pkg/v3 v3.5.4 // indirect
 	go.uber.org/atomic v1.9.0 // indirect
