@@ -1,17 +1,8 @@
 name: Go Build & Test
-on: 
-  push:
-    paths:
-      - '**.go'
-      - '**.yaml'
-      - '**.yml'
-      - '**.sql'
-      - 'go.mod'
-      - 'go.sum'
-    branches:
-      - '*'
-    tags-ignore:
-      - '*'
+on:
+  pull_request:
+  workflow_dispatch:
+  
 jobs:
   build:
     runs-on: ${{ matrix.os }}
