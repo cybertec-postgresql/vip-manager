@@ -13,17 +13,8 @@ function get_dev {
     # select a suitable device for testing purposes
     # * a device that is an "ether"
     # * and isn't a nil hardware address
-
-    # https://www.kernel.org/doc/Documentation/ABI/testing/sysfs-class-net
-    ARPHRD_ETHER=1
-
-    for dev in /sys/class/net/* ; do
-        test ! -e "$dev/address" && continue
-        test "`cat $dev/address`" = "00:00:00:00:00:00" && continue
-        test "`cat $dev/type`" != "$ARPHRD_ETHER" && continue
-        basename "$dev"
-        break
-    done
+    # strip suffix from name (veth3@if8 -> veth3)
+    ip -oneline link show | grep link/ether | grep -v 00:00:00:00:00:00 | cut -d ":" -f2 | cut -d "@" -f 1
 }
 
 dev="`get_dev`"
