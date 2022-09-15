@@ -14,7 +14,7 @@ function get_dev {
     # * a device that is an "ether"
     # * and isn't a nil hardware address
     # strip suffix from name (veth3@if8 -> veth3)
-    ip -oneline link show | grep link/ether | grep -v 00:00:00:00:00:00 | cut -d ":" -f2 | cut -d "@" -f 1
+    ip -oneline link show | grep link/ether | grep -v 00:00:00:00:00:00 | cut -d ":" -f2 | cut -d "@" -f 1 | head -n1
 }
 
 dev="`get_dev`"
