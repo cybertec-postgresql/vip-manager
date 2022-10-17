@@ -5,8 +5,8 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"io/ioutil"
 	"log"
+	"os"
 	"time"
 
 	"github.com/cybertec-postgresql/vip-manager/vipconfig"
@@ -20,7 +20,7 @@ type EtcdLeaderChecker struct {
 	kapi     client.KV
 }
 
-//naming this c_conf to avoid conflict with conf in etcd_leader_checker.go
+// naming this c_conf to avoid conflict with conf in etcd_leader_checker.go
 var eConf *vipconfig.Config
 
 func getTransport(conf *vipconfig.Config) (*tls.Config, error) {
@@ -28,7 +28,7 @@ func getTransport(conf *vipconfig.Config) (*tls.Config, error) {
 
 	// create valid CertPool only if the ca certificate file exists
 	if conf.EtcdCAFile != "" {
-		caCert, err := ioutil.ReadFile(conf.EtcdCAFile)
+		caCert, err := os.ReadFile(conf.EtcdCAFile)
 		if err != nil {
 			return nil, fmt.Errorf("cannot load CA file: %s", err)
 		}
