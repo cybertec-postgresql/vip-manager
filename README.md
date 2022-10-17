@@ -27,7 +27,7 @@ Manages a virtual IP based on state kept in etcd or Consul. Monitors state in et
 
 ## Prerequisites
 
-- `go` >= 1.14
+- `go` >= 1.19
 - `make`
 - [`nfpm`](https://github.com/goreleaser/nfpm) for building .rpm and .deb packages
 - [`chglog`](https://github.com/goreleaser/chglog) for changelog and packaging
