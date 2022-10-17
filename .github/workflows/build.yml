@@ -20,11 +20,6 @@ jobs:
       with:
         go-version: '1.19'      
 
-    - name: Remove windows dependencies for Ubuntu
-      if: runner.os == 'Linux'
-      run: |
-        rm -r iphlpapi
-
     - name: GolangCI-Lint
       if: runner.os == 'Linux'
       uses: golangci/golangci-lint-action@v3
