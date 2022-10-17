@@ -7,6 +7,8 @@
 
 Manages a virtual IP based on state kept in etcd or Consul. Monitors state in etcd
 
+### We are actively developing vip-manager v2. Please refer to the [v1 branch](https://github.com/cybertec-postgresql/vip-manager/tree/v1) for the previous stable version.
+
 ## Table of Contents
 - [Prerequisites](#prerequisites)
 - [Building](#building)
