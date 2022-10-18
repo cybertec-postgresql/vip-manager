@@ -18,12 +18,7 @@ jobs:
     - name: Set up Golang
       uses: actions/setup-go@v3
       with:
-        go-version: '1.18'      
-
-    - name: Remove windows dependencies for Ubuntu
-      if: runner.os == 'Linux'
-      run: |
-        rm -r iphlpapi
+        go-version: '1.19'      
 
     - name: GolangCI-Lint
       if: runner.os == 'Linux'
@@ -38,22 +33,9 @@ jobs:
         go version
         go build
 
-    # - name: Test
-    #   run: go test -v -p 1 -coverprofile=profile.cov ./...
-
-    # - name: Convert coverage to lcov
-    #   uses: jandelgado/gcov2lcov-action@v1.0.2
-    #   with:
-    #       infile: profile.cov
-    #       outfile: coverage.lcov
-
-    # - name: Coveralls
-    #   uses: coverallsapp/github-action@master
-    #   with:
-    #     github-token: ${{ secrets.GITHUB_TOKEN }}
-    #     path-to-lcov: coverage.lcov
-
-    # - name: Run GoReleaser
-    #   uses: goreleaser/goreleaser-action@master
-    #   with:
-    #     args: release --snapshot --skip-publish --rm-dist
+    - name: Run GoReleaser
+      if: runner.os == 'Linux'
+      uses: goreleaser/goreleaser-action@v3
+      with:
+        version: latest
+        args: release --snapshot --skip-publish --rm-dist
