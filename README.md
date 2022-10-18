@@ -1,7 +1,7 @@
 [![License: MIT](https://img.shields.io/badge/License-BSD-green.svg)](https://opensource.org/licenses/BSD-2)
 ![](https://github.com/cybertec-postgresql/vip-manager/workflows/Go%20Build%20&%20Test/badge.svg)
 [![Go Report Card](https://goreportcard.com/badge/github.com/cybertec-postgresql/vip-manager)](https://goreportcard.com/report/github.com/cybertec-postgresql/vip-manager)
-[![Release](https://img.shields.io/github/release/cybertec-postgresql/vip-manager.svg)](https://github.com/cybertec-postgresql/vip-manager/releases/latest)
+[![Release](https://img.shields.io/github/release/cybertec-postgresql/vip-manager.svg?include_prereleases)](https://github.com/cybertec-postgresql/vip-manager/releases/latest)
 
 # vip-manager
 
