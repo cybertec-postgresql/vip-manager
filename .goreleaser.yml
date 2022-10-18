@@ -28,11 +28,48 @@ archives:
     - README.md
     - src: 'vipconfig/*.yml'
       strip_parent: true
+
 checksum:
   name_template: 'checksums.txt'
+
 changelog:
   sort: asc
   filters:
     exclude:
     - '^docs:'
     - '^test:'
+
+nfpms:
+  # note that this is an array of nfpm configs
+  -
+    replacements:
+      darwin: Darwin
+      linux: Linux
+      windows: Windows
+      386: i386
+      amd64: x86_64
+
+    vendor: CYBERTEC PostgreSQL International GmbH
+    homepage: https://github.com/cybertec-postgresql/vip-manager/
+    maintainer: Julian Markwort <julian.markwort@cybertec.at>
+    description: Manages a virtual IP based on state kept in etcd/consul
+    license: BSD 2-Clause License
+    section: default
+    
+    provides:
+      - vip-manager
+
+    formats:
+      - deb
+      - rpm
+    
+    contents:
+      - src: vipconfig/vip-manager.yml
+        dst: /etc/default/vip-manager.yml
+        type: config
+
+      - src: package/scripts/vip-manager.service
+        dst: /lib/systemd/system/vip-manager.service
+
+      - src: LICENSE
+        dst: /usr/share/doc/vip-manager/LICENSE
