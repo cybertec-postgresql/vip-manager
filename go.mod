@@ -3,7 +3,7 @@ module github.com/cybertec-postgresql/vip-manager
 go 1.19
 
 require (
-	github.com/hashicorp/consul/api v1.15.3
+	github.com/hashicorp/consul/api v1.16.0
 	github.com/mdlayher/arp v0.0.0-20220512170110-6706a2966875
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.14.0
@@ -25,7 +25,7 @@ require (
 	github.com/hashicorp/go-rootcerts v1.0.2 // indirect
 	github.com/hashicorp/golang-lru v0.5.4 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
-	github.com/hashicorp/serf v0.9.8 // indirect
+	github.com/hashicorp/serf v0.10.1 // indirect
 	github.com/josharian/native v1.0.0 // indirect
 	github.com/magiconair/properties v1.8.6 // indirect
 	github.com/mattn/go-colorable v0.1.12 // indirect
