@@ -2,6 +2,7 @@
 ![](https://github.com/cybertec-postgresql/vip-manager/workflows/Go%20Build%20&%20Test/badge.svg)
 [![Go Report Card](https://goreportcard.com/badge/github.com/cybertec-postgresql/vip-manager)](https://goreportcard.com/report/github.com/cybertec-postgresql/vip-manager)
 [![Release](https://img.shields.io/github/release/cybertec-postgresql/vip-manager.svg?include_prereleases)](https://github.com/cybertec-postgresql/vip-manager/releases/latest)
+[![Github All Releases](https://img.shields.io/github/downloads/cybertec-postgresql/vip-manager/total?style=flat-square)](https://github.com/cybertec-postgresql/vip-manager/releases)
 
 # vip-manager
 
