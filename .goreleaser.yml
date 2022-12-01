@@ -68,7 +68,7 @@ nfpms:
         dst: /etc/default/vip-manager.yml
         type: config
 
-      - src: package/scripts/vip-manager.service
+      - src: vip-manager.service
         dst: /lib/systemd/system/vip-manager.service
 
       - src: LICENSE
