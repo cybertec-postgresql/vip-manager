@@ -39,9 +39,13 @@ git clone https://github.com/cybertec-postgresql/vip-manager.git
 ```
 2. Build the binary using `make` or `go build`.
 5. To build your own packages (.deb, .rpm, .zip, etc.), run 
-```make package```
+```
+make package
+```
 or 
-```goreleaser release --snapshot --skip-publish --rm-dist```.
+```
+goreleaser release --snapshot --skip-publish --rm-dist
+```.
 
 ## Installing from package
 You can download .rpm or .deb packages here, on the [Releases](https://github.com/cybertec-postgresql/vip-manager/releases) page.
