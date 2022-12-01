@@ -45,7 +45,7 @@ make package
 or 
 ```
 goreleaser release --snapshot --skip-publish --rm-dist
-```.
+```
 
 ## Installing from package
 You can download .rpm or .deb packages here, on the [Releases](https://github.com/cybertec-postgresql/vip-manager/releases) page.
