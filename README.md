@@ -13,18 +13,15 @@ Manages a virtual IP based on state kept in etcd or Consul. Monitors state in et
 ## Table of Contents
 - [Prerequisites](#prerequisites)
 - [Building](#building)
-- [Installing from package](#Installing-from-package)
+- [Installing from package](#installing-from-package)
 - [Installing from source](#installing-from-source)
 - [Environment prerequisites](#environment-prerequisites)
-- [PostgreSQL prerequisites](#PostgreSQL-prerequisites)
-- [Configuration](#Configuration)
-- [Migrating configuration from releases before v1.0](#migrating-configuration-from-releases-before-v10)
-    - [Migration for Service Files using Environment Variables](#Migration-for-Service-Files-using-Environment-Variables)
-    - [Migration for Service Files using YAML config files](#Migration-for-Service-Files-using-YAML-config-files)
-- [Configuration - Hetzner](#Configuration---Hetzner)
-    - [Credential File - Hetzmer](#Credential-File---Hetzner)
-- [Debugging](#Debugging)
-- [Author](#Author)
+- [PostgreSQL prerequisites](#postgresql-prerequisites)
+- [Configuration](#configuration)
+- [Configuration - Hetzner](#configuration---hetzner)
+    - [Credential File - Hetzmer](#credential-file---hetzner)
+- [Debugging](#debugging)
+- [Author](#author)
 
 ## Prerequisites
 
@@ -50,7 +47,7 @@ goreleaser release --snapshot --skip-publish --rm-dist
 ## Installing from package
 You can download .rpm or .deb packages here, on the [Releases](https://github.com/cybertec-postgresql/vip-manager/releases) page.
 On Debian and Ubuntu, the universe repositories should provide you with vip-manager, though the version may be not as recent.
-> **Warning**
+> **Warning**<br>
 > Our packages are probably not compatible with the one from those repositories, do not try to install them side-by-side.
 
 ## Installing from source
@@ -59,7 +56,7 @@ On Debian and Ubuntu, the universe repositories should provide you with vip-mana
 - Run `DESTDIR=/tmp make install` to copy the binary, service files and config file into the destination of your choice.
 - Edit config to your needs, then run `systemctl daemon-reload`, then `systemctl start vip-manager`.
 
-> **Note**
+> **Note**<br>
 > systemd will only pick the service files up if you chose a `DESTDIR` so that it can find it. Usually `DESTDIR=''` should work.
 
 ## Environment prerequisites
@@ -67,7 +64,7 @@ On Debian and Ubuntu, the universe repositories should provide you with vip-mana
 When vip-manager is in charge of registering and deregistering the VIP locally, it needs superuser privileges to do so.
 This is not required when vip-manager is used to manage a VIP through some API, e.g. Hetzner Robot API or Hetzner Cloud API.
 
-> **Note**
+> **Note**<br>
 > At some point it would be great to reduce this requirement to only the `CAP_NET_RAW` and `CAP_NET_ADMIN` capabilities, which could be added by a superuser to the vip-manager binary _once_.
 > Right now, this is not possible since vip-manager launches plain shell commands to register and deregister virtual IP addresses locally (at least on linux), so the whole user would need these privileges.
 > When vip-manager is eventually taught to directly use a library that directly uses the Linux kernel's API to register/deregister the VIP, the capabilities set for the binary will suffice.
@@ -97,7 +94,7 @@ sysctl -p
 
 The configuration can be passed to the executable through argument flags, environment variables or through a YAML config file. Run `vip-manager --help` to see the available flags.
 
-> **Note**
+> **Note**<br>
 > The location of the YAML config file can be specified with the --config flag.
 > An exemplary config file is installed into `/etc/default/vip-manager.yml` or is available in the vipconfig directory in the repository of the software.
 
@@ -108,7 +105,7 @@ When using different configuration sources simultaneously, this is the precedenc
 - env
 - config
 
-> **Note**
+> **Note**<br>
 > So flags always overwrite env variables and entries from the config file. Env variables overwrite the config file entries.
 
 All flags and file entries are written in lower case. To make longer multi-word flags and entries readable, they are separated by dashes, e.g. `retry-num`.
@@ -159,7 +156,7 @@ Either:
 * set `verbose` to `true` in `/etc/default/vip-manager.yml`
 * set `VIP_VERBOSE=true`
 
-> **Note**
+> **Note**<br>
 > Currently only supported for `hetzner`
 
 ## Author
