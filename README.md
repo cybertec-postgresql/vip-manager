@@ -14,7 +14,7 @@ Manages a virtual IP based on state kept in etcd or Consul. Monitors state in et
 - [Prerequisites](#prerequisites)
 - [Building](#building)
 - [Installing from package](#Installing-from-package)
-- [Installing from source](#installing-by-hand)
+- [Installing from source](#installing-from-source)
 - [Environment prerequisites](#environment-prerequisites)
 - [PostgreSQL prerequisites](#PostgreSQL-prerequisites)
 - [Configuration](#Configuration)
@@ -29,39 +29,30 @@ Manages a virtual IP based on state kept in etcd or Consul. Monitors state in et
 ## Prerequisites
 
 - `go` >= 1.19
-- `make`
-- [`nfpm`](https://github.com/goreleaser/nfpm) for building .rpm and .deb packages
-- [`chglog`](https://github.com/goreleaser/chglog) for changelog and packaging
+- `make` (optional)
+- `goreleaser` (optional)
 
 ## Building
 1. clone this repo
 ```
 git clone https://github.com/cybertec-postgresql/vip-manager.git
 ```
-2. get the (optional) requirements
-```
-# packaging:
-go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
-# changelog, also packaging:
-go get github.com/goreleaser/chglog/cmd/chglog
-```
-3. (optionally) set PATH to find those dependencies
-```
-PATH="$HOME/go/bin:$PATH"
-```
-4. Build the binary using `make`.
-5. To build your own .deb or .rpm, run `make package`, which will generate a .deb and .rpm package.
+2. Build the binary using `make` or `go build`.
+5. To build your own packages (.deb, .rpm, .zip, etc.), run `make package` or `goreleaser release --snapshot --skip-publish --rm-dist`.
 
 ## Installing from package
 You can download .rpm or .deb packages here, on the [Releases](https://github.com/cybertec-postgresql/vip-manager/releases) page.
 On Debian and Ubuntu, the universe repositories should provide you with vip-manager, though the version may be not as recent.
-> NB! Our .deb is probably not compatible with the one from those repositories, do not try to install them side-by-side.
+> **Warning**
+> Our packages are probably not compatible with the one from those repositories, do not try to install them side-by-side.
 
 ## Installing from source
 
 - Follow the steps to [build](#building) vip-manager.
 - Run `DESTDIR=/tmp make install` to copy the binary, service files and config file into the destination of your choice.
 - Edit config to your needs, then run `systemctl daemon-reload`, then `systemctl start vip-manager`.
+
+> **Note**
 > systemd will only pick the service files up if you chose a `DESTDIR` so that it can find it. Usually `DESTDIR=''` should work.
 
 ## Environment prerequisites
@@ -69,9 +60,10 @@ On Debian and Ubuntu, the universe repositories should provide you with vip-mana
 When vip-manager is in charge of registering and deregistering the VIP locally, it needs superuser privileges to do so.
 This is not required when vip-manager is used to manage a VIP through some API, e.g. Hetzner Robot API or Hetzner Cloud API.
 
+> **Note**
 > At some point it would be great to reduce this requirement to only the `CAP_NET_RAW` and `CAP_NET_ADMIN` capabilities, which could be added by a superuser to the vip-manager binary _once_.
 > Right now, this is not possible since vip-manager launches plain shell commands to register and deregister virtual IP addresses locally (at least on linux), so the whole user would need these privileges.
-> When vip-manager is eventually taught to directly use a library that directly uses the linux kernel's API to register/deregister the VIP, the capabilities set for the binary will suffice.
+> When vip-manager is eventually taught to directly use a library that directly uses the Linux kernel's API to register/deregister the VIP, the capabilities set for the binary will suffice.
 
 ## PostgreSQL prerequisites
 
@@ -98,8 +90,9 @@ sysctl -p
 
 The configuration can be passed to the executable through argument flags, environment variables or through a YAML config file. Run `vip-manager --help` to see the available flags.
 
+> **Note**
 > The location of the YAML config file can be specified with the --config flag.
-> An exemplary config file is installed into `/etc/default/vip-manager_default.yml` or is available in the vipconfig directory in the repository of the software.
+> An exemplary config file is installed into `/etc/default/vip-manager.yml` or is available in the vipconfig directory in the repository of the software.
 
 Configuration is now (from release v1.0 on) handled using the [`viper`](https://github.com/spf13/viper) library.
 This means that environment variables, command line flags, and config files can be used to configure vip-manager.
@@ -108,15 +101,12 @@ When using different configuration sources simultaneously, this is the precedenc
 - env
 - config
 
+> **Note**
 > So flags always overwrite env variables and entries from the config file. Env variables overwrite the config file entries.
 
-All flags and file entries are written in lower case. To make longer multi-word flags and entries readable, they are separated by dashes.
+All flags and file entries are written in lower case. To make longer multi-word flags and entries readable, they are separated by dashes, e.g. `retry-num`.
 
-> e.g. `retry-num`
-
-If you put a flag or file entry into uppercase and replace dashes with underscores, you end up with the format of environment variables. To avoid overlapping configuration with other applications, the env variables are additionall prefixed with `VIP_`.
-
-> e.g. `VIP_RETRY_NUM`
+If you put a flag or file entry into uppercase and replace dashes with underscores, you end up with the format of environment variables. To avoid overlapping configuration with other applications, the env variables are additionall prefixed with `VIP_`, e.g. `VIP_RETRY_NUM`.
 
 This is a list of all avaiable configuration items:
 
@@ -142,50 +132,10 @@ This is a list of all avaiable configuration items:
 `verbose`           | `VIP_VERBOSE`         | no        | true                      | Enable more verbose logging. Currently only the manager-type=hetzner provides additional logs.
 
 
-### Migrating configuration from releases before v1.0
-As stated above, the configuration method has been changed from v1.0 onwards.
-The breaking changes with regards to config handling are thus:
-- Config flags are no longer prefixed with a single dash `-`, but in POSIX style with double dashes `--`.
-- Some config keys have received new names, but the value handling has not changed.
-
-However, some consideration has been made to ease migration:
-- The old key names in VIP_* environment variables and in YAML config files are mapped to the new keys, a deprecation warning will be emitted for each old key that is used.
-- If both old and new key names are used and have different values, vip-manager will exit; If both values are identical, the duplication will be ignored.
-
-This means that migration should be pretty straight forward.
-
-#### Migration for Service Files using Environment Variables
-> These Service Files have been published in releases <v0.4 and on Debian/Ubuntu in release v0.6 as well.
-In the "ENV style" Service Files, configuration was loaded in through an environment file and the values of the environment variables where shimmed in place of the flag values:
-```bash
-ExecStart=/usr/bin/vip-manager -ip="${VIP_IP}" -mask="${VIP_MASK}" -iface="${VIP_IFACE}" -key="${VIP_KEY}" -host="${VIP_HOST}" -type="${VIP_TYPE}" -endpoint="${VIP_ENDPOINT}"
-```
-
-As a result, these Service Files should be replaced by ones that specify no flags at all:
-```bash
-ExecStart=/usr/bin/vip-manager
-```
-
-Since the environment variables are still there, the vip-manager (>=v1.0) will pick them up itself. It will pick up the old keys and use only emit log messages indicating the deprecation of those keys.
-> You could even consider another shim, that will take the environment variables using old keys, get their values and assign them to environment variables using the new keys. Then unset the old keys and you will no longer see deprecation messages.
-
-#### Migration for Service Files using YAML config files:
-> These Service FIles have been published in release v0.6
-In these "config file style" Service Files, the yaml configuration file was passed as a flag to the vip-manager.
-```bash
-ExecStart=/usr/bin/vip-manager -config=/etc/default/vip-manager.yml
-```
-
-Because the old keys in the YAML config files will be remapped to new keys, all that needs to be done is to add a single dash (`sed -i 's/-config/--config/'`):
-```bash
-ExecStart=/usr/bin/vip-manager --config=/etc/default/vip-manager.yml
-```
-
 ## Configuration - Hetzner
-To use vip-manager with Hetzner Robot API you need a Credential file, set hosting_type to `hetzner` and your Floating-IP must be added on all Servers.
+To use vip-manager with Hetzner Robot API you need a Credential file, set `hosting_type` to `hetzner` in `/etc/default/vip-manager.yml` 
+and your Floating-IP must be added on all Servers.
 The Floating-IP (VIP) will not be added or removed on the current Master node interface, Hetzner will route it to the current one.
-
-Set `hosting_type` to `hetzner` in `/etc/default/vip-manager.yml`
 
 ### Credential File - Hetzner
 Add the File `/etc/hetzner` with your Username and Password
@@ -202,7 +152,8 @@ Either:
 * set `verbose` to `true` in `/etc/default/vip-manager.yml`
 * set `VIP_VERBOSE=true`
 
-(currently only supported for `hetzner`)
+> **Note**
+> Currently only supported for `hetzner`
 
 ## Author
 
