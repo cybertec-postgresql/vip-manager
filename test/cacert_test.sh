@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 
 set -eu -o pipefail
@@ -6,9 +6,23 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 NC='\033[0m' # No Color
 
+export ETCDCTL_API=3
+
 # testing parameters
-dev=`ip link show | grep -B1 ether | cut -d ":" -f2 | head -n1 | cut -d " " -f2`
 vip=10.0.2.123
+
+function get_dev {
+    # select a suitable device for testing purposes
+    # * a device that is an "ether"
+    # * state is UP not DOWN
+    # * and isn't a nil hardware address
+    # strip suffix from name (veth3@if8 -> veth3)
+    ip -oneline link show | grep link/ether | grep state.UP | grep -v 00:00:00:00:00:00 | cut -d ":" -f2 | cut -d "@" -f 1 | head -n1
+}
+
+dev="`get_dev`"
+# prerequisite test: do we have a suitable device?
+test -n "$dev"
 
 #cleanup
 function cleanup {
@@ -33,7 +47,7 @@ function cleanup {
         echo -e "${RED}### Some tests failed! ###${NC}"
         rm .failed
     fi
-    podman stop etcd
+    #podman stop etcd
 }
 trap cleanup EXIT
 
@@ -41,15 +55,19 @@ trap cleanup EXIT
 ! ip address show dev $dev | grep $vip
 
 # run etcd with podman/docker maybe?
-podman run --rm -d --name etcd -p 2379:2379 -e "ETCD_ENABLE_V2=true" -e "ALLOW_NONE_AUTHENTICATION=yes" -v `pwd`/test/certs/:/certs:Z quay.io/coreos/etcd /usr/local/bin/etcd --cert-file=/certs/etcd_server.crt --key-file=/certs/etcd_server.key --listen-client-urls https://127.0.0.1:2379 --advertise-client-urls https://127.0.0.1:2379
+# podman rm etcd || true
+# podman run --rm -d --name etcd -p 2379:2379 -e "ETCD_ENABLE_V2=true" -e "ALLOW_NONE_AUTHENTICATION=yes" -v `pwd`/test/certs/:/certs:Z quay.io/coreos/etcd /usr/local/bin/etcd --cert-file=/certs/etcd_server.crt --key-file=/certs/etcd_server.key --listen-client-urls https://127.0.0.1:2379 --advertise-client-urls https://127.0.0.1:2379
 
-sleep 2
+# run etcd locally maybe?
+#etcd --cert-file=test/certs/etcd_server.crt --key-file=test/certs/etcd_server.key --listen-client-urls https://127.0.0.1:2379  --advertise-client-urls https://127.0.0.1:2379 &
+#echo $! > .etcdPid
+#sleep 2
 
 # simulate server, e.g. postgres
 ncat -vlk 0.0.0.0 12345  -e "/bin/echo $HOSTNAME" &
 echo $! > .ncatPid
 
-curl -s --cacert test/certs/etcd_server_ca.crt -XDELETE https://127.0.0.1:2379/v2/keys/service/pgcluster/leader ||true
+etcdctl --cacert test/certs/etcd_server_ca.crt del service/pgcluster/leader || true
 
 touch .failed
 ./vip-manager --etcd-ca-file test/certs/etcd_server_ca.crt --dcs-endpoints https://127.0.0.1:2379 --interface $dev --ip $vip --netmask 32 --trigger-key service/pgcluster/leader --trigger-value $HOSTNAME &> vip-manager.log &
@@ -60,7 +78,7 @@ sleep 2
 ! ip address show dev $dev | grep $vip
 
 # simulate patroni member promoting to leader
-curl -s --cacert test/certs/etcd_server_ca.crt -XPUT https://127.0.0.1:2379/v2/keys/service/pgcluster/leader -d value=$HOSTNAME | jq .
+etcdctl --cacert test/certs/etcd_server_ca.crt put service/pgcluster/leader $HOSTNAME
 sleep 2
 
 # we're just checking whether vip-manager picked up the change, for some reason, we can't run an elevated container of quay.io/coreos/etcd

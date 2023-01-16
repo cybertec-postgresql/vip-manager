@@ -1,10 +1,12 @@
-#!/bin/sh
+#!/bin/bash
 
 
 set -eu -o pipefail
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 NC='\033[0m' # No Color
+
+export ETCDCTL_API=3
 
 # testing parameters
 vip=10.0.2.123
@@ -62,7 +64,7 @@ sleep 2
 ncat -vlk 0.0.0.0 12345  -e "/bin/echo $HOSTNAME" &
 echo $! > .ncatPid
 
-curl -s -XDELETE http://127.0.0.1:2379/v2/keys/service/pgcluster/leader ||true
+etcdctl del service/pgcluster/leader || true
 
 touch .failed
 ./vip-manager --interface $dev --ip $vip --netmask 32 --trigger-key service/pgcluster/leader --trigger-value $HOSTNAME & #2>&1 &
@@ -73,7 +75,7 @@ sleep 2
 ! ip address show dev $dev | grep $vip
 
 # simulate patroni member promoting to leader
-curl -s -XPUT http://127.0.0.1:2379/v2/keys/service/pgcluster/leader -d value=$HOSTNAME | jq .
+etcdctl put service/pgcluster/leader $HOSTNAME
 sleep 2
 
 # test 2: vip should now be registered
@@ -83,7 +85,7 @@ ncat -vzw 1 $vip 12345
 
 # simulate leader change
 
-curl -s -XPUT http://127.0.0.1:2379/v2/keys/service/pgcluster/leader -d value=0xGARBAGE | jq .
+etcdctl put service/pgcluster/leader 0xGARBAGE
 sleep 2
 
 # test 3: vip should be deregistered again
