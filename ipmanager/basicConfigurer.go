@@ -41,7 +41,7 @@ func (c *BasicConfigurer) queryAddress() bool {
 		return false
 	}
 	for _, address := range addresses {
-		if strings.Contains(address.String(), c.VIP.String()) {
+		if strings.Contains(address.String(), c.getCIDR()) {
 			return true
 		}
 	}
