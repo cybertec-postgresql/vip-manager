@@ -301,7 +301,7 @@ func NewConfig() (*Config, error) {
 		switch viper.GetString("dcs-type") {
 		case "consul":
 			viper.Set("dcs-endpoints", []string{"http://127.0.0.1:8500"})
-		case "etcd":
+		case "etcd", "etcd3":
 			viper.Set("dcs-endpoints", []string{"http://127.0.0.1:2379"})
 		}
 	}

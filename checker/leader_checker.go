@@ -23,7 +23,7 @@ func NewLeaderChecker(con *vipconfig.Config) (LeaderChecker, error) {
 	switch con.EndpointType {
 	case "consul":
 		lc, err = NewConsulLeaderChecker(con)
-	case "etcd":
+	case "etcd", "etcd3":
 		lc, err = NewEtcdLeaderChecker(con)
 	default:
 		err = ErrUnsupportedEndpointType
