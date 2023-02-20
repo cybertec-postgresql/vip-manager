@@ -32,8 +32,11 @@ jobs:
       with:
         languages: ${{ matrix.language }}
 
-    - name: Autobuild
-      uses: github/codeql-action/autobuild@v2
+    - name: Build
+      run: |
+        go mod download
+        go version
+        go build
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v2
