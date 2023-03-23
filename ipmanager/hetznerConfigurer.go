@@ -244,7 +244,7 @@ func (c *HetznerConfigurer) queryAddress() bool {
 func (c *HetznerConfigurer) configureAddress() bool {
 	//log.Printf("Configuring address %s on %s", m.GetCIDR(), m.iface.Name)
 
-	return c.runAddressConfiguration("set")
+	return c.runAddressConfiguration()
 }
 
 func (c *HetznerConfigurer) deconfigureAddress() bool {
@@ -254,7 +254,7 @@ func (c *HetznerConfigurer) deconfigureAddress() bool {
 	return true
 }
 
-func (c *HetznerConfigurer) runAddressConfiguration(action string) bool {
+func (c *HetznerConfigurer) runAddressConfiguration() bool {
 	str, err := c.curlQueryFailover(true)
 	if err != nil {
 		log.Printf("Error while configuring Hetzner failover-ip! Error message: %s", err)
