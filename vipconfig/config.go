@@ -127,11 +127,10 @@ func mapDeprecated() error {
 					if viper.Get(k) == viper.Get(v) {
 						complaints = append(complaints, fmt.Sprintf("… But no conflicting values: %s and %s are equal…ignoring.", viper.GetString(k), viper.GetString(v)))
 						continue
-					} else {
-						complaints = append(complaints, fmt.Sprintf("…conflicting values: %s and %s", viper.GetString(k), viper.GetString(v)))
-						errors = true
-						continue
 					}
+					complaints = append(complaints, fmt.Sprintf("…conflicting values: %s and %s", viper.GetString(k), viper.GetString(v)))
+					errors = true
+					continue
 				}
 			}
 			// if this is a valid mapping due to deprecation, set the new key explicitly to the value of the deprecated key.
