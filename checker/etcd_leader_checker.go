@@ -89,6 +89,7 @@ func NewEtcdLeaderChecker(con *vipconfig.Config) (*EtcdLeaderChecker, error) {
 // GetChangeNotificationStream checks the status in the loop
 func (e *EtcdLeaderChecker) GetChangeNotificationStream(ctx context.Context, out chan<- bool) error {
 	var state bool
+	var alreadyConnected = false
 checkLoop:
 	for {
 		resp, err := e.kapi.Get(ctx, e.key)
@@ -101,6 +102,11 @@ checkLoop:
 			out <- false
 			time.Sleep(time.Duration(eConf.Interval) * time.Millisecond)
 			continue
+		}
+
+		if (!alreadyConnected) {
+			log.Printf("etcd checker started up, found key %s", e.key)
+			alreadyConnected = true
 		}
 
 		for _, kv := range resp.Kvs {
