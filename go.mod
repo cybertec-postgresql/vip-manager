@@ -6,7 +6,7 @@ require (
 	github.com/hashicorp/consul/api v1.26.1
 	github.com/mdlayher/arp v0.0.0-20220512170110-6706a2966875
 	github.com/spf13/pflag v1.0.5
-	github.com/spf13/viper v1.18.0
+	github.com/spf13/viper v1.18.1
 	go.etcd.io/etcd/client/v3 v3.5.11
 	golang.org/x/sys v0.15.0
 )
