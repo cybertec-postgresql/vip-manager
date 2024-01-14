@@ -96,6 +96,7 @@ func main() {
 			log.Fatalf("Leader checker returned the following error: %s", err)
 		}
 		wg.Done()
+		panic("Leader checker process fail")
 	}()
 
 	wg.Add(1)
