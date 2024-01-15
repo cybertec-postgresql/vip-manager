@@ -74,7 +74,8 @@ func NewEtcdLeaderChecker(con *vipconfig.Config) (*EtcdLeaderChecker, error) {
 	cfg := client.Config{
 		Endpoints:            eConf.Endpoints,
 		TLS:                  tlsConfig,
-		DialKeepAliveTimeout: time.Second,
+		DialKeepAliveTimeout: 5 * time.Second,
+		DialKeepAliveTime:    5 * time.Second,
 		Username:             eConf.EtcdUser,
 		Password:             eConf.EtcdPassword,
 	}
@@ -104,12 +105,15 @@ checkLoop:
 			continue
 		}
 
-		if (!alreadyConnected) {
+		if !alreadyConnected {
 			log.Printf("etcd checker started up, found key %s", e.key)
 			alreadyConnected = true
 		}
 
 		for _, kv := range resp.Kvs {
+			if eConf.Verbose {
+				log.Println("Leader from DCS:", string(kv.Value))
+			}
 			state = string(kv.Value) == e.nodename
 		}
 
