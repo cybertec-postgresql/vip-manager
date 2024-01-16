@@ -75,8 +75,6 @@ func NewEtcdLeaderChecker(con *vipconfig.Config) (*EtcdLeaderChecker, error) {
 	cfg := clientv3.Config{
 		Endpoints: eConf.Endpoints,
 		TLS:       tlsConfig,
-		// see bug https://github.com/etcd-io/etcd/issues/8905 (15 min for default)
-		// wait 10 sec and retry
 		DialKeepAliveTimeout: 5 * time.Second,
 		DialKeepAliveTime:    5 * time.Second,
 		Username:             eConf.EtcdUser,
