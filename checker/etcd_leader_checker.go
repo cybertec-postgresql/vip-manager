@@ -105,7 +105,7 @@ func (e *EtcdLeaderChecker) GetChangeNotificationStream(ctx context.Context, out
 		time.Sleep(time.Duration(eConf.Interval) * time.Millisecond)
 	}
 
-	// process responce
+	// process response
 	for _, kv := range resp.Kvs {
 		log.Println("Current Leader from DCS:", string(kv.Value))
 		state = string(kv.Value) == e.nodename
