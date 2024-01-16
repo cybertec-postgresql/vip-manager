@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/cybertec-postgresql/vip-manager/vipconfig"
+	"go.etcd.io/etcd/api/v3/mvccpb"
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
@@ -125,8 +126,11 @@ func (e *EtcdLeaderChecker) GetChangeNotificationStream(ctx context.Context, out
 	// process watching changes for key
 	for watchResp := range watchChan {
 		for _, event := range watchResp.Events {
-			state = string(event.Kv.Value) == e.nodename
-			out <- state
+			// new val on key
+			if event.Type == mvccpb.PUT {
+				state = string(event.Kv.Value) == e.nodename
+				out <- state
+			}
 			fmt.Printf("Event received! %s executed on %q with value %q\n", event.Type, event.Kv.Key, event.Kv.Value)
 		}
 	}
