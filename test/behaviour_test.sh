@@ -56,8 +56,8 @@ trap cleanup EXIT
 # podman run -d --name etcd -p 2379:2379 -e "ETCD_ENABLE_V2=true" -e "ALLOW_NONE_AUTHENTICATION=yes" bitnami/etcd
 
 # run etcd locally maybe?
-#etcd --enable-v2 &
-#echo $! > .etcdPid
+etcd &
+echo $! > .etcdPid
 sleep 2
 
 # simulate server, e.g. postgres
