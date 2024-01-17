@@ -27,12 +27,6 @@ jobs:
         version: latest
         args: --verbose
 
-    - name: Get dependencies
-      run: |
-        go mod download
-        go version
-        go build
-
     - uses: awalsh128/cache-apt-pkgs-action@latest
       with:
         packages: etcd ncat
@@ -41,11 +35,15 @@ jobs:
     - name: Test E2E
       if: runner.os == 'Linux'
       run: |
+        go version
+        go mod download
+        go build
         sudo test/behaviour_test.sh
+        sudo rm -r default.etcd
 
     - name: Run GoReleaser
       if: runner.os == 'Linux'
       uses: goreleaser/goreleaser-action@v5
       with:
         version: latest
-        args: release --snapshot --skip-publish --clean
+        args: release --snapshot --skip=publish --clean
