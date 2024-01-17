@@ -125,7 +125,7 @@ This is a list of all avaiable configuration items:
 `etcd-user`         | `VIP_ETCD_USER`       | no        | patroni                   | A username that is allowed to look at the `trigger-key` in an etcd DCS. Optional when using `dcs-type=etcd` .
 `etcd-password`     | `VIP_ETCD_PASSWORD`   | no        | snakeoil                  | The password for `etcd-user`. Optional when using `dcs-type=etcd` . Requires that `etcd-user` is also set.
 `consul-token`      | `VIP_CONSUL_TOKEN`    | no        | snakeoil                  | A token that can be used with the consul-API for authentication. Optional when using `dcs-type=consul` .
-`interval`          | `VIP_INTERVAL`        | no        | 1000                      | The time vip-manager main loop sleeps before checking for changes. Measured in ms. Defaults to `1000`.
+`interval`          | `VIP_INTERVAL`        | no        | 1000                      | The time vip-manager main loop sleeps before checking for changes. Measured in ms. Defaults to `1000`. Doesn't affect etcd checker since v2.3.0.
 `retry-after`       | `VIP_RETRY_AFTER`     | no        | 250                       | The time to wait before retrying interactions with components outside of vip-manager. Measured in ms. Defaults to `250`.
 `retry-num`         | `VIP_RETRY_NUM`       | no        | 3                         | The number of times interactions with components outside of vip-manager are retried. Defaults to `3`.
 `etcd-ca-file`      | `VIP_ETCD_CA_FILE`    | no        | /etc/etcd/ca.cert.pem     | A certificate authority file that can be used to verify the certificate provided by etcd endpoints. Make sure to change `dcs-endpoints` to reflect that `https` is used.
