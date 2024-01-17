@@ -41,7 +41,7 @@ jobs:
     - name: Test E2E
       if: runner.os == 'Linux'
       run: |
-        test/behaviour_test.sh
+        sudo test/behaviour_test.sh
 
     - name: Run GoReleaser
       if: runner.os == 'Linux'
