@@ -33,6 +33,16 @@ jobs:
         go version
         go build
 
+    - uses: awalsh128/cache-apt-pkgs-action@latest
+      with:
+        packages: etcd ncat
+        version: 1.0
+
+    - name: Test E2E
+      if: runner.os == 'Linux'
+      run: |
+        test/behaviour_test.sh
+
     - name: Run GoReleaser
       if: runner.os == 'Linux'
       uses: goreleaser/goreleaser-action@v5
