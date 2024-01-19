@@ -10,22 +10,35 @@ import (
 	"time"
 
 	"github.com/cybertec-postgresql/vip-manager/vipconfig"
-	client "go.etcd.io/etcd/client/v3"
+	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
 // EtcdLeaderChecker is used to check state of the leader key in Etcd
 type EtcdLeaderChecker struct {
-	key      string
-	nodename string
-	kapi     client.KV
+	*vipconfig.Config
+	*clientv3.Client
 }
 
-// naming this c_conf to avoid conflict with conf in etcd_leader_checker.go
-var eConf *vipconfig.Config
+// NewEtcdLeaderChecker returns a new instance
+func NewEtcdLeaderChecker(conf *vipconfig.Config) (*EtcdLeaderChecker, error) {
+	tlsConfig, err := getTransport(conf)
+	if err != nil {
+		return nil, err
+	}
+	cfg := clientv3.Config{
+		Endpoints:            conf.Endpoints,
+		TLS:                  tlsConfig,
+		DialKeepAliveTimeout: 5 * time.Second,
+		DialKeepAliveTime:    5 * time.Second,
+		Username:             conf.EtcdUser,
+		Password:             conf.EtcdPassword,
+	}
+	c, err := clientv3.New(cfg)
+	return &EtcdLeaderChecker{conf, c}, err
+}
 
 func getTransport(conf *vipconfig.Config) (*tls.Config, error) {
 	var caCertPool *x509.CertPool
-
 	// create valid CertPool only if the ca certificate file exists
 	if conf.EtcdCAFile != "" {
 		caCert, err := os.ReadFile(conf.EtcdCAFile)
@@ -36,9 +49,7 @@ func getTransport(conf *vipconfig.Config) (*tls.Config, error) {
 		caCertPool = x509.NewCertPool()
 		caCertPool.AppendCertsFromPEM(caCert)
 	}
-
 	var certificates []tls.Certificate
-
 	// create valid []Certificate only if the client cert and key files exists
 	if conf.EtcdCertFile != "" && conf.EtcdKeyFile != "" {
 		cert, err := tls.LoadX509KeyPair(conf.EtcdCertFile, conf.EtcdKeyFile)
@@ -48,83 +59,57 @@ func getTransport(conf *vipconfig.Config) (*tls.Config, error) {
 
 		certificates = []tls.Certificate{cert}
 	}
-
 	tlsClientConfig := new(tls.Config)
-
 	if caCertPool != nil {
 		tlsClientConfig.RootCAs = caCertPool
 		if certificates != nil {
 			tlsClientConfig.Certificates = certificates
 		}
 	}
-
 	return tlsClientConfig, nil
 }
 
-// NewEtcdLeaderChecker returns a new instance
-func NewEtcdLeaderChecker(con *vipconfig.Config) (*EtcdLeaderChecker, error) {
-	eConf = con
-	e := &EtcdLeaderChecker{key: eConf.Key, nodename: eConf.Nodename}
-
-	tlsConfig, err := getTransport(eConf)
+// init gets the current leader from etcd
+func (elc *EtcdLeaderChecker) init(ctx context.Context, out chan<- bool) {
+	resp, err := elc.Get(ctx, elc.Key)
 	if err != nil {
-		return nil, err
+		log.Printf("etcd error: %s", err)
+		out <- false
+		return
 	}
-
-	cfg := client.Config{
-		Endpoints:            eConf.Endpoints,
-		TLS:                  tlsConfig,
-		DialKeepAliveTimeout: 5 * time.Second,
-		DialKeepAliveTime:    5 * time.Second,
-		Username:             eConf.EtcdUser,
-		Password:             eConf.EtcdPassword,
+	for _, kv := range resp.Kvs {
+		log.Printf("Current Leader from DCS: %s", kv.Value)
+		out <- string(kv.Value) == elc.Nodename
 	}
-	c, err := client.New(cfg)
-	if err != nil {
-		return nil, err
-	}
-	e.kapi = c.KV
-	return e, nil
 }
 
-// GetChangeNotificationStream checks the status in the loop
-func (e *EtcdLeaderChecker) GetChangeNotificationStream(ctx context.Context, out chan<- bool) error {
-	var state bool
-	var alreadyConnected = false
-checkLoop:
+// watch monitors the leader change from etcd
+func (elc *EtcdLeaderChecker) watch(ctx context.Context, out chan<- bool) error {
+	watchChan := elc.Watch(ctx, elc.Key)
+	log.Println("set WATCH on " + elc.Key)
 	for {
-		resp, err := e.kapi.Get(ctx, e.key)
-
-		if err != nil {
-			if ctx.Err() != nil {
-				break checkLoop
-			}
-			log.Printf("etcd error: %s", err)
-			out <- false
-			time.Sleep(time.Duration(eConf.Interval) * time.Millisecond)
-			continue
-		}
-
-		if !alreadyConnected {
-			log.Printf("etcd checker started up, found key %s", e.key)
-			alreadyConnected = true
-		}
-
-		for _, kv := range resp.Kvs {
-			if eConf.Verbose {
-				log.Println("Leader from DCS:", string(kv.Value))
-			}
-			state = string(kv.Value) == e.nodename
-		}
-
 		select {
 		case <-ctx.Done():
-			break checkLoop
-		case out <- state:
-			time.Sleep(time.Duration(eConf.Interval) * time.Millisecond)
-			continue
+			return ctx.Err()
+		case watchResp := <-watchChan:
+			if err := watchResp.Err(); err != nil {
+				log.Printf("etcd watcher returned error: %s", err)
+				out <- false
+				continue
+			}
+			for _, event := range watchResp.Events {
+				out <- string(event.Kv.Value) == elc.Nodename
+				log.Printf("Current Leader from DCS: %s", event.Kv.Value)
+			}
 		}
 	}
+}
 
-	return ctx.Err()
+// GetChangeNotificationStream monitors the leader in etcd
+func (elc *EtcdLeaderChecker) GetChangeNotificationStream(ctx context.Context, out chan<- bool) error {
+	defer elc.Close()
+	go elc.init(ctx, out)
+	wctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	return elc.watch(wctx, out)
 }

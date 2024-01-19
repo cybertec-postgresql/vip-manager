@@ -53,7 +53,7 @@ trap cleanup EXIT
 
 # run etcd with podman/docker maybe?
 # podman rm etcd || true
-# podman run -d --name etcd -p 2379:2379 -e "ETCD_ENABLE_V2=true" -e "ALLOW_NONE_AUTHENTICATION=yes" bitnami/etcd
+# podman run -d --name etcd -p 2379:2379 -e "ALLOW_NONE_AUTHENTICATION=yes" bitnami/etcd
 
 # run etcd locally maybe?
 etcd &
@@ -67,7 +67,7 @@ echo $! > .ncatPid
 etcdctl del service/pgcluster/leader || true
 
 touch .failed
-./vip-manager --interface $dev --ip $vip --netmask 32 --trigger-key service/pgcluster/leader --trigger-value $HOSTNAME & #2>&1 &
+./vip-manager --interval 3000 --interface $dev --ip $vip --netmask 32 --trigger-key service/pgcluster/leader --trigger-value $HOSTNAME & #2>&1 &
 echo $! > .vipPid
 sleep 2
 
