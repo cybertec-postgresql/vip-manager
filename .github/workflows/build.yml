@@ -43,7 +43,7 @@ jobs:
       if: runner.os == 'Linux'
       run: |
         sudo test/behaviour_test.sh
-        sudo rm -r default.etcd
+        sudo rm -r default.etcd || true
 
     - name: Run GoReleaser
       if: runner.os == 'Linux'
