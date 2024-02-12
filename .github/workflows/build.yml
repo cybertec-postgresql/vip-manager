@@ -28,7 +28,7 @@ jobs:
 
     - name: GolangCI-Lint
       if: runner.os == 'Linux'
-      uses: golangci/golangci-lint-action@v3
+      uses: golangci/golangci-lint-action@v4
       with:
         version: latest
         args: --verbose
