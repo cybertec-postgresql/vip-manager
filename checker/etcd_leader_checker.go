@@ -4,12 +4,14 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"fmt"
 	"log"
 	"os"
 	"time"
 
 	"github.com/cybertec-postgresql/vip-manager/vipconfig"
+	v3rpc "go.etcd.io/etcd/api/v3/v3rpc/rpctypes"
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
@@ -69,8 +71,8 @@ func getTransport(conf *vipconfig.Config) (*tls.Config, error) {
 	return tlsClientConfig, nil
 }
 
-// init gets the current leader from etcd
-func (elc *EtcdLeaderChecker) init(ctx context.Context, out chan<- bool) {
+// get gets the current leader from etcd
+func (elc *EtcdLeaderChecker) get(ctx context.Context, out chan<- bool) {
 	resp, err := elc.Get(ctx, elc.Key)
 	if err != nil {
 		log.Printf("etcd error: %s", err)
@@ -93,8 +95,12 @@ func (elc *EtcdLeaderChecker) watch(ctx context.Context, out chan<- bool) error 
 			return ctx.Err()
 		case watchResp := <-watchChan:
 			if err := watchResp.Err(); err != nil {
-				log.Printf("etcd watcher returned error: %s", err)
-				out <- false
+				if errors.Is(err, v3rpc.ErrCompacted) { // revision is compacted, try direct get key
+					elc.get(ctx, out)
+				} else {
+					log.Printf("etcd watcher returned error: %s", err)
+					out <- false
+				}
 				continue
 			}
 			for _, event := range watchResp.Events {
@@ -108,7 +114,7 @@ func (elc *EtcdLeaderChecker) watch(ctx context.Context, out chan<- bool) error 
 // GetChangeNotificationStream monitors the leader in etcd
 func (elc *EtcdLeaderChecker) GetChangeNotificationStream(ctx context.Context, out chan<- bool) error {
 	defer elc.Close()
-	go elc.init(ctx, out)
+	go elc.get(ctx, out)
 	wctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	return elc.watch(wctx, out)
