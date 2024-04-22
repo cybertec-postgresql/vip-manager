@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/cybertec-postgresql/vip-manager/vipconfig"
-	v3rpc "go.etcd.io/etcd/api/v3/v3rpc/rpctypes"
+	rpcv3 "go.etcd.io/etcd/api/v3/v3rpc/rpctypes"
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
@@ -95,7 +95,7 @@ func (elc *EtcdLeaderChecker) watch(ctx context.Context, out chan<- bool) error 
 			return ctx.Err()
 		case watchResp := <-watchChan:
 			if err := watchResp.Err(); err != nil {
-				if errors.Is(err, v3rpc.ErrCompacted) { // revision is compacted, try direct get key
+				if errors.Is(err, rpcv3.ErrCompacted) { // revision is compacted, try direct get key
 					elc.get(ctx, out)
 				} else {
 					log.Printf("etcd watcher returned error: %s", err)
