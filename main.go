@@ -24,19 +24,14 @@ var (
 )
 
 func getMask(vip netip.Addr, mask int) net.IPMask {
-	if vip.Is4() {
-		//IPV4
+	if vip.Is4() { //IPv4
 		if mask > 0 && mask < 33 {
 			return net.CIDRMask(mask, 32)
 		}
 		var ip net.IP = vip.AsSlice()
 		return ip.DefaultMask()
 	}
-	else
-	{
-		//IPV6
-		return net.CIDRMask(mask, 128)
-	}
+	return net.CIDRMask(mask, 128) //IPv6
 }
 
 func getNetIface(iface string) *net.Interface {
