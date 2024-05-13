@@ -65,7 +65,7 @@ nfpms:
     contents:
       - src: vipconfig/vip-manager.yml
         dst: /etc/default/vip-manager.yml
-        type: config
+        type: "config|noreplace"
 
       - src: vip-manager.service
         dst: /lib/systemd/system/vip-manager.service
