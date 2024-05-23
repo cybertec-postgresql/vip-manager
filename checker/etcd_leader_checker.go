@@ -4,14 +4,12 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"errors"
 	"fmt"
 	"log"
 	"os"
 	"time"
 
 	"github.com/cybertec-postgresql/vip-manager/vipconfig"
-	rpcv3 "go.etcd.io/etcd/api/v3/v3rpc/rpctypes"
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
@@ -80,7 +78,7 @@ func (elc *EtcdLeaderChecker) get(ctx context.Context, out chan<- bool) {
 		return
 	}
 	for _, kv := range resp.Kvs {
-		log.Printf("Current Leader from DCS: %s", kv.Value)
+		log.Printf("current leader from DCS: %s", kv.Value)
 		out <- string(kv.Value) == elc.Nodename
 	}
 }
@@ -94,18 +92,18 @@ func (elc *EtcdLeaderChecker) watch(ctx context.Context, out chan<- bool) error 
 		case <-ctx.Done():
 			return ctx.Err()
 		case watchResp := <-watchChan:
+			if watchResp.Canceled {
+				watchChan = elc.Watch(ctx, elc.Key)
+				log.Println("reset cancelled WATCH on " + elc.Key)
+				continue
+			}
 			if err := watchResp.Err(); err != nil {
-				if errors.Is(err, rpcv3.ErrCompacted) { // revision is compacted, try direct get key
-					elc.get(ctx, out)
-				} else {
-					log.Printf("etcd watcher returned error: %s", err)
-					out <- false
-				}
+				elc.get(ctx, out) // RPC failed, try to get the key directly to be on the safe side
 				continue
 			}
 			for _, event := range watchResp.Events {
 				out <- string(event.Kv.Value) == elc.Nodename
-				log.Printf("Current Leader from DCS: %s", event.Kv.Value)
+				log.Printf("current leader from DCS: %s", event.Kv.Value)
 			}
 		}
 	}
