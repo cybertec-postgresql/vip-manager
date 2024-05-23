@@ -87,25 +87,35 @@ func (elc *EtcdLeaderChecker) get(ctx context.Context, out chan<- bool) {
 
 // watch monitors the leader change from etcd
 func (elc *EtcdLeaderChecker) watch(ctx context.Context, out chan<- bool) error {
-	watchChan := elc.Watch(ctx, elc.Key)
-	log.Println("set WATCH on " + elc.Key)
+
+	// wrap watch in a loop so it's possible to catch a canceled watch and restart it
 	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case watchResp := <-watchChan:
-			if err := watchResp.Err(); err != nil {
-				if errors.Is(err, rpcv3.ErrCompacted) { // revision is compacted, try direct get key
-					elc.get(ctx, out)
-				} else {
-					log.Printf("etcd watcher returned error: %s", err)
-					out <- false
+		watchChan := elc.Watch(ctx, elc.Key)
+		log.Println("set WATCH on " + elc.Key)
+
+	Selectloop:
+		for {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case watchResp := <-watchChan:
+				if watchResp.Canceled {
+					log.Printf("etcd watch was canceled, restarting")
+					break Selectloop
 				}
-				continue
-			}
-			for _, event := range watchResp.Events {
-				out <- string(event.Kv.Value) == elc.Nodename
-				log.Printf("Current Leader from DCS: %s", event.Kv.Value)
+				if err := watchResp.Err(); err != nil {
+					if errors.Is(err, rpcv3.ErrCompacted) { // revision is compacted, try direct get key
+						elc.get(ctx, out)
+					} else {
+						log.Printf("etcd watcher returned error: %s", err)
+						out <- false
+					}
+					continue Selectloop
+				}
+				for _, event := range watchResp.Events {
+					out <- string(event.Kv.Value) == elc.Nodename
+					log.Printf("Current Leader from DCS: %s", event.Kv.Value)
+				}
 			}
 		}
 	}
