@@ -21,9 +21,8 @@ var (
 // configureAddress assigns virtual IP address
 func (c *BasicConfigurer) configureAddress() bool {
 	if c.arpClient == nil {
-		err := c.createArpClient()
-		if err != nil {
-			log.Fatalf("Couldn't create an Arp client: %s", err)
+		if err := c.createArpClient(); err != nil {
+			log.Printf("Couldn't create an Arp client: %s", err)
 		}
 	}
 
@@ -67,24 +66,15 @@ func (c *BasicConfigurer) runAddressConfiguration(action string) bool {
 	return true
 }
 
-func (c *BasicConfigurer) createArpClient() error {
-	var err error
-	var arpClient *arp.Client
+func (c *BasicConfigurer) createArpClient() (err error) {
 	for i := 0; i < c.RetryNum; i++ {
-		arpClient, err = arp.Dial(&c.Iface)
-		if err != nil {
-			log.Printf("Problems with producing the arp client: %s", err)
-		} else {
-			break
+		if c.arpClient, err = arp.Dial(&c.Iface); err == nil {
+			return
 		}
+		log.Printf("Problems with producing the arp client: %s", err)
 		time.Sleep(time.Duration(c.RetryAfter) * time.Millisecond)
 	}
-	if err != nil {
-		log.Print("too many retries")
-		return err
-	}
-	c.arpClient = arpClient
-	return nil
+	return
 }
 
 // sends a gratuitous ARP request and reply
@@ -95,6 +85,10 @@ func (c *BasicConfigurer) arpSendGratuitous() error {
 	 * This site also recommends sending a reply, as requests might be ignored by some hardware:
 	 *		https://support.citrix.com/article/CTX112701
 	 */
+	if c.arpClient == nil {
+		log.Println("No arp client available, skip send gratuitous ARP")
+		return nil
+	}
 	gratuitousReplyPackage, err := arp.NewPacket(
 		arpReplyOp,
 		c.Iface.HardwareAddr,
