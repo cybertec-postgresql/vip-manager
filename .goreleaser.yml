@@ -3,7 +3,6 @@ version: 2
 before:
   hooks:
     - go mod tidy
-    - go generate ./...
 
 builds:
 - env:
@@ -11,7 +10,8 @@ builds:
   goos:
     - linux
     - windows
-    # - darwin
+  hooks:
+    pre: go generate ./...
 
 archives:
 - name_template: >-
