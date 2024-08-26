@@ -24,6 +24,7 @@ jobs:
       run: |
         go mod download
         go version
+        go generate ./...
         go build
 
     - name: GolangCI-Lint
