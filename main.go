@@ -20,7 +20,9 @@ import (
 
 var (
 	// vip-manager version definition
-	version = "2.4.0"
+	version = "master"
+	commit  = "none"
+	date    = "unknown"
 )
 
 func getMask(vip netip.Addr, mask int) net.IPMask {
@@ -48,6 +50,8 @@ func main() {
 		//			return nil, nil
 		//		}
 		fmt.Printf("version: %s\n", version)
+		fmt.Printf("commit:  %s\n", commit)
+		fmt.Printf("date:    %s\n", date)
 		return
 	}
 
