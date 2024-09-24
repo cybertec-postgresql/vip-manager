@@ -1,7 +1,6 @@
 module github.com/cybertec-postgresql/vip-manager
 
-go 1.21.0
-toolchain go1.22.5
+go 1.23.0
 
 require (
 	github.com/hashicorp/consul/api v1.29.4
