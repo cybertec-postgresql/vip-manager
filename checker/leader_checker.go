@@ -25,6 +25,8 @@ func NewLeaderChecker(con *vipconfig.Config) (LeaderChecker, error) {
 		lc, err = NewConsulLeaderChecker(con)
 	case "etcd", "etcd3":
 		lc, err = NewEtcdLeaderChecker(con)
+	case "patroni":
+		lc, err = NewPatroniLeaderChecker(con)
 	default:
 		err = ErrUnsupportedEndpointType
 	}
