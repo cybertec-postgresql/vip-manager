@@ -6,7 +6,7 @@
 
 # vip-manager
 
-Manages a virtual IP based on state kept in `etcd` or `Consul`
+Manages a virtual IP based on state kept in `etcd`, `Consul` or using `Patroni` REST API
 
 ## Table of Contents
 - [Prerequisites](#prerequisites)
@@ -159,4 +159,4 @@ Either:
 
 ## Author
 
-Cybertec Schönig & Schönig GmbH, https://www.cybertec-postgresql.com
+CYBERTEC PostgreSQL International GmbH, https://www.cybertec-postgresql.com
