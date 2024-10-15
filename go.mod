@@ -3,7 +3,7 @@ module github.com/cybertec-postgresql/vip-manager
 go 1.23.0
 
 require (
-	github.com/hashicorp/consul/api v1.29.4
+	github.com/hashicorp/consul/api v1.29.5
 	github.com/mdlayher/arp v0.0.0-20220512170110-6706a2966875
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.19.0
