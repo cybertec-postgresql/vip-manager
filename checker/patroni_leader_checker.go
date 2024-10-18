@@ -29,7 +29,7 @@ func (c *PatroniLeaderChecker) GetChangeNotificationStream(ctx context.Context, 
 		select {
 		case <-ctx.Done():
 			return nil
-		case <-time.After(time.Duration(cConf.Interval) * time.Millisecond):
+		case <-time.After(time.Duration(c.Interval) * time.Millisecond):
 			r, err := http.Get(c.Endpoints[0] + c.Key)
 			if err != nil {
 				log.Printf("patroni REST API error: %s", err)
