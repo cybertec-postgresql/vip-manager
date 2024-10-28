@@ -55,9 +55,9 @@ func defineFlags() {
 	pflag.String("trigger-key", "", "Key in the DCS to monitor, e.g. \"/service/batman/leader\".")
 	pflag.String("trigger-value", "", "Value to monitor for.")
 
-	pflag.String("dcs-type", "etcd", "Type of endpoint used for key storage. Supported values: etcd, consul.")
+	pflag.String("dcs-type", "etcd", "Type of endpoint used for key storage. Supported values: etcd, consul, patroni.")
 	// note: can't put a default value into dcs-endpoints as that would mess with applying default localhost when using consul
-	pflag.String("dcs-endpoints", "", "DCS endpoint(s), separate multiple endpoints using commas. (default \"http://127.0.0.1:2379\" or \"http://127.0.0.1:8500\" depending on dcs-type.)")
+	pflag.String("dcs-endpoints", "", "DCS endpoint(s), separate multiple endpoints using commas. (default \"http://127.0.0.1:2379\", \"http://127.0.0.1:8500\" or \"http://127.0.0.1:8008/\" depending on dcs-type.)")
 	pflag.String("etcd-user", "", "Username for etcd DCS endpoints.")
 	pflag.String("etcd-password", "", "Password for etcd DCS endpoints.")
 	pflag.String("etcd-ca-file", "", "Trusted CA certificate for the etcd server.")
@@ -302,12 +302,18 @@ func NewConfig() (*Config, error) {
 			viper.Set("dcs-endpoints", []string{"http://127.0.0.1:8500"})
 		case "etcd", "etcd3":
 			viper.Set("dcs-endpoints", []string{"http://127.0.0.1:2379"})
+		case "patroni":
+			viper.Set("dcs-endpoints", []string{"http://127.0.0.1:8008/"})
 		}
 	}
 
-	// set trigger-value to hostname if nothing is specified
-	if len(viper.GetString("trigger-value")) == 0 {
-		triggerValue, err := os.Hostname()
+	// set trigger-value to default value if nothing is specified
+	if triggerValue := viper.GetString("trigger-value"); len(triggerValue) == 0 {
+		if viper.GetString("dcs-type") == "patroni" {
+			triggerValue = "200"
+		} else {
+			triggerValue, err = os.Hostname()
+		}
 		if err != nil {
 			log.Printf("No trigger-value specified, hostname could not be retrieved: %s", err)
 		} else {
