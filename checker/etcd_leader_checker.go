@@ -28,8 +28,8 @@ func NewEtcdLeaderChecker(conf *vipconfig.Config) (*EtcdLeaderChecker, error) {
 	cfg := clientv3.Config{
 		Endpoints:            conf.Endpoints,
 		TLS:                  tlsConfig,
-		DialKeepAliveTimeout: 5 * time.Second,
-		DialKeepAliveTime:    5 * time.Second,
+		DialKeepAliveTimeout: time.Second,
+		DialKeepAliveTime:    time.Second,
 		Username:             conf.EtcdUser,
 		Password:             conf.EtcdPassword,
 	}
