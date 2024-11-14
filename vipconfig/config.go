@@ -3,13 +3,14 @@ package vipconfig
 import (
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"sort"
 	"strings"
 
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 // Config represents the configuration of the VIP manager
@@ -20,8 +21,8 @@ type Config struct {
 
 	HostingType string `mapstructure:"manager-type"`
 
-	Key      string `mapstructure:"trigger-key"`
-	Nodename string `mapstructure:"trigger-value"` //hostname to trigger on. usually the name of the host where this vip-manager runs.
+	TriggerKey   string `mapstructure:"trigger-key"`
+	TriggerValue string `mapstructure:"trigger-value"` //hostname to trigger on. usually the name of the host where this vip-manager runs.
 
 	EndpointType string   `mapstructure:"dcs-type"`
 	Endpoints    []string `mapstructure:"dcs-endpoints"`
@@ -40,6 +41,8 @@ type Config struct {
 	RetryNum   int `mapstructure:"retry-num"`
 
 	Verbose bool `mapstructure:"verbose"`
+
+	Logger *zap.Logger
 }
 
 func defineFlags() {
@@ -141,10 +144,10 @@ func mapDeprecated() error {
 		}
 	}
 	for c := range complaints {
-		log.Println(complaints[c])
+		fmt.Println(complaints[c])
 	}
 	if errors {
-		log.Fatal("Cannot continue due to conflicts.")
+		panic("Cannot continue due to conflicts.")
 	}
 	return nil
 }
@@ -167,7 +170,7 @@ func setDefaults() {
 
 func checkSetting(name string) bool {
 	if !viper.IsSet(name) {
-		log.Printf("Setting %s is mandatory", name)
+		fmt.Printf("Setting %s is mandatory", name)
 		return false
 	}
 	return true
@@ -195,7 +198,7 @@ func checkMandatory() error {
 // if reason is set, but implied is not set, return false.
 func checkImpliedSetting(implied string, reason string) bool {
 	if viper.IsSet(reason) && !viper.IsSet(implied) {
-		log.Printf("Setting %s is mandatory when setting %s is specified.", implied, reason)
+		fmt.Printf("Setting %s is mandatory when setting %s is specified.", implied, reason)
 		return false
 	}
 	return true
@@ -236,7 +239,7 @@ func printSettings() {
 	}
 
 	sort.Strings(s)
-	log.Println("This is the config that will be used:")
+	fmt.Println("This is the config that will be used:")
 	for k := range s {
 		fmt.Print(s[k])
 	}
@@ -276,7 +279,7 @@ func NewConfig() (*Config, error) {
 		if err != nil {             // Handle errors reading the config file
 			return nil, fmt.Errorf("Fatal error reading config file: %w", err)
 		}
-		log.Printf("Using config from file: %s\n", viper.ConfigFileUsed())
+		fmt.Printf("Using config from file: %s\n", viper.ConfigFileUsed())
 	}
 
 	if err = mapDeprecated(); err != nil {
@@ -295,7 +298,7 @@ func NewConfig() (*Config, error) {
 
 	// apply defaults for endpoints
 	if !viper.IsSet("dcs-endpoints") {
-		log.Println("No dcs-endpoints specified, trying to use localhost with standard ports!")
+		fmt.Println("No dcs-endpoints specified, trying to use localhost with standard ports!")
 
 		switch viper.GetString("dcs-type") {
 		case "consul":
@@ -315,9 +318,9 @@ func NewConfig() (*Config, error) {
 			triggerValue, err = os.Hostname()
 		}
 		if err != nil {
-			log.Printf("No trigger-value specified, hostname could not be retrieved: %s", err)
+			fmt.Printf("No trigger-value specified, hostname could not be retrieved: %s", err)
 		} else {
-			log.Printf("No trigger-value specified, instead using hostname: %v", triggerValue)
+			fmt.Printf("No trigger-value specified, instead using hostname: %v", triggerValue)
 			viper.Set("trigger-value", triggerValue)
 		}
 	}
@@ -331,12 +334,56 @@ func NewConfig() (*Config, error) {
 	}
 
 	conf := &Config{}
-	err = viper.Unmarshal(conf)
-	if err != nil {
-		log.Fatalf("unable to decode viper config into config struct, %v", err)
+	if err = viper.Unmarshal(conf); err != nil {
+		zap.L().Fatal("unable to decode viper config into config struct, %v", zap.Error(err))
 	}
+
+	conf.initLogger()
 
 	printSettings()
 
 	return conf, nil
+}
+
+func (conf *Config) initLogger() {
+	lcfg := zap.Config{
+		Level: zap.NewAtomicLevelAt(map[bool]zapcore.Level{
+			false: zap.InfoLevel,
+			true:  zap.DebugLevel}[conf.Verbose]),
+
+		Development: false,
+
+		Sampling: &zap.SamplingConfig{
+			Initial:    100,
+			Thereafter: 100,
+		},
+		Encoding: "console",
+
+		// copied from "zap.NewProductionEncoderConfig" with some updates
+		EncoderConfig: zapcore.EncoderConfig{
+			TimeKey:        "ts",
+			LevelKey:       "level",
+			NameKey:        "logger",
+			CallerKey:      "caller",
+			MessageKey:     "msg",
+			StacktraceKey:  "stacktrace",
+			LineEnding:     zapcore.DefaultLineEnding,
+			EncodeLevel:    zapcore.CapitalColorLevelEncoder,
+			EncodeTime:     zapcore.ISO8601TimeEncoder,
+			EncodeDuration: zapcore.StringDurationEncoder,
+
+			EncodeCaller: map[bool]zapcore.CallerEncoder{
+				false: nil,
+				true:  zapcore.ShortCallerEncoder}[conf.Verbose],
+		},
+
+		// Use "/dev/null" to discard all
+		OutputPaths:      []string{"stdout"},
+		ErrorOutputPaths: []string{"stderr"},
+	}
+	var err error
+	conf.Logger, err = lcfg.Build()
+	if err != nil {
+		panic(err)
+	}
 }

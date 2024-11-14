@@ -2,7 +2,6 @@ package checker
 
 import (
 	"context"
-	"log"
 	"strconv"
 	"time"
 
@@ -30,12 +29,12 @@ func (c *PatroniLeaderChecker) GetChangeNotificationStream(ctx context.Context, 
 		case <-ctx.Done():
 			return nil
 		case <-time.After(time.Duration(c.Interval) * time.Millisecond):
-			r, err := http.Get(c.Endpoints[0] + c.Key)
+			r, err := http.Get(c.Endpoints[0] + c.TriggerKey)
 			if err != nil {
-				log.Printf("patroni REST API error: %s", err)
+				c.Logger.Sugar().Error("patroni REST API error:", err)
 				continue
 			}
-			out <- strconv.Itoa(r.StatusCode) == c.Nodename
+			out <- strconv.Itoa(r.StatusCode) == c.TriggerValue
 		}
 	}
 }

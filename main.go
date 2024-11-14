@@ -3,12 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"net/netip"
 
-	// "flag"
-
-	"log"
-	"net"
 	"os"
 	"os/signal"
 	"sync"
@@ -16,6 +11,7 @@ import (
 	"github.com/cybertec-postgresql/vip-manager/checker"
 	"github.com/cybertec-postgresql/vip-manager/ipmanager"
 	"github.com/cybertec-postgresql/vip-manager/vipconfig"
+	"go.uber.org/zap"
 )
 
 var (
@@ -25,30 +21,10 @@ var (
 	date    = "unknown"
 )
 
-func getMask(vip netip.Addr, mask int) net.IPMask {
-	if vip.Is4() { //IPv4
-		if mask > 0 && mask < 33 {
-			return net.CIDRMask(mask, 32)
-		}
-		var ip net.IP = vip.AsSlice()
-		return ip.DefaultMask()
-	}
-	return net.CIDRMask(mask, 128) //IPv6
-}
-
-func getNetIface(iface string) *net.Interface {
-	netIface, err := net.InterfaceByName(iface)
-	if err != nil {
-		log.Fatalf("Obtaining the interface raised an error: %s", err)
-	}
-	return netIface
-}
+var log *zap.SugaredLogger = zap.L().Sugar()
 
 func main() {
 	if (len(os.Args) > 1) && (os.Args[1] == "--version") {
-		//			log.Print("version " + version)
-		//			return nil, nil
-		//		}
 		fmt.Printf("version: %s\n", version)
 		fmt.Printf("commit:  %s\n", commit)
 		fmt.Printf("date:    %s\n", date)
@@ -59,28 +35,16 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	log = conf.Logger.Sugar()
+	defer conf.Logger.Sync()
 
 	lc, err := checker.NewLeaderChecker(conf)
 	if err != nil {
 		log.Fatalf("Failed to initialize leader checker: %s", err)
 	}
 
-	vip := netip.MustParseAddr(conf.IP)
-	vipMask := getMask(vip, conf.Mask)
-	netIface := getNetIface(conf.Iface)
 	states := make(chan bool)
-	manager, err := ipmanager.NewIPManager(
-		conf.HostingType,
-		&ipmanager.IPConfiguration{
-			VIP:        vip,
-			Netmask:    vipMask,
-			Iface:      *netIface,
-			RetryNum:   conf.RetryNum,
-			RetryAfter: conf.RetryAfter,
-		},
-		states,
-		conf.Verbose,
-	)
+	manager, err := ipmanager.NewIPManager(conf, states)
 	if err != nil {
 		log.Fatalf("Problems with generating the virtual ip manager: %s", err)
 	}
@@ -91,7 +55,7 @@ func main() {
 		c := make(chan os.Signal, 1)
 		signal.Notify(c, os.Interrupt)
 		<-c
-		log.Print("Received exit signal")
+		log.Info("Received exit signal")
 		cancel()
 	}()
 
@@ -100,7 +64,7 @@ func main() {
 	go func() {
 		err := lc.GetChangeNotificationStream(mainCtx, states)
 		if err != nil && err != context.Canceled {
-			log.Fatalf("Leader checker returned the following error: %s", err)
+			log.Fatal("Leader checker returned the following error: %s", zap.Error(err))
 		}
 		wg.Done()
 	}()
