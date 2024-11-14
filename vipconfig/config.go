@@ -320,7 +320,7 @@ func NewConfig() (*Config, error) {
 		if err != nil {
 			fmt.Printf("No trigger-value specified, hostname could not be retrieved: %s", err)
 		} else {
-			fmt.Printf("No trigger-value specified, instead using hostname: %v", triggerValue)
+			fmt.Printf("No trigger-value specified, instead using: %v", triggerValue)
 			viper.Set("trigger-value", triggerValue)
 		}
 	}
