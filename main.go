@@ -36,7 +36,7 @@ func main() {
 		log.Fatal(err)
 	}
 	log = conf.Logger.Sugar()
-	defer conf.Logger.Sync()
+	defer func() { _ = conf.Logger.Sync() }()
 
 	lc, err := checker.NewLeaderChecker(conf)
 	if err != nil {
