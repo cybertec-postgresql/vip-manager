@@ -2,7 +2,6 @@ package checker
 
 import (
 	"context"
-	"log"
 	"net/url"
 	"time"
 
@@ -17,15 +16,15 @@ type ConsulLeaderChecker struct {
 	apiClient *api.Client
 }
 
-//naming this cConf to avoid conflict with conf in etcd_leader_checker.go
+// naming this cConf to avoid conflict with conf in etcd_leader_checker.go
 var cConf *vipconfig.Config
 
 // NewConsulLeaderChecker returns a new instance
 func NewConsulLeaderChecker(con *vipconfig.Config) (*ConsulLeaderChecker, error) {
 	cConf = con
 	lc := &ConsulLeaderChecker{
-		key:      cConf.Key,
-		nodename: cConf.Nodename,
+		key:      cConf.TriggerKey,
+		nodename: cConf.TriggerValue,
 	}
 
 	url, err := url.Parse(cConf.Endpoints[0])
@@ -69,13 +68,13 @@ checkLoop:
 			if ctx.Err() != nil {
 				break checkLoop
 			}
-			log.Printf("consul error: %s", err)
+			cConf.Logger.Sugar().Error("consul error: ", err)
 			out <- false
 			time.Sleep(time.Duration(cConf.Interval) * time.Millisecond)
 			continue
 		}
 		if resp == nil {
-			log.Printf("Cannot get variable for key %s. Will try again in a second.", c.key)
+			cConf.Logger.Sugar().Errorf("Cannot get variable for key %s. Will try again in a second.", c.key)
 			out <- false
 			time.Sleep(time.Duration(cConf.Interval) * time.Millisecond)
 			continue

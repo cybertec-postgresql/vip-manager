@@ -1,7 +1,6 @@
 package ipmanager
 
 import (
-	"log"
 	"net"
 	"os/exec"
 	"time"
@@ -22,11 +21,11 @@ var (
 func (c *BasicConfigurer) configureAddress() bool {
 	if c.arpClient == nil {
 		if err := c.createArpClient(); err != nil {
-			log.Printf("Couldn't create an Arp client: %s", err)
+			log.Error("Couldn't create an Arp client:", err)
 		}
 	}
 
-	log.Printf("Configuring address %s on %s", c.getCIDR(), c.Iface.Name)
+	log.Infof("Configuring address %s on %s", c.getCIDR(), c.Iface.Name)
 
 	result := c.runAddressConfiguration("add")
 
@@ -42,7 +41,7 @@ func (c *BasicConfigurer) configureAddress() bool {
 
 // deconfigureAddress drops virtual IP address
 func (c *BasicConfigurer) deconfigureAddress() bool {
-	log.Printf("Removing address %s on %s", c.getCIDR(), c.Iface.Name)
+	log.Infof("Removing address %s on %s", c.getCIDR(), c.Iface.Name)
 	return c.runAddressConfiguration("delete")
 }
 
@@ -54,12 +53,12 @@ func (c *BasicConfigurer) runAddressConfiguration(action string) bool {
 
 	switch err.(type) {
 	case *exec.ExitError:
-		log.Printf("Got error %s", output)
+		log.Infof("Got error %s", output)
 
 		return false
 	}
 	if err != nil {
-		log.Printf("Error running ip address %s %s on %s: %s",
+		log.Infof("Error running ip address %s %s on %s: %s",
 			action, c.VIP, c.Iface.Name, err)
 		return false
 	}
@@ -71,7 +70,7 @@ func (c *BasicConfigurer) createArpClient() (err error) {
 		if c.arpClient, err = arp.Dial(&c.Iface); err == nil {
 			return
 		}
-		log.Printf("Problems with producing the arp client: %s", err)
+		log.Infof("Problems with producing the arp client: %s", err)
 		time.Sleep(time.Duration(c.RetryAfter) * time.Millisecond)
 	}
 	return
@@ -86,7 +85,7 @@ func (c *BasicConfigurer) arpSendGratuitous() error {
 	 *		https://support.citrix.com/article/CTX112701
 	 */
 	if c.arpClient == nil {
-		log.Println("No arp client available, skip send gratuitous ARP")
+		log.Info("No arp client available, skip send gratuitous ARP")
 		return nil
 	}
 	gratuitousReplyPackage, err := arp.NewPacket(
@@ -97,7 +96,7 @@ func (c *BasicConfigurer) arpSendGratuitous() error {
 		c.VIP,
 	)
 	if err != nil {
-		log.Printf("Gratuitous arp reply package is malformed: %s", err)
+		log.Infof("Gratuitous arp reply package is malformed: %s", err)
 		return err
 	}
 
@@ -121,23 +120,23 @@ func (c *BasicConfigurer) arpSendGratuitous() error {
 		c.VIP,
 	)
 	if err != nil {
-		log.Printf("Gratuitous arp request package is malformed: %s", err)
+		log.Infof("Gratuitous arp request package is malformed: %s", err)
 		return err
 	}
 
 	for i := 0; i < c.RetryNum; i++ {
 		errReply := c.arpClient.WriteTo(gratuitousReplyPackage, ethernetBroadcast)
 		if err != nil {
-			log.Printf("Couldn't write to the arpClient: %s", errReply)
+			log.Error("Couldn't write to the arpClient:", errReply)
 		} else {
-			log.Println("Sent gratuitous ARP reply")
+			log.Info("Sent gratuitous ARP reply")
 		}
 
 		errRequest := c.arpClient.WriteTo(gratuitousRequestPackage, ethernetBroadcast)
 		if err != nil {
-			log.Printf("Couldn't write to the arpClient: %s", errRequest)
+			log.Error("Couldn't write to the arpClient:", errRequest)
 		} else {
-			log.Println("Sent gratuitous ARP request")
+			log.Info("Sent gratuitous ARP request")
 		}
 
 		if errReply != nil || errRequest != nil {
@@ -152,7 +151,7 @@ func (c *BasicConfigurer) arpSendGratuitous() error {
 		time.Sleep(time.Duration(c.RetryAfter) * time.Millisecond)
 	}
 	if err != nil {
-		log.Print("too many retries")
+		log.Error("too many retries", err)
 		return err
 	}
 

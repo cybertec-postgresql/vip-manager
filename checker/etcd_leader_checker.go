@@ -5,12 +5,12 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"log"
 	"os"
 	"time"
 
 	"github.com/cybertec-postgresql/vip-manager/vipconfig"
 	clientv3 "go.etcd.io/etcd/client/v3"
+	"go.uber.org/zap"
 )
 
 // EtcdLeaderChecker is used to check state of the leader key in Etcd
@@ -32,6 +32,7 @@ func NewEtcdLeaderChecker(conf *vipconfig.Config) (*EtcdLeaderChecker, error) {
 		DialKeepAliveTime:    time.Second,
 		Username:             conf.EtcdUser,
 		Password:             conf.EtcdPassword,
+		Logger:               conf.Logger,
 	}
 	c, err := clientv3.New(cfg)
 	return &EtcdLeaderChecker{conf, c}, err
@@ -71,30 +72,30 @@ func getTransport(conf *vipconfig.Config) (*tls.Config, error) {
 
 // get gets the current leader from etcd
 func (elc *EtcdLeaderChecker) get(ctx context.Context, out chan<- bool) {
-	resp, err := elc.Get(ctx, elc.Key)
+	resp, err := elc.Get(ctx, elc.TriggerKey)
 	if err != nil {
-		log.Printf("etcd error: %s", err)
+		elc.Logger.Error("etcd error:", zap.Error(err))
 		out <- false
 		return
 	}
 	for _, kv := range resp.Kvs {
-		log.Printf("current leader from DCS: %s", kv.Value)
-		out <- string(kv.Value) == elc.Nodename
+		elc.Logger.Sugar().Info("current leader from DCS:", kv.Value)
+		out <- string(kv.Value) == elc.TriggerValue
 	}
 }
 
 // watch monitors the leader change from etcd
 func (elc *EtcdLeaderChecker) watch(ctx context.Context, out chan<- bool) error {
-	watchChan := elc.Watch(ctx, elc.Key)
-	log.Println("set WATCH on " + elc.Key)
+	watchChan := elc.Watch(ctx, elc.TriggerKey)
+	elc.Logger.Sugar().Info("set WATCH on ", elc.TriggerKey)
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		case watchResp := <-watchChan:
 			if watchResp.Canceled {
-				watchChan = elc.Watch(ctx, elc.Key)
-				log.Println("reset cancelled WATCH on " + elc.Key)
+				watchChan = elc.Watch(ctx, elc.TriggerKey)
+				elc.Logger.Sugar().Info("reset cancelled WATCH on ", elc.TriggerKey)
 				continue
 			}
 			if err := watchResp.Err(); err != nil {
@@ -102,8 +103,8 @@ func (elc *EtcdLeaderChecker) watch(ctx context.Context, out chan<- bool) error 
 				continue
 			}
 			for _, event := range watchResp.Events {
-				out <- string(event.Kv.Value) == elc.Nodename
-				log.Printf("current leader from DCS: %s", event.Kv.Value)
+				out <- string(event.Kv.Value) == elc.TriggerValue
+				elc.Logger.Sugar().Info("current leader from DCS:", event.Kv.Value)
 			}
 		}
 	}

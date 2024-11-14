@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"encoding/json"
 	"errors"
-	"log"
 	"net"
 	"os"
 	"os/exec"
@@ -34,7 +33,6 @@ func newHetznerConfigurer(config *IPConfiguration, verbose bool) (*HetznerConfig
 		cachedState:     unknown,
 		lastAPICheck:    time.Unix(0, 0),
 		verbose:         verbose}
-
 	return c, nil
 }
 
@@ -45,7 +43,7 @@ func newHetznerConfigurer(config *IPConfiguration, verbose bool) (*HetznerConfig
 func getOutboundIP() net.IP {
 	conn, err := net.Dial("udp", "8.8.8.8:80")
 	if err != nil || conn == nil {
-		log.Println("error dialing 8.8.8.8 to retrieve preferred outbound IP", err)
+		log.Error("error dialing 8.8.8.8 to retrieve preferred outbound IP", err)
 		return nil
 	}
 	defer conn.Close()
@@ -63,7 +61,7 @@ func (c *HetznerConfigurer) curlQueryFailover(post bool) (string, error) {
 	credentialsFile := "/etc/hetzner"
 	f, err := os.Open(credentialsFile)
 	if err != nil {
-		log.Println("can't open passwordfile", err)
+		log.Error("can't open passwordfile", err)
 		return "", err
 	}
 	defer f.Close()
@@ -85,7 +83,7 @@ func (c *HetznerConfigurer) curlQueryFailover(post bool) (string, error) {
 		}
 	}
 	if user == "" || password == "" {
-		log.Println("Couldn't retrieve username or password from file", credentialsFile)
+		log.Infoln("Couldn't retrieve username or password from file", credentialsFile)
 		return "", errors.New("Couldn't retrieve username or password from file")
 	}
 
@@ -102,10 +100,10 @@ func (c *HetznerConfigurer) curlQueryFailover(post bool) (string, error) {
 	if post {
 		myOwnIP := getOutboundIP()
 		if myOwnIP == nil {
-			log.Printf("Error determining this machine's IP address.")
+			log.Error("Error determining this machine's IP address.")
 			return "", errors.New("Error determining this machine's IP address")
 		}
-		log.Printf("my_own_ip: %s\n", myOwnIP.String())
+		log.Infof("my_own_ip: %s\n", myOwnIP.String())
 
 		cmd = exec.Command("curl",
 			"--ipv4",
@@ -113,27 +111,23 @@ func (c *HetznerConfigurer) curlQueryFailover(post bool) (string, error) {
 			"https://robot-ws.your-server.de/failover/"+c.IPConfiguration.VIP.String(),
 			"-d", "active_server_ip="+myOwnIP.String())
 
-		if c.verbose {
-			log.Printf("%s %s %s '%s' %s %s %s",
-				"curl",
-				"--ipv4",
-				"-u", user+":XXXXXX",
-				"https://robot-ws.your-server.de/failover/"+c.IPConfiguration.VIP.String(),
-				"-d", "active_server_ip="+myOwnIP.String())
-		}
+		log.Debugf("%s %s %s '%s' %s %s %s",
+			"curl",
+			"--ipv4",
+			"-u", user+":XXXXXX",
+			"https://robot-ws.your-server.de/failover/"+c.IPConfiguration.VIP.String(),
+			"-d", "active_server_ip="+myOwnIP.String())
 	} else {
 		cmd = exec.Command("curl",
 			"--ipv4",
 			"-u", user+":"+password,
 			"https://robot-ws.your-server.de/failover/"+c.IPConfiguration.VIP.String())
 
-		if c.verbose {
-			log.Printf("%s %s %s %s %s",
-				"curl",
-				"--ipv4",
-				"-u", user+":XXXXXX",
-				"https://robot-ws.your-server.de/failover/"+c.IPConfiguration.VIP.String())
-		}
+		log.Debugf("%s %s %s %s %s",
+			"curl",
+			"--ipv4",
+			"-u", user+":XXXXXX",
+			"https://robot-ws.your-server.de/failover/"+c.IPConfiguration.VIP.String())
 	}
 
 	out, err := cmd.Output()
@@ -154,20 +148,18 @@ func (c *HetznerConfigurer) curlQueryFailover(post bool) (string, error) {
 func (c *HetznerConfigurer) getActiveIPFromJSON(str string) (net.IP, error) {
 	var f map[string]interface{}
 
-	if c.verbose {
-		log.Printf("JSON response: %s\n", str)
-	}
+	log.Debugf("JSON response: %s\n", str)
 
 	err := json.Unmarshal([]byte(str), &f)
 	if err != nil {
-		log.Println(err)
+		log.Errorln(err)
 		return nil, err
 	}
 
 	if f["error"] != nil {
 		errormap := f["error"].(map[string]interface{})
 
-		log.Printf("There was an error accessing the Hetzner API!\n"+
+		log.Errorf("There was an error accessing the Hetzner API!\n"+
 			" status: %f\n code: %s\n message: %s\n",
 			errormap["status"].(float64),
 			errormap["code"].(string),
@@ -184,7 +176,7 @@ func (c *HetznerConfigurer) getActiveIPFromJSON(str string) (net.IP, error) {
 		serverNumber := failovermap["server_number"].(float64)
 		activeServerIP := failovermap["active_server_ip"].(string)
 
-		log.Println("Result of the failover query was: ",
+		log.Infoln("Result of the failover query was: ",
 			"failover-ip=", ip,
 			"netmask=", netmask,
 			"server_ip=", serverIP,
@@ -204,7 +196,7 @@ func (c *HetznerConfigurer) queryAddress() bool {
 		/**We need to recheck the status!
 		 * Don't check too often because of stupid API rate limits
 		 */
-		log.Println("Cached state was too old.")
+		log.Info("Cached state was too old.")
 		c.cachedState = unknown
 	} else {
 		/** no need to check, we can use "cached" state if set.
@@ -257,7 +249,7 @@ func (c *HetznerConfigurer) deconfigureAddress() bool {
 func (c *HetznerConfigurer) runAddressConfiguration() bool {
 	str, err := c.curlQueryFailover(true)
 	if err != nil {
-		log.Printf("Error while configuring Hetzner failover-ip! Error message: %s", err)
+		log.Infof("Error while configuring Hetzner failover-ip! Error message: %s", err)
 		c.cachedState = unknown
 		return false
 	}
@@ -271,12 +263,12 @@ func (c *HetznerConfigurer) runAddressConfiguration() bool {
 
 	if currentFailoverDestinationIP.Equal(getOutboundIP()) {
 		//We "are" the current failover destination.
-		log.Printf("Failover was successfully executed!")
+		log.Info("Failover was successfully executed!")
 		c.cachedState = configured
 		return true
 	}
 
-	log.Printf("The failover command was issued, but the current Failover destination (%s) is different from what it should be (%s).",
+	log.Infof("The failover command was issued, but the current Failover destination (%s) is different from what it should be (%s).",
 		currentFailoverDestinationIP.String(),
 		getOutboundIP().String())
 	//Something must have gone wrong while trying to switch IP's...
