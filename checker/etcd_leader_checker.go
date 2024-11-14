@@ -79,7 +79,7 @@ func (elc *EtcdLeaderChecker) get(ctx context.Context, out chan<- bool) {
 		return
 	}
 	for _, kv := range resp.Kvs {
-		elc.Logger.Sugar().Info("current leader from DCS:", kv.Value)
+		elc.Logger.Sugar().Info("current leader from DCS:", string(kv.Value))
 		out <- string(kv.Value) == elc.TriggerValue
 	}
 }
@@ -104,7 +104,7 @@ func (elc *EtcdLeaderChecker) watch(ctx context.Context, out chan<- bool) error 
 			}
 			for _, event := range watchResp.Events {
 				out <- string(event.Kv.Value) == elc.TriggerValue
-				elc.Logger.Sugar().Info("current leader from DCS:", event.Kv.Value)
+				elc.Logger.Sugar().Info("current leader from DCS:", string(event.Kv.Value))
 			}
 		}
 	}
