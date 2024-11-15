@@ -166,6 +166,40 @@ func setDefaults() {
 			viper.SetDefault(k, v)
 		}
 	}
+
+	// apply defaults for endpoints
+	if !viper.IsSet("dcs-endpoints") {
+		fmt.Println("No dcs-endpoints specified, trying to use localhost with standard ports!")
+		switch viper.GetString("dcs-type") {
+		case "consul":
+			viper.Set("dcs-endpoints", []string{"http://127.0.0.1:8500"})
+		case "etcd", "etcd3":
+			viper.Set("dcs-endpoints", []string{"http://127.0.0.1:2379"})
+		case "patroni":
+			viper.Set("dcs-endpoints", []string{"http://127.0.0.1:8008/"})
+		}
+	}
+
+	// set trigger-key to '/leader' if DCS type is patroni and nothing is specified
+	if viper.GetString("trigger-key") == "" && viper.GetString("dcs-type") == "patroni" {
+		viper.Set("trigger-key", "/leader")
+	}
+
+	// set trigger-value to default value if nothing is specified
+	if triggerValue := viper.GetString("trigger-value"); triggerValue == "" {
+		var err error
+		if viper.GetString("dcs-type") == "patroni" {
+			triggerValue = "200"
+		} else {
+			triggerValue, err = os.Hostname()
+		}
+		if err != nil {
+			fmt.Printf("No trigger-value specified, hostname could not be retrieved: %s", err)
+		} else {
+			fmt.Printf("No trigger-value specified, instead using: %v", triggerValue)
+			viper.Set("trigger-value", triggerValue)
+		}
+	}
 }
 
 func checkSetting(name string) bool {
@@ -192,7 +226,7 @@ func checkMandatory() error {
 	if !success {
 		return errors.New("one or more mandatory settings were not set")
 	}
-	return nil
+	return checkImpliedMandatory()
 }
 
 // if reason is set, but implied is not set, return false.
@@ -245,6 +279,17 @@ func printSettings() {
 	}
 }
 
+func loadConfigFile() error {
+	if viper.IsSet("config") {
+		viper.SetConfigFile(viper.GetString("config"))
+		if err := viper.ReadInConfig(); err != nil {
+			return err
+		}
+		fmt.Printf("Using config from file: %s\n", viper.ConfigFileUsed())
+	}
+	return mapDeprecated()
+}
+
 // NewConfig returns a new Config instance
 func NewConfig() (*Config, error) {
 	var err error
@@ -272,72 +317,16 @@ func NewConfig() (*Config, error) {
 	// - default
 
 	// if a configfile has been passed, make viper read it
-	if viper.IsSet("config") {
-		viper.SetConfigFile(viper.GetString("config"))
-
-		err := viper.ReadInConfig() // Find and read the config file
-		if err != nil {             // Handle errors reading the config file
-			return nil, fmt.Errorf("Fatal error reading config file: %w", err)
-		}
-		fmt.Printf("Using config from file: %s\n", viper.ConfigFileUsed())
+	if err = loadConfigFile(); err != nil {
+		return nil, fmt.Errorf("Fatal error reading config file: %w", err)
 	}
-
-	if err = mapDeprecated(); err != nil {
-		return nil, err
-	}
-
-	setDefaults()
 
 	// convert string of csv to String Slice
-	if viper.IsSet("dcs-endpoints") {
-		endpointsString := viper.GetString("dcs-endpoints")
-		if strings.Contains(endpointsString, ",") {
-			viper.Set("dcs-endpoints", strings.Split(endpointsString, ","))
-		}
+	if endpointsString := viper.GetString("dcs-endpoints"); endpointsString != "" && strings.Contains(endpointsString, ",") {
+		viper.Set("dcs-endpoints", strings.Split(endpointsString, ","))
 	}
-
-	// apply defaults for endpoints
-	if !viper.IsSet("dcs-endpoints") {
-		fmt.Println("No dcs-endpoints specified, trying to use localhost with standard ports!")
-
-		switch viper.GetString("dcs-type") {
-		case "consul":
-			viper.Set("dcs-endpoints", []string{"http://127.0.0.1:8500"})
-		case "etcd", "etcd3":
-			viper.Set("dcs-endpoints", []string{"http://127.0.0.1:2379"})
-		case "patroni":
-			viper.Set("dcs-endpoints", []string{"http://127.0.0.1:8008/"})
-		}
-	}
-
-	// set trigger-key to '/leader' if DCS type is patroni and nothing is specified
-	if triggerKey := viper.GetString("trigger-key"); len(triggerKey) == 0 {
-		if viper.GetString("dcs-type") == "patroni" {
-			triggerKey = "/leader"
-			viper.Set("trigger-key", triggerKey)
-		}
-	}
-
-	// set trigger-value to default value if nothing is specified
-	if triggerValue := viper.GetString("trigger-value"); len(triggerValue) == 0 {
-		if viper.GetString("dcs-type") == "patroni" {
-			triggerValue = "200"
-		} else {
-			triggerValue, err = os.Hostname()
-		}
-		if err != nil {
-			fmt.Printf("No trigger-value specified, hostname could not be retrieved: %s", err)
-		} else {
-			fmt.Printf("No trigger-value specified, instead using: %v", triggerValue)
-			viper.Set("trigger-value", triggerValue)
-		}
-	}
-
+	setDefaults()
 	if err = checkMandatory(); err != nil {
-		return nil, err
-	}
-
-	if err = checkImpliedMandatory(); err != nil {
 		return nil, err
 	}
 
@@ -347,7 +336,6 @@ func NewConfig() (*Config, error) {
 	}
 
 	conf.initLogger()
-
 	printSettings()
 
 	return conf, nil
