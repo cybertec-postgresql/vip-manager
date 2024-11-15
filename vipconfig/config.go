@@ -310,6 +310,14 @@ func NewConfig() (*Config, error) {
 		}
 	}
 
+	// set trigger-key to '/leader' if DCS type is patroni and nothing is specified
+	if triggerKey := viper.GetString("trigger-key"); len(triggerKey) == 0 {
+		if viper.GetString("dcs-type") == "patroni" {
+			triggerKey = "/leader"
+			viper.Set("trigger-key", triggerKey)
+		}
+	}
+
 	// set trigger-value to default value if nothing is specified
 	if triggerValue := viper.GetString("trigger-value"); len(triggerValue) == 0 {
 		if viper.GetString("dcs-type") == "patroni" {
