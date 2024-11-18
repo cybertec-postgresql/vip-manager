@@ -72,6 +72,9 @@ func defineFlags() {
 	pflag.String("interval", "1000", "DCS scan interval in milliseconds.")
 	pflag.String("manager-type", "basic", "Type of VIP-management to be used. Supported values: basic, hetzner.")
 
+	pflag.String("retry-after", "250", "Time to wait before retrying interactions with outside components in milliseconds.")
+	pflag.String("retry-num", "3", "Number of times interactions with outside components are retried.")
+
 	pflag.Bool("verbose", false, "Be verbose. Currently only implemented for manager-type=hetzner .")
 
 	pflag.CommandLine.SortFlags = false
@@ -199,6 +202,11 @@ func setDefaults() {
 			fmt.Printf("No trigger-value specified, instead using: %v", triggerValue)
 			viper.Set("trigger-value", triggerValue)
 		}
+	}
+
+	// set retry-num to default if not set or set to zero
+	if retryNum := viper.GetString("retry-num"); retryNum == "" || retryNum == "0" {
+		viper.Set("retry-num", 3)
 	}
 }
 
