@@ -69,8 +69,11 @@ func defineFlags() {
 
 	pflag.String("consul-token", "", "Token for consul DCS endpoints.")
 
-	pflag.String("interval", "1000", "DCS scan interval in milliseconds.")
+	pflag.Int("interval", 1000, "DCS scan interval in milliseconds.")
 	pflag.String("manager-type", "basic", "Type of VIP-management to be used. Supported values: basic, hetzner.")
+
+	pflag.Int("retry-after", 250, "Time to wait before retrying interactions with outside components in milliseconds.")
+	pflag.Int("retry-num", 3, "Number of times interactions with outside components are retried.")
 
 	pflag.Bool("verbose", false, "Be verbose. Currently only implemented for manager-type=hetzner .")
 
@@ -153,12 +156,12 @@ func mapDeprecated() error {
 }
 
 func setDefaults() {
-	defaults := map[string]string{
-		"dcs-type":    "etcd",
-		"interval":    "1000",
+	defaults := map[string]any{
 		"hostingtype": "basic",
-		"retry-num":   "3",
-		"retry-after": "250",
+		"dcs-type":    "etcd",
+		"interval":    1000,
+		"retry-after": 250,
+		"retry-num":   3,
 	}
 
 	for k, v := range defaults {
@@ -199,6 +202,11 @@ func setDefaults() {
 			fmt.Printf("No trigger-value specified, instead using: %v", triggerValue)
 			viper.Set("trigger-value", triggerValue)
 		}
+	}
+
+	// set retry-num to default if not set or set to zero
+	if retryNum := viper.GetInt("retry-num"); retryNum <= 0 {
+		viper.Set("retry-num", 3)
 	}
 }
 
