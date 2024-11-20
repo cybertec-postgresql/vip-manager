@@ -151,7 +151,7 @@ func (c *BasicConfigurer) arpSendGratuitous() error {
 		time.Sleep(time.Duration(c.RetryAfter) * time.Millisecond)
 	}
 	if err != nil {
-		log.Error("too many retries", err)
+		log.Error("Too many retries", err)
 		return err
 	}
 

@@ -4,7 +4,7 @@ import (
 	"context"
 	"net"
 	"net/netip"
-	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/cybertec-postgresql/vip-manager/vipconfig"
@@ -25,10 +25,9 @@ var log *zap.SugaredLogger = zap.L().Sugar()
 type IPManager struct {
 	configurer ipConfigurer
 
-	states       <-chan bool
-	currentState bool
-	stateLock    sync.Mutex
-	recheck      *sync.Cond
+	states        <-chan bool
+	shouldSetIPUp atomic.Bool
+	recheckChan   chan struct{}
 }
 
 func getMask(vip netip.Addr, mask int) net.IPMask {
@@ -69,7 +68,7 @@ func NewIPManager(conf *vipconfig.Config, states <-chan bool) (m *IPManager, err
 		states: states,
 	}
 	log = conf.Logger.Sugar()
-	m.recheck = sync.NewCond(&m.stateLock)
+	m.recheckChan = make(chan struct{})
 	switch conf.HostingType {
 	case "hetzner":
 		m.configurer, err = newHetznerConfigurer(ipConf, conf.Verbose)
@@ -86,71 +85,45 @@ func NewIPManager(conf *vipconfig.Config, states <-chan bool) (m *IPManager, err
 
 func (m *IPManager) applyLoop(ctx context.Context) {
 	strUpDown := map[bool]string{true: "up", false: "down"}
-	timeout := 0
 	for {
-		// Check if we should exit
+		isIPUp := m.configurer.queryAddress()
+		shouldSetIPUp := m.shouldSetIPUp.Load()
+		log.Infof("IP address %s is %s, must be %s",
+			m.configurer.getCIDR(),
+			strUpDown[isIPUp],
+			strUpDown[shouldSetIPUp])
+		if isIPUp != shouldSetIPUp {
+			var isOk bool
+			if shouldSetIPUp {
+				isOk = m.configurer.configureAddress()
+			} else {
+				isOk = m.configurer.deconfigureAddress()
+			}
+			if !isOk {
+				log.Error("Failed to configure virtual ip for this machine")
+			}
+		}
 		select {
 		case <-ctx.Done():
-			m.configurer.deconfigureAddress()
 			return
-		case <-time.After(time.Duration(timeout) * time.Second):
-			actualState := m.configurer.queryAddress()
-			m.stateLock.Lock()
-			desiredState := m.currentState
-			log.Infof("IP address %s state is %s, must be %s",
-				m.configurer.getCIDR(),
-				strUpDown[actualState],
-				strUpDown[desiredState])
-			if actualState != desiredState {
-				m.stateLock.Unlock()
-				var configureState bool
-				if desiredState {
-					configureState = m.configurer.configureAddress()
-				} else {
-					configureState = m.configurer.deconfigureAddress()
-				}
-				if !configureState {
-					log.Error("Error while acquiring virtual ip for this machine")
-					//Sleep a little bit to avoid busy waiting due to the for loop.
-					timeout = 10
-				} else {
-					timeout = 0
-				}
-			} else {
-				// Wait for notification
-				m.recheck.Wait()
-				// Want to query actual state anyway, so unlock
-				m.stateLock.Unlock()
-			}
+		case <-m.recheckChan: // signal to recheck
+		case <-time.After(time.Duration(10) * time.Second): // recheck every 10 seconds
 		}
 	}
 }
 
 // SyncStates implements states synchronization
 func (m *IPManager) SyncStates(ctx context.Context, states <-chan bool) {
-	ticker := time.NewTicker(10 * time.Second)
-
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		m.applyLoop(ctx)
-		wg.Done()
-	}()
-
+	go m.applyLoop(ctx)
 	for {
 		select {
 		case newState := <-states:
-			m.stateLock.Lock()
-			if m.currentState != newState {
-				m.currentState = newState
-				m.recheck.Broadcast()
+			if m.shouldSetIPUp.Load() != newState {
+				m.shouldSetIPUp.Store(newState)
+				m.recheckChan <- struct{}{}
 			}
-			m.stateLock.Unlock()
-		case <-ticker.C:
-			m.recheck.Broadcast()
 		case <-ctx.Done():
-			m.recheck.Broadcast()
-			wg.Wait()
+			m.configurer.deconfigureAddress()
 			m.configurer.cleanupArp()
 			return
 		}

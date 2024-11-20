@@ -74,20 +74,20 @@ func getTransport(conf *vipconfig.Config) (*tls.Config, error) {
 func (elc *EtcdLeaderChecker) get(ctx context.Context, out chan<- bool) {
 	resp, err := elc.Get(ctx, elc.TriggerKey)
 	if err != nil {
-		elc.Logger.Error("etcd error:", zap.Error(err))
+		elc.Logger.Error("Failed to get etcd value:", zap.Error(err))
 		out <- false
 		return
 	}
 	for _, kv := range resp.Kvs {
-		elc.Logger.Sugar().Info("current leader from DCS:", string(kv.Value))
+		elc.Logger.Sugar().Info("Current leader from DCS:", string(kv.Value))
 		out <- string(kv.Value) == elc.TriggerValue
 	}
 }
 
 // watch monitors the leader change from etcd
 func (elc *EtcdLeaderChecker) watch(ctx context.Context, out chan<- bool) error {
+	elc.Logger.Sugar().Info("Setting WATCH on ", elc.TriggerKey)
 	watchChan := elc.Watch(ctx, elc.TriggerKey)
-	elc.Logger.Sugar().Info("set WATCH on ", elc.TriggerKey)
 	for {
 		select {
 		case <-ctx.Done():
@@ -95,7 +95,7 @@ func (elc *EtcdLeaderChecker) watch(ctx context.Context, out chan<- bool) error 
 		case watchResp := <-watchChan:
 			if watchResp.Canceled {
 				watchChan = elc.Watch(ctx, elc.TriggerKey)
-				elc.Logger.Sugar().Info("reset cancelled WATCH on ", elc.TriggerKey)
+				elc.Logger.Sugar().Info("Resetting cancelled WATCH on ", elc.TriggerKey)
 				continue
 			}
 			if err := watchResp.Err(); err != nil {
@@ -104,7 +104,7 @@ func (elc *EtcdLeaderChecker) watch(ctx context.Context, out chan<- bool) error 
 			}
 			for _, event := range watchResp.Events {
 				out <- string(event.Kv.Value) == elc.TriggerValue
-				elc.Logger.Sugar().Info("current leader from DCS:", string(event.Kv.Value))
+				elc.Logger.Sugar().Info("Current leader from DCS: ", string(event.Kv.Value))
 			}
 		}
 	}
