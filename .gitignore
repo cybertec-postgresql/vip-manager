@@ -1,8 +1,5 @@
-/vip-manager
 *.deb
 *.rpm
 *.exe
 tmp/
 .vscode/
-dist/
-package/changelog.yml
