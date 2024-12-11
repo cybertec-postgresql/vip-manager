@@ -34,6 +34,7 @@ func (c *PatroniLeaderChecker) GetChangeNotificationStream(ctx context.Context, 
 				c.Logger.Sugar().Error("patroni REST API error:", err)
 				continue
 			}
+			r.Body.Close() //throw away the body
 			out <- strconv.Itoa(r.StatusCode) == c.TriggerValue
 		}
 	}
