@@ -5,7 +5,9 @@ import (
 	"net"
 	"strings"
 
-	arp "github.com/mdlayher/arp"
+	"github.com/google/gopacket"
+	"github.com/google/gopacket/layers"
+	"github.com/google/gopacket/pcap"
 )
 
 // BasicConfigurer can be used to enable vip-management on nodes
@@ -16,7 +18,6 @@ import (
 // nearby routers and other devices.
 type BasicConfigurer struct {
 	*IPConfiguration
-	arpClient  *arp.Client
 	ntecontext uint32 //used by Windows to delete IP address
 }
 
@@ -48,8 +49,51 @@ func (c *BasicConfigurer) queryAddress() bool {
 	return false
 }
 
-func (c *BasicConfigurer) cleanupArp() {
-	if c.arpClient != nil {
-		c.arpClient.Close()
+const (
+	MACAddressSize  = 6
+	IPv4AddressSize = 4
+)
+
+// arpSendGratuitous is a function that sends gratuitous ARP requests
+func (c *BasicConfigurer) arpSendGratuitous() error {
+	// Open the network interface for sending
+	handle, err := pcap.OpenLive(c.Iface.Name, 65536, false, pcap.BlockForever)
+	if err != nil {
+		return err
 	}
+	defer handle.Close()
+
+	// Create the Ethernet layer
+	ethLayer := &layers.Ethernet{
+		SrcMAC:       c.Iface.HardwareAddr,
+		DstMAC:       net.HardwareAddr{0xff, 0xff, 0xff, 0xff, 0xff, 0xff}, // Broadcast
+		EthernetType: layers.EthernetTypeARP,
+	}
+
+	// Create the ARP layer
+	arpLayer := &layers.ARP{
+		AddrType:          layers.LinkTypeEthernet,
+		Protocol:          layers.EthernetTypeIPv4,
+		HwAddressSize:     MACAddressSize,
+		ProtAddressSize:   IPv4AddressSize,
+		Operation:         layers.ARPReply, // Gratuitous ARP is sent as a reply
+		SourceHwAddress:   c.Iface.HardwareAddr,
+		SourceProtAddress: c.IPConfiguration.VIP.AsSlice(),
+		DstHwAddress:      c.Iface.HardwareAddr, // Gratuitous ARP targets itself
+		DstProtAddress:    c.IPConfiguration.VIP.AsSlice(),
+	}
+
+	// Create a packet with the layers
+	buffer := gopacket.NewSerializeBuffer()
+	opts := gopacket.SerializeOptions{
+		FixLengths:       true,
+		ComputeChecksums: true,
+	}
+	err = gopacket.SerializeLayers(buffer, opts, ethLayer, arpLayer)
+	if err != nil {
+		return err
+	}
+
+	// Send the packet
+	return handle.WritePacketData(buffer.Bytes())
 }

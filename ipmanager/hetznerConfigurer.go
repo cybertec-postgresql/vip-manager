@@ -275,8 +275,3 @@ func (c *HetznerConfigurer) runAddressConfiguration() bool {
 	c.cachedState = unknown
 	return false
 }
-
-func (c *HetznerConfigurer) cleanupArp() {
-	// dummy function as the usage of interfaces requires us to have this function.
-	// It is sufficient for the leader to tell Hetzner to switch the IP, no cleanup needed.
-}

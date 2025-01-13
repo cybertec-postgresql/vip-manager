@@ -25,10 +25,10 @@ func (c *BasicConfigurer) configureAddress() bool {
 		log.Error("Failed to add address: ", err)
 		return false
 	}
-	// For now it is save to say that also working even if a
-	// gratuitous arp message could not be send but logging an
-	// errror should be enough.
-	//_ = c.ARPSendGratuitous()
+
+	if err := c.arpSendGratuitous(); err != nil {
+		log.Error("Failed to send gratuitous ARP: ", err)
+	}
 	return true
 }
 

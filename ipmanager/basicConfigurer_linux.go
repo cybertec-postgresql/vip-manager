@@ -1,11 +1,7 @@
 package ipmanager
 
 import (
-	"net"
 	"os/exec"
-	"time"
-
-	arp "github.com/mdlayher/arp"
 )
 
 const (
@@ -13,27 +9,14 @@ const (
 	arpReplyOp   = 2
 )
 
-var (
-	ethernetBroadcast = net.HardwareAddr{0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
-)
-
 // configureAddress assigns virtual IP address
 func (c *BasicConfigurer) configureAddress() bool {
-	if c.arpClient == nil {
-		if err := c.createArpClient(); err != nil {
-			log.Error("Couldn't create an Arp client:", err)
-		}
-	}
-
 	log.Infof("Configuring address %s on %s", c.getCIDR(), c.Iface.Name)
-
 	result := c.runAddressConfiguration("add")
-
 	if result {
-		// For now it is save to say that also working even if a
-		// gratuitous arp message could not be send but logging an
-		// errror should be enough.
-		_ = c.arpSendGratuitous()
+		if err := c.arpSendGratuitous(); err != nil {
+			log.Error("Failed to send gratuitous ARP: ", err)
+		}
 	}
 
 	return result
@@ -63,97 +46,4 @@ func (c *BasicConfigurer) runAddressConfiguration(action string) bool {
 		return false
 	}
 	return true
-}
-
-func (c *BasicConfigurer) createArpClient() (err error) {
-	for i := 0; i < c.RetryNum; i++ {
-		if c.arpClient, err = arp.Dial(&c.Iface); err == nil {
-			return
-		}
-		log.Infof("Problems with producing the arp client: %s", err)
-		time.Sleep(time.Duration(c.RetryAfter) * time.Millisecond)
-	}
-	return
-}
-
-// sends a gratuitous ARP request and reply
-func (c *BasicConfigurer) arpSendGratuitous() error {
-	/* While RFC 2002 does not say whether a gratuitous ARP request or reply is preferred
-	 * to update ones neighbours' MAC tables, the Wireshark Wiki recommends sending both.
-	 *		https://wiki.wireshark.org/Gratuitous_ARP
-	 * This site also recommends sending a reply, as requests might be ignored by some hardware:
-	 *		https://support.citrix.com/article/CTX112701
-	 */
-	if c.arpClient == nil {
-		log.Info("No arp client available, skip send gratuitous ARP")
-		return nil
-	}
-	gratuitousReplyPackage, err := arp.NewPacket(
-		arpReplyOp,
-		c.Iface.HardwareAddr,
-		c.VIP,
-		c.Iface.HardwareAddr,
-		c.VIP,
-	)
-	if err != nil {
-		log.Infof("Gratuitous arp reply package is malformed: %s", err)
-		return err
-	}
-
-	/* RFC 2002 specifies (in section 4.6) that a gratuitous ARP request
-	 * should "not set" the target Hardware Address (THA).
-	 * Since the arp package offers no option to leave the THA out, we specify the Zero-MAC.
-	 * If parsing that fails for some reason, we'll just use the local interface's address.
-	 * The field is probably ignored by the receivers' implementation anyway.
-	 */
-	arpRequestDestMac, err := net.ParseMAC("00:00:00:00:00:00")
-	if err != nil {
-		// not entirely RFC-2002 conform but better then nothing.
-		arpRequestDestMac = c.Iface.HardwareAddr
-	}
-
-	gratuitousRequestPackage, err := arp.NewPacket(
-		arpRequestOp,
-		c.Iface.HardwareAddr,
-		c.VIP,
-		arpRequestDestMac,
-		c.VIP,
-	)
-	if err != nil {
-		log.Infof("Gratuitous arp request package is malformed: %s", err)
-		return err
-	}
-
-	for i := 0; i < c.RetryNum; i++ {
-		errReply := c.arpClient.WriteTo(gratuitousReplyPackage, ethernetBroadcast)
-		if err != nil {
-			log.Error("Couldn't write to the arpClient:", errReply)
-		} else {
-			log.Info("Sent gratuitous ARP reply")
-		}
-
-		errRequest := c.arpClient.WriteTo(gratuitousRequestPackage, ethernetBroadcast)
-		if err != nil {
-			log.Error("Couldn't write to the arpClient:", errRequest)
-		} else {
-			log.Info("Sent gratuitous ARP request")
-		}
-
-		if errReply != nil || errRequest != nil {
-			/* If something went wrong while sending the packages, we'll recreate the ARP client for the next try,
-			 * to avoid having a stale client that gives "network is down" error.
-			 */
-			err = c.createArpClient()
-		} else {
-			//TODO: think about whether to leave this out to achieve simple repeat sending of GARP packages
-			break
-		}
-		time.Sleep(time.Duration(c.RetryAfter) * time.Millisecond)
-	}
-	if err != nil {
-		log.Error("Too many retries", err)
-		return err
-	}
-
-	return nil
 }
