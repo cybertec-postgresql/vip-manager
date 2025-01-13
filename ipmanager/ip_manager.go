@@ -16,7 +16,6 @@ type ipConfigurer interface {
 	configureAddress() bool
 	deconfigureAddress() bool
 	getCIDR() string
-	cleanupArp()
 }
 
 var log *zap.SugaredLogger = zap.L().Sugar()
@@ -124,7 +123,6 @@ func (m *IPManager) SyncStates(ctx context.Context, states <-chan bool) {
 			}
 		case <-ctx.Done():
 			m.configurer.deconfigureAddress()
-			m.configurer.cleanupArp()
 			return
 		}
 	}
