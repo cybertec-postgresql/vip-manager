@@ -6,11 +6,6 @@ import (
 	"syscall"
 )
 
-const (
-	arpRequestOp = 1
-	arpReplyOp   = 2
-)
-
 func htons(i uint16) uint16 {
 	return (i<<8)&0xff00 | i>>8
 }
