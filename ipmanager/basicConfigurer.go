@@ -7,7 +7,6 @@ import (
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
-	"github.com/google/gopacket/pcap"
 )
 
 // BasicConfigurer can be used to enable vip-management on nodes
@@ -55,14 +54,7 @@ const (
 )
 
 // arpSendGratuitous is a function that sends gratuitous ARP requests
-func (c *BasicConfigurer) arpSendGratuitous() error {
-	// Open the network interface for sending
-	handle, err := pcap.OpenLive(c.Iface.Name, 65536, false, pcap.BlockForever)
-	if err != nil {
-		return err
-	}
-	defer handle.Close()
-
+func (c *BasicConfigurer) createGratuitousARP() ([]byte, error) {
 	// Create the Ethernet layer
 	ethLayer := &layers.Ethernet{
 		SrcMAC:       c.Iface.HardwareAddr,
@@ -89,11 +81,10 @@ func (c *BasicConfigurer) arpSendGratuitous() error {
 		FixLengths:       true,
 		ComputeChecksums: true,
 	}
-	err = gopacket.SerializeLayers(buffer, opts, ethLayer, arpLayer)
-	if err != nil {
-		return err
+
+	if err := gopacket.SerializeLayers(buffer, opts, ethLayer, arpLayer); err != nil {
+		return nil, err
 	}
 
-	// Send the packet
-	return handle.WritePacketData(buffer.Bytes())
+	return buffer.Bytes(), nil
 }
