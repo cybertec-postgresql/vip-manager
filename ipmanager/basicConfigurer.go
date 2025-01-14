@@ -53,7 +53,7 @@ const (
 	IPv4AddressSize = 4
 )
 
-// arpSendGratuitous is a function that sends gratuitous ARP requests
+// createGratuitousARP prepares a packet with a gratuitous ARP request
 func (c *BasicConfigurer) createGratuitousARP() ([]byte, error) {
 	// Create the Ethernet layer
 	ethLayer := &layers.Ethernet{
