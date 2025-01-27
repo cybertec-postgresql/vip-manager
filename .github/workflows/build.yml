@@ -18,7 +18,17 @@ jobs:
     - name: Set up Golang
       uses: actions/setup-go@v5
       with:
-        go-version: '1.23'      
+        go-version: '1.23' 
+
+    - name: Install etcd
+      if: runner.os == 'Linux'
+      run: |
+        curl -L https://github.com/etcd-io/etcd/releases/download/v3.5.18/etcd-v3.5.18-linux-amd64.tar.gz -o etcd-v3.5.18-linux-amd64.tar.gz
+        tar xzvf etcd-v3.5.18-linux-amd64.tar.gz
+        sudo mv etcd-v3.5.18-linux-amd64/etcd /usr/local/bin/
+        sudo mv etcd-v3.5.18-linux-amd64/etcdctl /usr/local/bin/
+        etcd --version
+        sudo apt install -y ncat    
     
     - name: Get dependencies
       run: |
@@ -33,12 +43,6 @@ jobs:
       with:
         version: latest
         args: --verbose
-
-    - uses: awalsh128/cache-apt-pkgs-action@latest
-      if: runner.os == 'Linux'
-      with:
-        packages: etcd ncat
-        version: 1.0
 
     - name: Test E2E
       if: runner.os == 'Linux'
