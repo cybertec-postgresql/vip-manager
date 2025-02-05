@@ -9,7 +9,7 @@ require (
 	github.com/spf13/viper v1.19.0
 	go.etcd.io/etcd/client/v3 v3.5.18
 	go.uber.org/zap v1.27.0
-	golang.org/x/sys v0.29.0
+	golang.org/x/sys v0.30.0
 )
 
 require (
