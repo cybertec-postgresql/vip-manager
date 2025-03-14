@@ -15,11 +15,31 @@ import (
 // --trigger-value is used to specify the HTTP code to expect, e.g. 200.
 type PatroniLeaderChecker struct {
 	*vipconfig.Config
+	*http.Client
 }
 
 // NewPatroniLeaderChecker returns a new instance
 func NewPatroniLeaderChecker(conf *vipconfig.Config) (*PatroniLeaderChecker, error) {
-	return &PatroniLeaderChecker{conf}, nil
+
+	tlsConfig, err := getTransport(conf)
+	if err != nil {
+		return nil, err
+	}
+
+	transport := &http.Transport{}
+        if tlsConfig != nil {
+		transport.TLSClientConfig = tlsConfig
+	}
+
+	client := &http.Client{
+		Transport: transport,
+		Timeout:   time.Second,
+	}
+
+	return &PatroniLeaderChecker{
+		Config: conf,
+		Client: client,
+	}, nil
 }
 
 // GetChangeNotificationStream checks the status in the loop
@@ -29,7 +49,7 @@ func (c *PatroniLeaderChecker) GetChangeNotificationStream(ctx context.Context, 
 		case <-ctx.Done():
 			return nil
 		case <-time.After(time.Duration(c.Interval) * time.Millisecond):
-			r, err := http.Get(c.Endpoints[0] + c.TriggerKey)
+			r, err := c.Client.Get(c.Endpoints[0] + c.TriggerKey)
 			if err != nil {
 				c.Logger.Sugar().Error("patroni REST API error:", err)
 				continue
