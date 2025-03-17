@@ -20,15 +20,13 @@ type PatroniLeaderChecker struct {
 
 // NewPatroniLeaderChecker returns a new instance
 func NewPatroniLeaderChecker(conf *vipconfig.Config) (*PatroniLeaderChecker, error) {
-
 	tlsConfig, err := getTransport(conf)
 	if err != nil {
 		return nil, err
 	}
 
-	transport := &http.Transport{}
-        if tlsConfig != nil {
-		transport.TLSClientConfig = tlsConfig
+	transport := &http.Transport{
+		TLSClientConfig: tlsConfig,
 	}
 
 	client := &http.Client{
