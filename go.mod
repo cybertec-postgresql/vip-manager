@@ -6,7 +6,7 @@ toolchain go1.24.1
 
 require (
 	github.com/google/gopacket v1.1.19
-	github.com/hashicorp/consul/api v1.31.2
+	github.com/hashicorp/consul/api v1.32.0
 	github.com/spf13/pflag v1.0.6
 	github.com/spf13/viper v1.20.1
 	go.etcd.io/etcd/client/v3 v3.5.21
