@@ -11,7 +11,7 @@ require (
 	github.com/spf13/viper v1.20.1
 	go.etcd.io/etcd/client/v3 v3.5.21
 	go.uber.org/zap v1.27.0
-	golang.org/x/sys v0.31.0
+	golang.org/x/sys v0.32.0
 )
 
 require (
