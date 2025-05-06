@@ -1,12 +1,11 @@
 module github.com/cybertec-postgresql/vip-manager
 
 go 1.23.0
-
 toolchain go1.24.1
 
 require (
 	github.com/google/gopacket v1.1.19
-	github.com/hashicorp/consul/api v1.32.0
+	github.com/hashicorp/consul/api v1.32.1
 	github.com/spf13/pflag v1.0.6
 	github.com/spf13/viper v1.20.1
 	go.etcd.io/etcd/client/v3 v3.5.21
@@ -45,7 +44,7 @@ require (
 	go.etcd.io/etcd/api/v3 v3.5.21 // indirect
 	go.etcd.io/etcd/client/pkg/v3 v3.5.21 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	golang.org/x/exp v0.0.0-20250106191152-7588d65b2ba8 // indirect
+	golang.org/x/exp v0.0.0-20250305212735-054e65f0b394 // indirect
 	golang.org/x/net v0.38.0 // indirect
 	golang.org/x/text v0.23.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20241209162323-e6fa225c2576 // indirect
