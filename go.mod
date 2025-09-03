@@ -7,7 +7,7 @@ toolchain go1.24.1
 require (
 	github.com/google/gopacket v1.1.19
 	github.com/hashicorp/consul/api v1.32.1
-	github.com/spf13/pflag v1.0.8
+	github.com/spf13/pflag v1.0.10
 	github.com/spf13/viper v1.20.1
 	go.etcd.io/etcd/client/v3 v3.6.4
 	go.uber.org/zap v1.27.0
