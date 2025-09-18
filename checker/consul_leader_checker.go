@@ -42,7 +42,7 @@ func NewConsulLeaderChecker(con *vipconfig.Config) (lc *ConsulLeaderChecker, err
 
 // GetChangeNotificationStream checks the status in the loop
 func (c *ConsulLeaderChecker) GetChangeNotificationStream(ctx context.Context, out chan<- bool) error {
-	kv := c.Client.KV()
+	kv := c.KV()
 
 	queryOptions := &api.QueryOptions{
 		RequireConsistent: true,

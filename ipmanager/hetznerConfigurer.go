@@ -84,7 +84,7 @@ func (c *HetznerConfigurer) curlQueryFailover(post bool) (string, error) {
 	}
 	if user == "" || password == "" {
 		log.Infoln("Couldn't retrieve username or password from file", credentialsFile)
-		return "", errors.New("Couldn't retrieve username or password from file")
+		return "", errors.New("couldn't retrieve username or password from file")
 	}
 
 	/**
@@ -101,33 +101,33 @@ func (c *HetznerConfigurer) curlQueryFailover(post bool) (string, error) {
 		myOwnIP := getOutboundIP()
 		if myOwnIP == nil {
 			log.Error("Error determining this machine's IP address.")
-			return "", errors.New("Error determining this machine's IP address")
+			return "", errors.New("error determining this machine's IP address")
 		}
 		log.Infof("my_own_ip: %s\n", myOwnIP.String())
 
 		cmd = exec.Command("curl",
 			"--ipv4",
 			"-u", user+":"+password,
-			"https://robot-ws.your-server.de/failover/"+c.IPConfiguration.VIP.String(),
+			"https://robot-ws.your-server.de/failover/"+c.VIP.String(),
 			"-d", "active_server_ip="+myOwnIP.String())
 
 		log.Debugf("%s %s %s '%s' %s %s %s",
 			"curl",
 			"--ipv4",
 			"-u", user+":XXXXXX",
-			"https://robot-ws.your-server.de/failover/"+c.IPConfiguration.VIP.String(),
+			"https://robot-ws.your-server.de/failover/"+c.VIP.String(),
 			"-d", "active_server_ip="+myOwnIP.String())
 	} else {
 		cmd = exec.Command("curl",
 			"--ipv4",
 			"-u", user+":"+password,
-			"https://robot-ws.your-server.de/failover/"+c.IPConfiguration.VIP.String())
+			"https://robot-ws.your-server.de/failover/"+c.VIP.String())
 
 		log.Debugf("%s %s %s %s %s",
 			"curl",
 			"--ipv4",
 			"-u", user+":XXXXXX",
-			"https://robot-ws.your-server.de/failover/"+c.IPConfiguration.VIP.String())
+			"https://robot-ws.your-server.de/failover/"+c.VIP.String())
 	}
 
 	out, err := cmd.Output()
@@ -164,7 +164,7 @@ func (c *HetznerConfigurer) getActiveIPFromJSON(str string) (net.IP, error) {
 			errormap["status"].(float64),
 			errormap["code"].(string),
 			errormap["message"].(string))
-		return nil, errors.New("Hetzner API returned error response")
+		return nil, errors.New("error response from Hetzner API returned")
 	}
 
 	if f["failover"] != nil {
@@ -202,9 +202,10 @@ func (c *HetznerConfigurer) queryAddress() bool {
 		/** no need to check, we can use "cached" state if set.
 		 * if it is set to UNKNOWN, a check will be done.
 		 */
-		if c.cachedState == configured {
+		switch c.cachedState {
+		case configured:
 			return true
-		} else if c.cachedState == released {
+		case released:
 			return false
 		}
 	}
