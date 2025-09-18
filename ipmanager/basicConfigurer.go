@@ -23,7 +23,7 @@ type BasicConfigurer struct {
 func newBasicConfigurer(config *IPConfiguration) (*BasicConfigurer, error) {
 	c := &BasicConfigurer{IPConfiguration: config, ntecontext: 0}
 	if c.Iface.HardwareAddr == nil || c.Iface.HardwareAddr.String() == "00:00:00:00:00:00" {
-		return nil, errors.New(`Cannot run vip-manager on the loopback device
+		return nil, errors.New(`cannot run vip-manager on the loopback device
 as its hardware address is the local address (00:00:00:00:00:00),
 which prohibits sending of gratuitous ARP messages`)
 	}
@@ -70,9 +70,9 @@ func (c *BasicConfigurer) createGratuitousARP() ([]byte, error) {
 		ProtAddressSize:   IPv4AddressSize,
 		Operation:         layers.ARPReply, // Gratuitous ARP is sent as a reply
 		SourceHwAddress:   c.Iface.HardwareAddr,
-		SourceProtAddress: c.IPConfiguration.VIP.AsSlice(),
+		SourceProtAddress: c.VIP.AsSlice(),
 		DstHwAddress:      c.Iface.HardwareAddr, // Gratuitous ARP targets itself
-		DstProtAddress:    c.IPConfiguration.VIP.AsSlice(),
+		DstProtAddress:    c.VIP.AsSlice(),
 	}
 
 	// Create a packet with the layers

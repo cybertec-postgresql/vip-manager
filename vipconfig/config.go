@@ -326,7 +326,7 @@ func NewConfig() (*Config, error) {
 
 	// if a configfile has been passed, make viper read it
 	if err = loadConfigFile(); err != nil {
-		return nil, fmt.Errorf("Fatal error reading config file: %w", err)
+		return nil, fmt.Errorf("fatal error reading config file: %w", err)
 	}
 
 	// convert string of csv to String Slice
