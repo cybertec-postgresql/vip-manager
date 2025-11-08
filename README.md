@@ -143,9 +143,9 @@ This is a list of all avaiable configuration items:
 | `interval`        | `VIP_INTERVAL`        | no        | `1000`                      | The time vip-manager main loop sleeps before checking for changes. Measured in ms. Defaults to `1000`. Doesn't affect etcd checker since v2.3.0. |
 | `retry-after`     | `VIP_RETRY_AFTER`     | no        | `250`                       | The time to wait before retrying interactions with components outside of vip-manager. Measured in ms. Defaults to `250`. |
 | `retry-num`       | `VIP_RETRY_NUM`       | no        | `3`                         | The number of times interactions with components outside of vip-manager are retried. Defaults to `3`. |
-| `etcd-ca-le`      | `VIP_ETCD_CA_FILE`    | no        | `/etc/etcd/ca.cert.pem`     | A certificate authority file that can be used to verify the certificate provided by etcd endpoints. Make sure to change `dcs-endpoints` to reflect that `https` is used. |
-| `etcd-cert-le`    | `VIP_ETCD_CERT_FILE`  | no        | `/etc/etcd/client.cert.pem` | A client certificate that is used to authenticate against etcd endpoints. Requires `etcd-ca-file` to be set as well. |
-| `etcd-key-le`     | `VIP_ETCD_KEY_FILE`   | no        | `/etc/etcd/client.key.pem`  | A private key for the client certificate, used to decrypt messages sent by etcd endpoints. Required when `etcd-cert-file` is specified. |
+| `etcd-ca-file`    | `VIP_ETCD_CA_FILE`    | no        | `/etc/etcd/ca.cert.pem`     | A certificate authority file that can be used to verify the certificate provided by etcd endpoints. Make sure to change `dcs-endpoints` to reflect that `https` is used. |
+| `etcd-cert-file   | `VIP_ETCD_CERT_FILE`  | no        | `/etc/etcd/client.cert.pem` | A client certificate that is used to authenticate against etcd endpoints. Requires `etcd-ca-file` to be set as well. |
+| `etcd-key-file`   | `VIP_ETCD_KEY_FILE`   | no        | `/etc/etcd/client.key.pem`  | A private key for the client certificate, used to decrypt messages sent by etcd endpoints. Required when `etcd-cert-file` is specified. |
 | `verbose`         | `VIP_VERBOSE`         | no        | `true`                      | Enable more verbose logging. Currently only the manager-type=hetzner provides additional logs. |
 
 ## Configuration - Patroni REST API
