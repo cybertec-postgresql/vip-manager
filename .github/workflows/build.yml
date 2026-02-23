@@ -44,6 +44,15 @@ jobs:
         version: latest
         args: --verbose
 
+    - name: Test
+      run: |
+        go test -failfast -v -coverprofile=profile.cov ./...
+
+    - name: Coveralls
+      uses: coverallsapp/github-action@v2
+      with:
+        file: profile.cov 
+
     - name: Test E2E
       if: runner.os == 'Linux'
       run: |
