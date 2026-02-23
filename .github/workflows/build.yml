@@ -46,7 +46,7 @@ jobs:
 
     - name: Test
       run: |
-        go test -failfast -v -coverprofile=profile.cov ./...
+        go test -failfast -v -coverprofile profile.cov ./...
 
     - name: Coveralls
       uses: coverallsapp/github-action@v2
