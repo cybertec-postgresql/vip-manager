@@ -23,7 +23,11 @@ func NewConsulLeaderChecker(con *vipconfig.Config) (lc *ConsulLeaderChecker, err
 
 	url, err := url.Parse(con.Endpoints[0])
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to parse consul endpoint URL %s: %w", con.Endpoints[0], err)
+	}
+
+	if url.Hostname() == "" {
+		return nil, fmt.Errorf("invalid consul endpoint URL: hostname is empty in %s", con.Endpoints[0])
 	}
 
 	config := &api.Config{
@@ -34,7 +38,7 @@ func NewConsulLeaderChecker(con *vipconfig.Config) (lc *ConsulLeaderChecker, err
 	}
 
 	if lc.Client, err = api.NewClient(config); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create consul client for endpoint %s: %w", con.Endpoints[0], err)
 	}
 
 	return lc, nil

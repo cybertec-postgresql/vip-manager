@@ -2,6 +2,7 @@ package ipmanager
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"net/netip"
 	"sync/atomic"
@@ -18,7 +19,7 @@ type ipConfigurer interface {
 	getCIDR() string
 }
 
-var log *zap.SugaredLogger = zap.L().Sugar()
+var log *zap.SugaredLogger
 
 // IPManager implements the main functionality of the VIP manager
 type IPManager struct {
@@ -40,22 +41,28 @@ func getMask(vip netip.Addr, mask int) net.IPMask {
 	return net.CIDRMask(mask, 128) //IPv6
 }
 
-func getNetIface(iface string) *net.Interface {
+func getNetIface(iface string) (*net.Interface, error) {
 	netIface, err := net.InterfaceByName(iface)
 	if err != nil {
-		log.Fatalf("Obtaining the interface raised an error: %s", err)
+		return nil, fmt.Errorf("failed to get interface %s: %w", iface, err)
 	}
-	return netIface
+	if netIface.Flags&net.FlagUp == 0 {
+		return nil, fmt.Errorf("interface %s is not up", iface)
+	}
+	return netIface, nil
 }
 
 // NewIPManager returns a new instance of IPManager
 func NewIPManager(conf *vipconfig.Config, states <-chan bool) (m *IPManager, err error) {
 	vip, err := netip.ParseAddr(conf.IP)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to parse VIP address: %w", err)
 	}
 	vipMask := getMask(vip, conf.Mask)
-	netIface := getNetIface(conf.Iface)
+	netIface, err := getNetIface(conf.Iface)
+	if err != nil {
+		return nil, err
+	}
 	ipConf := &IPConfiguration{
 		VIP:        vip,
 		Netmask:    vipMask,

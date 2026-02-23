@@ -23,7 +23,7 @@ type EtcdLeaderChecker struct {
 func NewEtcdLeaderChecker(conf *vipconfig.Config) (*EtcdLeaderChecker, error) {
 	tlsConfig, err := getTransport(conf)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create TLS transport for etcd: %w", err)
 	}
 	cfg := clientv3.Config{
 		Endpoints:            conf.Endpoints,
@@ -35,7 +35,10 @@ func NewEtcdLeaderChecker(conf *vipconfig.Config) (*EtcdLeaderChecker, error) {
 		Logger:               conf.Logger,
 	}
 	c, err := clientv3.New(cfg)
-	return &EtcdLeaderChecker{conf, c}, err
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to etcd at endpoints %v: %w", conf.Endpoints, err)
+	}
+	return &EtcdLeaderChecker{conf, c}, nil
 }
 
 func getTransport(conf *vipconfig.Config) (*tls.Config, error) {
@@ -74,7 +77,17 @@ func getTransport(conf *vipconfig.Config) (*tls.Config, error) {
 func (elc *EtcdLeaderChecker) get(ctx context.Context, out chan<- bool) {
 	resp, err := elc.Get(ctx, elc.TriggerKey)
 	if err != nil {
-		elc.Logger.Error("Failed to get etcd value:", zap.Error(err))
+		elc.Logger.Error("Failed to get etcd value", zap.String("key", elc.TriggerKey), zap.Error(err))
+		out <- false
+		return
+	}
+	if resp == nil {
+		elc.Logger.Error("Received nil response from etcd", zap.String("key", elc.TriggerKey))
+		out <- false
+		return
+	}
+	if len(resp.Kvs) == 0 {
+		elc.Logger.Sugar().Info("No value found for key ", elc.TriggerKey, " - DCS may not have a leader yet")
 		out <- false
 		return
 	}
@@ -99,6 +112,7 @@ func (elc *EtcdLeaderChecker) watch(ctx context.Context, out chan<- bool) error 
 				continue
 			}
 			if err := watchResp.Err(); err != nil {
+				elc.Logger.Error("Watch error for key "+elc.TriggerKey+":", zap.Error(err))
 				elc.get(ctx, out) // RPC failed, try to get the key directly to be on the safe side
 				continue
 			}
