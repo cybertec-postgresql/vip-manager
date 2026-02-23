@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"os"
 	"os/exec"
@@ -40,17 +41,16 @@ func newHetznerConfigurer(config *IPConfiguration, verbose bool) (*HetznerConfig
  * In order to tell the Hetzner API to route the failover-ip to
  * this machine, we must attach our own IP address to the API request.
  */
-func getOutboundIP() net.IP {
+func getOutboundIP() (net.IP, error) {
 	conn, err := net.Dial("udp", "8.8.8.8:80")
 	if err != nil || conn == nil {
-		log.Error("error dialing 8.8.8.8 to retrieve preferred outbound IP", err)
-		return nil
+		return nil, fmt.Errorf("error dialing 8.8.8.8 to retrieve preferred outbound IP: %w", err)
 	}
 	defer conn.Close()
 
 	localAddr := conn.LocalAddr().(*net.UDPAddr)
 
-	return localAddr.IP
+	return localAddr.IP, nil
 }
 
 func (c *HetznerConfigurer) curlQueryFailover(post bool) (string, error) {
@@ -98,10 +98,10 @@ func (c *HetznerConfigurer) curlQueryFailover(post bool) (string, error) {
 	 */
 	var cmd *exec.Cmd
 	if post {
-		myOwnIP := getOutboundIP()
-		if myOwnIP == nil {
-			log.Error("Error determining this machine's IP address.")
-			return "", errors.New("error determining this machine's IP address")
+		myOwnIP, err := getOutboundIP()
+		if err != nil {
+			log.Error("Error determining this machine's IP address.", err)
+			return "", fmt.Errorf("error determining this machine's IP address: %w", err)
 		}
 		log.Infof("my_own_ip: %s\n", myOwnIP.String())
 
@@ -224,7 +224,14 @@ func (c *HetznerConfigurer) queryAddress() bool {
 		c.cachedState = unknown
 	}
 
-	if currentFailoverDestinationIP.Equal(getOutboundIP()) {
+	myOwnIP, err := getOutboundIP()
+	if err != nil {
+		log.Error("Error determining this machine's IP address.", err)
+		c.cachedState = unknown
+		return false
+	}
+
+	if currentFailoverDestinationIP.Equal(myOwnIP) {
 		//We "are" the current failover destination.
 		c.cachedState = configured
 		return true
@@ -262,7 +269,14 @@ func (c *HetznerConfigurer) runAddressConfiguration() bool {
 
 	c.lastAPICheck = time.Now()
 
-	if currentFailoverDestinationIP.Equal(getOutboundIP()) {
+	myOwnIP, err := getOutboundIP()
+	if err != nil {
+		log.Error("Error determining this machine's IP address.", err)
+		c.cachedState = unknown
+		return false
+	}
+
+	if currentFailoverDestinationIP.Equal(myOwnIP) {
 		//We "are" the current failover destination.
 		log.Info("Failover was successfully executed!")
 		c.cachedState = configured
@@ -271,7 +285,7 @@ func (c *HetznerConfigurer) runAddressConfiguration() bool {
 
 	log.Infof("The failover command was issued, but the current Failover destination (%s) is different from what it should be (%s).",
 		currentFailoverDestinationIP.String(),
-		getOutboundIP().String())
+		myOwnIP.String())
 	//Something must have gone wrong while trying to switch IP's...
 	c.cachedState = unknown
 	return false

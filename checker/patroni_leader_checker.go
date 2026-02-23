@@ -47,12 +47,17 @@ func (c *PatroniLeaderChecker) GetChangeNotificationStream(ctx context.Context, 
 		case <-ctx.Done():
 			return nil
 		case <-time.After(time.Duration(c.Interval) * time.Millisecond):
-			r, err := c.Get(c.Endpoints[0] + c.TriggerKey)
+			url := c.Endpoints[0] + c.TriggerKey
+			r, err := c.Get(url)
 			if err != nil {
-				c.Logger.Sugar().Error("patroni REST API error:", err)
+				c.Logger.Sugar().Errorf("patroni REST API error connecting to %s: %v", url, err)
+				out <- false
 				continue
 			}
 			r.Body.Close() //throw away the body
+			if r.StatusCode < 200 || r.StatusCode >= 300 {
+				c.Logger.Sugar().Warnf("patroni REST API returned non-success status code %d for %s (expected %s)", r.StatusCode, url, c.TriggerValue)
+			}
 			out <- strconv.Itoa(r.StatusCode) == c.TriggerValue
 		}
 	}
