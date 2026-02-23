@@ -134,5 +134,4 @@ func TestNewEtcdLeaderChecker_ValidConfig(t *testing.T) {
 	if checker == nil {
 		t.Fatal("expected non-nil checker")
 	}
-	_ = checker.Client.Close()
 }
