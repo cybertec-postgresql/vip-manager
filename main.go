@@ -21,8 +21,6 @@ var (
 	date    = "unknown"
 )
 
-var log *zap.SugaredLogger = zap.L().Sugar()
-
 func main() {
 	if (len(os.Args) > 1) && (os.Args[1] == "--version") {
 		fmt.Printf("version: %s\n", version)
@@ -33,9 +31,10 @@ func main() {
 
 	conf, err := vipconfig.NewConfig()
 	if err != nil {
-		log.Fatal(err)
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
 	}
-	log = conf.Logger.Sugar()
+	log := conf.Logger.Sugar()
 	defer func() { _ = conf.Logger.Sync() }()
 
 	lc, err := checker.NewLeaderChecker(conf)
