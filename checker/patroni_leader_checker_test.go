@@ -91,7 +91,7 @@ func TestGetChangeNotificationStream_HTTPError(t *testing.T) {
 // returns the expected status code the stream emits true.
 func TestGetChangeNotificationStream_StatusMatch(t *testing.T) {
 	t.Parallel()
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK) // 200
 	}))
 	defer srv.Close()
@@ -106,7 +106,7 @@ func TestGetChangeNotificationStream_StatusMatch(t *testing.T) {
 // status code causes false to be emitted.
 func TestGetChangeNotificationStream_StatusNoMatch(t *testing.T) {
 	t.Parallel()
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusServiceUnavailable) // 503
 	}))
 	defer srv.Close()
@@ -122,7 +122,7 @@ func TestGetChangeNotificationStream_StatusNoMatch(t *testing.T) {
 // (the warning log does not prevent correct evaluation).
 func TestGetChangeNotificationStream_NonSuccessMatch(t *testing.T) {
 	t.Parallel()
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusServiceUnavailable) // 503
 	}))
 	defer srv.Close()
