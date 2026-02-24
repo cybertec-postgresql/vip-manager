@@ -85,7 +85,7 @@ to activate the automatic binding. This again might not be suitable for all use 
 
 ### nonlocal bind
 
-If you can't set `listen_addresses` to a wildcard address, you can explicitly specify only those adresses that you want to listen to.
+If you can't set `listen_addresses` to a wildcard address, you can explicitly specify only those addresses that you want to listen to.
 However, if you add the virtual IP to those addresses, PostgreSQL will fail to start when that address is not yet registered on one of the interfaces of the machine.
 You need to configure the kernel to allow "nonlocal bind" of IP (v4) addresses:
 
@@ -123,9 +123,9 @@ When using different configuration sources simultaneously, this is the precedenc
 
 All flags and file entries are written in lower case. To make longer multi-word flags and entries readable, they are separated by dashes, e.g. `retry-num`.
 
-If you put a flag or file entry into uppercase and replace dashes with underscores, you end up with the format of environment variables. To avoid overlapping configuration with other applications, the env variables are additionall prefixed with `VIP_`, e.g. `VIP_RETRY_NUM`.
+If you put a flag or file entry into uppercase and replace dashes with underscores, you end up with the format of environment variables. To avoid overlapping configuration with other applications, the env variables are additional prefixed with `VIP_`, e.g. `VIP_RETRY_NUM`.
 
-This is a list of all avaiable configuration items:
+This is a list of all available configuration items:
 
 | flag/yaml key     | env notation          | required  | example                     | description |
 | ----------------- | --------------------- | --------- | --------------------------- | ----------- |
@@ -144,7 +144,7 @@ This is a list of all avaiable configuration items:
 | `retry-after`     | `VIP_RETRY_AFTER`     | no        | `250`                       | The time to wait before retrying interactions with components outside of vip-manager. Measured in ms. Defaults to `250`. |
 | `retry-num`       | `VIP_RETRY_NUM`       | no        | `3`                         | The number of times interactions with components outside of vip-manager are retried. Defaults to `3`. |
 | `etcd-ca-file`    | `VIP_ETCD_CA_FILE`    | no        | `/etc/etcd/ca.cert.pem`     | A certificate authority file that can be used to verify the certificate provided by etcd endpoints. Make sure to change `dcs-endpoints` to reflect that `https` is used. |
-| `etcd-cert-file   | `VIP_ETCD_CERT_FILE`  | no        | `/etc/etcd/client.cert.pem` | A client certificate that is used to authenticate against etcd endpoints. Requires `etcd-ca-file` to be set as well. |
+| `etcd-cert-file`  | `VIP_ETCD_CERT_FILE`  | no        | `/etc/etcd/client.cert.pem` | A client certificate that is used to authenticate against etcd endpoints. Requires `etcd-ca-file` to be set as well. |
 | `etcd-key-file`   | `VIP_ETCD_KEY_FILE`   | no        | `/etc/etcd/client.key.pem`  | A private key for the client certificate, used to decrypt messages sent by etcd endpoints. Required when `etcd-cert-file` is specified. |
 | `verbose`         | `VIP_VERBOSE`         | no        | `true`                      | Enable more verbose logging. Currently only the manager-type=hetzner provides additional logs. |
 
