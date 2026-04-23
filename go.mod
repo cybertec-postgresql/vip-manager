@@ -1,10 +1,10 @@
 module github.com/cybertec-postgresql/vip-manager
 
-go 1.25.9
+go 1.26
 
 require (
 	github.com/google/gopacket v1.1.19
-	github.com/hashicorp/consul/api v1.34.1
+	github.com/hashicorp/consul/api v1.34.2
 	github.com/spf13/pflag v1.0.10
 	github.com/spf13/viper v1.21.0
 	go.etcd.io/etcd/client/v3 v3.6.10
