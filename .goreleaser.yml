@@ -19,6 +19,7 @@ archives:
       {{- title .Os }}_
       {{- if eq .Arch "amd64" }}x86_64
       {{- else if eq .Arch "386" }}i386
+      {{- else if eq .Arch "ppc64le" }}ppy64le
       {{- else }}{{ .Arch }}{{ end }}
   wrap_in_directory: true
   format_overrides:
@@ -48,6 +49,7 @@ nfpms:
       {{- title .Os }}_
       {{- if eq .Arch "amd64" }}x86_64
       {{- else if eq .Arch "386" }}i386
+      {{- else if eq .Arch "ppc64le" }}ppy64le
       {{- else }}{{ .Arch }}{{ end }}
 
     vendor: CYBERTEC PostgreSQL International GmbH
