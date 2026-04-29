@@ -14,7 +14,7 @@ install:
 DESTDIR=tmp
 
 package: 
-	goreleaser release --snapshot --skip-publish --rm-dist
+	goreleaser release --snapshot --skip=publish --clean 
 
 clean:
 	$(RM) vip-manager
