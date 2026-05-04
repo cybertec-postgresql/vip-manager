@@ -1,5 +1,6 @@
 [![License: MIT](https://img.shields.io/badge/License-BSD-green.svg)](https://opensource.org/licenses/BSD-2)
 ![Build&Test](https://github.com/cybertec-postgresql/vip-manager/workflows/Go%20Build%20&%20Test/badge.svg)
+[![Coverage Status](https://coveralls.io/repos/github/cybertec-postgresql/vip-manager/badge.svg?branch=master)](https://coveralls.io/github/cybertec-postgresql/vip-manager?branch=master)
 [![Go Report Card](https://goreportcard.com/badge/github.com/cybertec-postgresql/vip-manager)](https://goreportcard.com/report/github.com/cybertec-postgresql/vip-manager)
 [![Release](https://img.shields.io/github/release/cybertec-postgresql/vip-manager.svg?include_prereleases)](https://github.com/cybertec-postgresql/vip-manager/releases/latest)
 [![Github All Releases](https://img.shields.io/github/downloads/cybertec-postgresql/vip-manager/total?style=flat-square)](https://github.com/cybertec-postgresql/vip-manager/releases)
