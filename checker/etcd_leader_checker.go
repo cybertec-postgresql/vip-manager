@@ -112,7 +112,7 @@ func (elc *EtcdLeaderChecker) watch(ctx context.Context, out chan<- bool) error 
 				continue
 			}
 			if err := watchResp.Err(); err != nil {
-				elc.Logger.Error("Watch error for key "+elc.TriggerKey+":", zap.Error(err))
+				elc.Logger.Error("Watch error", zap.String("key", elc.TriggerKey), zap.Error(err))
 				elc.get(ctx, out) // RPC failed, try to get the key directly to be on the safe side
 				continue
 			}
