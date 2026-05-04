@@ -1,5 +1,14 @@
 name: Go Build & Test
+
+permissions:
+  contents: write
+  packages: write
+  pages: write
+
 on:
+  push:
+    branches:
+      - master
   pull_request:
   workflow_dispatch:
   
