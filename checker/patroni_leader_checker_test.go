@@ -1,7 +1,6 @@
 package checker
 
 import (
-	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -33,14 +32,12 @@ func runStream(t *testing.T, conf *vipconfig.Config) bool {
 	}
 
 	out := make(chan bool, 1)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 
 	go func() { _ = checker.GetChangeNotificationStream(ctx, out) }()
 
 	select {
 	case v := <-out:
-		cancel()
 		return v
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out waiting for stream value")
