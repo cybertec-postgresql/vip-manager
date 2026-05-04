@@ -49,6 +49,7 @@ jobs:
         go test -failfast -v -coverprofile profile.cov ./...
 
     - name: Coveralls
+      if: runner.os == 'Linux'
       uses: coverallsapp/github-action@v2
       with:
         file: profile.cov 
