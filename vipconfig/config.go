@@ -45,153 +45,81 @@ type Config struct {
 	Logger *zap.Logger
 }
 
-func defineFlags() {
+func defineFlags() *pflag.FlagSet {
 	// When adding new flags here, consider adding them to the Config struct above
 	// and then make sure to insert them into the conf instance in NewConfig down below.
-	pflag.String("config", "", "Location of the configuration file.")
-	pflag.Bool("version", false, "Show the version number.")
+	flags := pflag.NewFlagSet("vip-manager", pflag.ContinueOnError)
 
-	pflag.String("ip", "", "Virtual IP address to configure.")
-	pflag.String("netmask", "", "The netmask used for the IP address. Defaults to -1 which assigns ipv4 default mask.")
-	pflag.String("interface", "", "Network interface to configure on .")
+	flags.String("config", "", "Location of the configuration file.")
+	flags.Bool("version", false, "Show the version number.")
 
-	pflag.String("trigger-key", "", "Key in the DCS to monitor, e.g. \"/service/batman/leader\".")
-	pflag.String("trigger-value", "", "Value to monitor for.")
+	flags.String("ip", "", "Virtual IP address to configure.")
+	flags.String("netmask", "", "The netmask used for the IP address. Defaults to -1 which assigns ipv4 default mask.")
+	flags.String("interface", "", "Network interface to configure on .")
 
-	pflag.String("dcs-type", "etcd", "Type of endpoint used for key storage. Supported values: etcd, consul, patroni.")
+	flags.String("trigger-key", "", "Key in the DCS to monitor, e.g. \"/service/batman/leader\".")
+	flags.String("trigger-value", "", "Value to monitor for.")
+
+	flags.String("dcs-type", "etcd", "Type of endpoint used for key storage. Supported values: etcd, consul, patroni.")
 	// note: can't put a default value into dcs-endpoints as that would mess with applying default localhost when using consul
-	pflag.String("dcs-endpoints", "", "DCS endpoint(s), separate multiple endpoints using commas. (default \"http://127.0.0.1:2379\", \"http://127.0.0.1:8500\" or \"http://127.0.0.1:8008/\" depending on dcs-type.)")
-	pflag.String("etcd-user", "", "Username for etcd DCS endpoints.")
-	pflag.String("etcd-password", "", "Password for etcd DCS endpoints.")
-	pflag.String("etcd-ca-file", "", "Trusted CA certificate for the etcd server.")
-	pflag.String("etcd-cert-file", "", "Client certificate used for authentiaction with etcd.")
-	pflag.String("etcd-key-file", "", "Private key matching etcd-cert-file to decrypt messages sent from etcd.")
+	flags.String("dcs-endpoints", "", "DCS endpoint(s), separate multiple endpoints using commas. (default \"http://127.0.0.1:2379\", \"http://127.0.0.1:8500\" or \"http://127.0.0.1:8008/\" depending on dcs-type.)")
+	flags.String("etcd-user", "", "Username for etcd DCS endpoints.")
+	flags.String("etcd-password", "", "Password for etcd DCS endpoints.")
+	flags.String("etcd-ca-file", "", "Trusted CA certificate for the etcd server.")
+	flags.String("etcd-cert-file", "", "Client certificate used for authentiaction with etcd.")
+	flags.String("etcd-key-file", "", "Private key matching etcd-cert-file to decrypt messages sent from etcd.")
 
-	pflag.String("consul-token", "", "Token for consul DCS endpoints.")
+	flags.String("consul-token", "", "Token for consul DCS endpoints.")
 
-	pflag.Int("interval", 1000, "DCS scan interval in milliseconds.")
-	pflag.String("manager-type", "basic", "Type of VIP-management to be used. Supported values: basic, hetzner.")
+	flags.Int("interval", 1000, "DCS scan interval in milliseconds.")
+	flags.String("manager-type", "basic", "Type of VIP-management to be used. Supported values: basic, hetzner.")
 
-	pflag.Int("retry-after", 250, "Time to wait before retrying interactions with outside components in milliseconds.")
-	pflag.Int("retry-num", 3, "Number of times interactions with outside components are retried.")
+	flags.Int("retry-after", 250, "Time to wait before retrying interactions with outside components in milliseconds.")
+	flags.Int("retry-num", 3, "Number of times interactions with outside components are retried.")
 
-	pflag.Bool("verbose", false, "Be verbose. Currently only implemented for manager-type=hetzner .")
+	flags.Bool("verbose", false, "Be verbose. Currently only implemented for manager-type=hetzner .")
 
-	pflag.CommandLine.SortFlags = false
+	flags.SortFlags = false
+	return flags
 }
 
-func mapDeprecated() error {
-	deprecated := map[string]string{
-		// "deprecated" : "new",
-		"mask":          "netmask",
-		"iface":         "interface",
-		"key":           "trigger-key",
-		"nodename":      "trigger-value",
-		"etcd_user":     "etcd-user",
-		"etcd_password": "etcd-password",
-		"type":          "dcs-type",
-		"endpoint":      "dcs-endpoints",
-		"endpoints":     "dcs-endpoints",
-		"hostingtype":   "manager-type",
-		"hosting_type":  "manager-type",
-		"endpoint_type": "dcs-type",
-		"retry_num":     "retry-num",
-		"retry_after":   "retry-after",
-		"consul_token":  "consul-token",
-		"host":          "trigger-value",
-	}
-
-	complaints := []string{}
-	errors := false
-	for k, v := range deprecated {
-		if viper.IsSet(k) {
-
-			if _, exists := os.LookupEnv("VIP_" + strings.ToUpper(k)); !exists {
-				// using deprecated key in config file (as not exists in ENV)
-				complaints = append(complaints, fmt.Sprintf("Parameter \"%s\" has been deprecated, please use \"%s\" instead", k, v))
-			} else {
-				if strings.ReplaceAll(k, "_", "-") != v {
-					// this string is not a direct replacement (e.g. etcd-user replaces etcd-user, i.e. in both cases VIP_ETCD_USER is the valid env key)
-					// for example, complain about VIP_IFACE, but not VIP_CONSUL_TOKEN or VIP_ETCD_USER...
-					complaints = append(complaints, fmt.Sprintf("Parameter \"%s\" has been deprecated, please use \"%s\" instead", "VIP_"+strings.ToUpper(k), "VIP_"+strings.ReplaceAll(strings.ToUpper(v), "-", "_")))
-				} else {
-					continue
-				}
-			}
-
-			if viper.IsSet(v) {
-				// don't forget to reset the desired replacer when exiting
-				replacer := strings.NewReplacer("-", "_")
-				defer viper.SetEnvKeyReplacer(replacer)
-
-				// Check if there is only a collision because ENV vars always use _ instead of - and the deprecated mapping only maps from *_* to *-*.
-				testReplacer := strings.NewReplacer("", "") // just don't replace anything
-				viper.SetEnvKeyReplacer(testReplacer)
-				if viper.IsSet(v) {
-					complaints = append(complaints, fmt.Sprintf("Conflicting settings: %s or %s and %s or %s are both specified…", k, "VIP_"+strings.ToUpper(k), v, "VIP_"+strings.ReplaceAll(strings.ToUpper(v), "-", "_")))
-
-					if viper.Get(k) == viper.Get(v) {
-						complaints = append(complaints, fmt.Sprintf("… But no conflicting values: %s and %s are equal…ignoring.", viper.GetString(k), viper.GetString(v)))
-						continue
-					}
-					complaints = append(complaints, fmt.Sprintf("…conflicting values: %s and %s", viper.GetString(k), viper.GetString(v)))
-					errors = true
-					continue
-				}
-			}
-			// if this is a valid mapping due to deprecation, set the new key explicitly to the value of the deprecated key.
-			viper.Set(v, viper.Get(k))
-			// "unset" the deprecated setting so it will not show up in our config later
-			viper.Set(k, "")
-
-		}
-	}
-	for c := range complaints {
-		fmt.Println(complaints[c])
-	}
-	if errors {
-		panic("Cannot continue due to conflicts.")
-	}
-	return nil
-}
-
-func setDefaults() {
+func setDefaults(v *viper.Viper) {
 	defaults := map[string]any{
-		"hostingtype": "basic",
-		"dcs-type":    "etcd",
-		"interval":    1000,
-		"retry-after": 250,
-		"retry-num":   3,
+		"manager-type": "basic",
+		"dcs-type":     "etcd",
+		"interval":     1000,
+		"retry-after":  250,
+		"retry-num":    3,
 	}
 
-	for k, v := range defaults {
-		if !viper.IsSet(k) {
-			viper.SetDefault(k, v)
+	for k, val := range defaults {
+		if !v.IsSet(k) {
+			v.SetDefault(k, val)
 		}
 	}
 
 	// apply defaults for endpoints
-	if !viper.IsSet("dcs-endpoints") {
+	if !v.IsSet("dcs-endpoints") {
 		fmt.Println("No dcs-endpoints specified, trying to use localhost with standard ports!")
-		switch viper.GetString("dcs-type") {
+		switch v.GetString("dcs-type") {
 		case "consul":
-			viper.Set("dcs-endpoints", []string{"http://127.0.0.1:8500"})
+			v.Set("dcs-endpoints", []string{"http://127.0.0.1:8500"})
 		case "etcd", "etcd3":
-			viper.Set("dcs-endpoints", []string{"http://127.0.0.1:2379"})
+			v.Set("dcs-endpoints", []string{"http://127.0.0.1:2379"})
 		case "patroni":
-			viper.Set("dcs-endpoints", []string{"http://127.0.0.1:8008/"})
+			v.Set("dcs-endpoints", []string{"http://127.0.0.1:8008/"})
 		}
 	}
 
 	// set trigger-key to '/leader' if DCS type is patroni and nothing is specified
-	if viper.GetString("trigger-key") == "" && viper.GetString("dcs-type") == "patroni" {
-		viper.Set("trigger-key", "/leader")
+	if v.GetString("trigger-key") == "" && v.GetString("dcs-type") == "patroni" {
+		v.Set("trigger-key", "/leader")
 	}
 
 	// set trigger-value to default value if nothing is specified
-	if triggerValue := viper.GetString("trigger-value"); triggerValue == "" {
+	if triggerValue := v.GetString("trigger-value"); triggerValue == "" {
 		var err error
-		if viper.GetString("dcs-type") == "patroni" {
+		if v.GetString("dcs-type") == "patroni" {
 			triggerValue = "200"
 		} else {
 			triggerValue, err = os.Hostname()
@@ -200,25 +128,25 @@ func setDefaults() {
 			fmt.Printf("No trigger-value specified, hostname could not be retrieved: %s", err)
 		} else {
 			fmt.Printf("No trigger-value specified, instead using: %v", triggerValue)
-			viper.Set("trigger-value", triggerValue)
+			v.Set("trigger-value", triggerValue)
 		}
 	}
 
 	// set retry-num to default if not set or set to zero
-	if retryNum := viper.GetInt("retry-num"); retryNum <= 0 {
-		viper.Set("retry-num", 3)
+	if retryNum := v.GetInt("retry-num"); retryNum <= 0 {
+		v.Set("retry-num", 3)
 	}
 }
 
-func checkSetting(name string) bool {
-	if !viper.IsSet(name) {
+func checkSetting(v *viper.Viper, name string) bool {
+	if !v.IsSet(name) {
 		fmt.Printf("Setting %s is mandatory", name)
 		return false
 	}
 	return true
 }
 
-func checkMandatory() error {
+func checkMandatory(v *viper.Viper) error {
 	mandatory := []string{
 		"ip",
 		"netmask",
@@ -228,18 +156,18 @@ func checkMandatory() error {
 		"dcs-endpoints",
 	}
 	success := true
-	for _, v := range mandatory {
-		success = checkSetting(v) && success
+	for _, name := range mandatory {
+		success = checkSetting(v, name) && success
 	}
 	if !success {
 		return errors.New("one or more mandatory settings were not set")
 	}
-	return checkImpliedMandatory()
+	return checkImpliedMandatory(v)
 }
 
 // if reason is set, but implied is not set, return false.
-func checkImpliedSetting(implied string, reason string) bool {
-	if viper.IsSet(reason) && !viper.IsSet(implied) {
+func checkImpliedSetting(v *viper.Viper, implied string, reason string) bool {
+	if v.IsSet(reason) && !v.IsSet(implied) {
 		fmt.Printf("Setting %s is mandatory when setting %s is specified.", implied, reason)
 		return false
 	}
@@ -247,7 +175,7 @@ func checkImpliedSetting(implied string, reason string) bool {
 }
 
 // Some settings imply that another setting must be set as well.
-func checkImpliedMandatory() error {
+func checkImpliedMandatory(v *viper.Viper) error {
 	mandatory := map[string]string{
 		// "implied" : "reason"
 		"etcd-user":     "etcd-password",
@@ -255,8 +183,8 @@ func checkImpliedMandatory() error {
 		"etcd-ca-file":  "etcd-cert-file",
 	}
 	success := true
-	for k, v := range mandatory {
-		success = checkImpliedSetting(k, v) && success
+	for k, reason := range mandatory {
+		success = checkImpliedSetting(v, k, reason) && success
 	}
 	if !success {
 		return errors.New("one or more implied mandatory settings were not set")
@@ -264,18 +192,18 @@ func checkImpliedMandatory() error {
 	return nil
 }
 
-func printSettings() {
+func printSettings(v *viper.Viper) {
 	s := []string{}
 
-	for k, v := range viper.AllSettings() {
-		if v != "" {
+	for k, val := range v.AllSettings() {
+		if val != "" {
 			switch k {
 			case "etcd-password":
 				fallthrough
 			case "consul-token":
 				s = append(s, fmt.Sprintf("\t%s : *****\n", k))
 			default:
-				s = append(s, fmt.Sprintf("\t%s : %v\n", k, v))
+				s = append(s, fmt.Sprintf("\t%s : %v\n", k, val))
 			}
 		}
 	}
@@ -287,34 +215,41 @@ func printSettings() {
 	}
 }
 
-func loadConfigFile() error {
-	if viper.IsSet("config") {
-		viper.SetConfigFile(viper.GetString("config"))
-		if err := viper.ReadInConfig(); err != nil {
+func loadConfigFile(v *viper.Viper) error {
+	if v.IsSet("config") {
+		v.SetConfigFile(v.GetString("config"))
+		if err := v.ReadInConfig(); err != nil {
 			return err
 		}
-		fmt.Printf("Using config from file: %s\n", viper.ConfigFileUsed())
+		fmt.Printf("Using config from file: %s\n", v.ConfigFileUsed())
 	}
-	return mapDeprecated()
+	return nil
 }
 
 // NewConfig returns a new Config instance
 func NewConfig() (*Config, error) {
+	return newConfig(os.Args[1:])
+}
+
+func newConfig(args []string) (*Config, error) {
 	var err error
 
-	defineFlags()
-	pflag.Parse()
+	v := viper.New()
+	flags := defineFlags()
+	if err = flags.Parse(args); err != nil {
+		return nil, fmt.Errorf("error parsing flags: %w", err)
+	}
 	// import pflags into viper
-	_ = viper.BindPFlags(pflag.CommandLine)
+	_ = v.BindPFlags(flags)
 
 	// make viper look for env variables that are prefixed VIP_...
-	// e.g.: viper.getString("ip") will return the value of env variable VIP_IP
-	viper.SetEnvPrefix("vip")
-	viper.AutomaticEnv()
+	// e.g.: v.GetString("ip") will return the value of env variable VIP_IP
+	v.SetEnvPrefix("vip")
+	v.AutomaticEnv()
 	//replace dashes (in flags) with underscores (in ENV vars)
-	// so that e.g. viper.GetString("dcs-endpoints") will return value of VIP_DCS_ENDPOINTS
+	// so that e.g. v.GetString("dcs-endpoints") will return value of VIP_DCS_ENDPOINTS
 	replacer := strings.NewReplacer("-", "_")
-	viper.SetEnvKeyReplacer(replacer)
+	v.SetEnvKeyReplacer(replacer)
 
 	// viper precedence order
 	// - explicit call to Set
@@ -325,26 +260,26 @@ func NewConfig() (*Config, error) {
 	// - default
 
 	// if a configfile has been passed, make viper read it
-	if err = loadConfigFile(); err != nil {
+	if err = loadConfigFile(v); err != nil {
 		return nil, fmt.Errorf("fatal error reading config file: %w", err)
 	}
 
 	// convert string of csv to String Slice
-	if endpointsString := viper.GetString("dcs-endpoints"); endpointsString != "" && strings.Contains(endpointsString, ",") {
-		viper.Set("dcs-endpoints", strings.Split(endpointsString, ","))
+	if endpointsString := v.GetString("dcs-endpoints"); endpointsString != "" && strings.Contains(endpointsString, ",") {
+		v.Set("dcs-endpoints", strings.Split(endpointsString, ","))
 	}
-	setDefaults()
-	if err = checkMandatory(); err != nil {
+	setDefaults(v)
+	if err = checkMandatory(v); err != nil {
 		return nil, err
 	}
 
 	conf := &Config{}
-	if err = viper.Unmarshal(conf); err != nil {
+	if err = v.Unmarshal(conf); err != nil {
 		zap.L().Fatal("unable to decode viper config into config struct, %v", zap.Error(err))
 	}
 
 	conf.initLogger()
-	printSettings()
+	printSettings(v)
 
 	return conf, nil
 }
