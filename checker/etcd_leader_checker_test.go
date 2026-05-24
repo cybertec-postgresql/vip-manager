@@ -1,12 +1,18 @@
 package checker
 
 import (
+	"context"
+	"errors"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/cybertec-postgresql/vip-manager/vipconfig"
+	"github.com/testcontainers/testcontainers-go"
+	tcetcd "github.com/testcontainers/testcontainers-go/modules/etcd"
+	clientv3 "go.etcd.io/etcd/client/v3"
 	"go.uber.org/zap"
 )
 
@@ -133,5 +139,208 @@ func TestNewEtcdLeaderChecker_ValidConfig(t *testing.T) {
 	}
 	if checker == nil {
 		t.Fatal("expected non-nil checker")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Integration tests – require a running Docker daemon
+// ---------------------------------------------------------------------------
+
+const etcdImage = "gcr.io/etcd-development/etcd:v3.5.14"
+
+// startEtcdContainer starts a real etcd container and returns the client
+// endpoints and a pre-authenticated seed client for writing test data.
+// The test is skipped when Docker is not available.
+func startEtcdContainer(t *testing.T) (endpoints []string, seed *clientv3.Client) {
+	t.Helper()
+	ctx := context.Background()
+	ctr, err := tcetcd.Run(ctx, etcdImage)
+	if err != nil {
+		t.Skipf("cannot start etcd container (Docker may be unavailable): %v", err)
+	}
+	testcontainers.CleanupContainer(t, ctr)
+
+	endpoints, err = ctr.ClientEndpoints(ctx)
+	if err != nil {
+		t.Fatalf("ClientEndpoints: %v", err)
+	}
+
+	seed, err = clientv3.New(clientv3.Config{
+		Endpoints:   endpoints,
+		DialTimeout: 5 * time.Second,
+		Logger:      zap.NewNop(),
+	})
+	if err != nil {
+		t.Fatalf("create seed client: %v", err)
+	}
+	t.Cleanup(func() { _ = seed.Close() })
+	return
+}
+
+// newIntegrationChecker creates an EtcdLeaderChecker backed by a real etcd
+// and registers Close via t.Cleanup.
+func newIntegrationChecker(t *testing.T, endpoints []string, key, value string) *EtcdLeaderChecker {
+	t.Helper()
+	conf := &vipconfig.Config{
+		Endpoints:    endpoints,
+		TriggerKey:   key,
+		TriggerValue: value,
+		Logger:       zap.NewNop(),
+	}
+	checker, err := NewEtcdLeaderChecker(conf)
+	if err != nil {
+		t.Fatalf("NewEtcdLeaderChecker: %v", err)
+	}
+	t.Cleanup(func() { _ = checker.Close() })
+	return checker
+}
+
+// TestEtcdLeaderChecker_get_KeyAbsent verifies that get emits false when the
+// watched key does not exist in etcd.
+func TestEtcdLeaderChecker_get_KeyAbsent(t *testing.T) {
+	endpoints, _ := startEtcdContainer(t)
+	checker := newIntegrationChecker(t, endpoints, "/no/such/key", "primary")
+
+	out := make(chan bool, 1)
+	checker.get(context.Background(), out)
+
+	if got := <-out; got {
+		t.Error("expected false for absent key, got true")
+	}
+}
+
+// TestEtcdLeaderChecker_get_MatchingValue verifies that get emits true when
+// the key value matches TriggerValue.
+func TestEtcdLeaderChecker_get_MatchingValue(t *testing.T) {
+	endpoints, seed := startEtcdContainer(t)
+	if _, err := seed.Put(context.Background(), "/leader", "primary"); err != nil {
+		t.Fatalf("seed Put: %v", err)
+	}
+	checker := newIntegrationChecker(t, endpoints, "/leader", "primary")
+
+	out := make(chan bool, 1)
+	checker.get(context.Background(), out)
+
+	if got := <-out; !got {
+		t.Error("expected true for matching value, got false")
+	}
+}
+
+// TestEtcdLeaderChecker_get_NonMatchingValue verifies that get emits false
+// when the key value does not match TriggerValue.
+func TestEtcdLeaderChecker_get_NonMatchingValue(t *testing.T) {
+	endpoints, seed := startEtcdContainer(t)
+	if _, err := seed.Put(context.Background(), "/leader", "secondary"); err != nil {
+		t.Fatalf("seed Put: %v", err)
+	}
+	checker := newIntegrationChecker(t, endpoints, "/leader", "primary")
+
+	out := make(chan bool, 1)
+	checker.get(context.Background(), out)
+
+	if got := <-out; got {
+		t.Error("expected false for non-matching value, got true")
+	}
+}
+
+// TestEtcdLeaderChecker_watch_EmitsOnPut verifies that watch emits the
+// correct bool each time the watched key is written, and stops when the
+// context is cancelled.
+func TestEtcdLeaderChecker_watch_EmitsOnPut(t *testing.T) {
+	endpoints, seed := startEtcdContainer(t)
+	checker := newIntegrationChecker(t, endpoints, "/leader", "primary")
+
+	out := make(chan bool, 4)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	watchDone := make(chan error, 1)
+	go func() { watchDone <- checker.watch(ctx, out) }()
+
+	// Allow the watch to register on the server before writing.
+	time.Sleep(150 * time.Millisecond)
+
+	if _, err := seed.Put(context.Background(), "/leader", "primary"); err != nil {
+		t.Fatalf("Put matching value: %v", err)
+	}
+	select {
+	case got := <-out:
+		if !got {
+			t.Error("expected true for matching put, got false")
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for watch event (matching value)")
+	}
+
+	if _, err := seed.Put(context.Background(), "/leader", "secondary"); err != nil {
+		t.Fatalf("Put non-matching value: %v", err)
+	}
+	select {
+	case got := <-out:
+		if got {
+			t.Error("expected false for non-matching put, got true")
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for watch event (non-matching value)")
+	}
+
+	cancel()
+	select {
+	case err := <-watchDone:
+		if !errors.Is(err, context.Canceled) {
+			t.Errorf("expected context.Canceled from watch, got %v", err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for watch goroutine to exit")
+	}
+}
+
+// TestEtcdLeaderChecker_GetChangeNotificationStream_StopsOnCancel verifies
+// the full stream: it emits an initial value via get and stops cleanly when
+// the context is cancelled.
+func TestEtcdLeaderChecker_GetChangeNotificationStream_StopsOnCancel(t *testing.T) {
+	endpoints, seed := startEtcdContainer(t)
+
+	// Pre-populate the key so the initial get emits true.
+	if _, err := seed.Put(context.Background(), "/leader", "primary"); err != nil {
+		t.Fatalf("seed Put: %v", err)
+	}
+
+	conf := &vipconfig.Config{
+		Endpoints:    endpoints,
+		TriggerKey:   "/leader",
+		TriggerValue: "primary",
+		Logger:       zap.NewNop(),
+	}
+	// GetChangeNotificationStream calls defer elc.Close(), so we must not
+	// register a second cleanup here.
+	checker, err := NewEtcdLeaderChecker(conf)
+	if err != nil {
+		t.Fatalf("NewEtcdLeaderChecker: %v", err)
+	}
+
+	out := make(chan bool, 4)
+	ctx, cancel := context.WithCancel(context.Background())
+	streamDone := make(chan error, 1)
+	go func() { streamDone <- checker.GetChangeNotificationStream(ctx, out) }()
+
+	// The initial get should emit true.
+	select {
+	case got := <-out:
+		if !got {
+			t.Error("expected true from initial get, got false")
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for initial get value")
+	}
+
+	cancel()
+	select {
+	case err := <-streamDone:
+		if !errors.Is(err, context.Canceled) {
+			t.Errorf("expected context.Canceled, got %v", err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for GetChangeNotificationStream to return")
 	}
 }
