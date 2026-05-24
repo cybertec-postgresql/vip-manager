@@ -115,8 +115,11 @@ func consulCheckerFor(t *testing.T, endpoint, key, value string) *ConsulLeaderCh
 
 // runConsulStream starts GetChangeNotificationStream in a goroutine and
 // returns the output channel and a done channel carrying the final error.
+// The channel is unbuffered so that, once the test stops reading, `out <-
+// state` always blocks and ctx.Done() is the guaranteed winner in the
+// production select – preventing spurious extra long-poll cycles after cancel.
 func runConsulStream(ctx context.Context, c *ConsulLeaderChecker) (out chan bool, done chan error) {
-	out = make(chan bool, 8)
+	out = make(chan bool) // unbuffered
 	done = make(chan error, 1)
 	go func() { done <- c.GetChangeNotificationStream(ctx, out) }()
 	return
@@ -163,9 +166,16 @@ func TestConsulLeaderChecker_GetChangeNotificationStream_KeyAbsent(t *testing.T)
 	}
 
 	cancel()
-	// The nil-response loop has no inline ctx check, so inject a key to let
-	// the goroutine reach the ctx.Done() select branch and exit cleanly.
+	// The nil-response branch has no inline ctx check and writes to `out`
+	// directly (not in a select). With an unbuffered channel the goroutine may
+	// therefore be stuck on that write. One extra read unblocks it so it can
+	// proceed. Injecting a key lets it advance to the resp-not-nil select where
+	// ctx.Done() fires cleanly.
 	_, _ = seed.KV().Put(&capi.KVPair{Key: consulTestKey, Value: []byte("any")}, nil)
+	select {
+	case <-out: // unblock the goroutine if stuck on a nil-response write
+	case <-time.After(time.Second): // goroutine already past that point – fine
+	}
 
 	if err := waitDone(t, done); !errors.Is(err, context.Canceled) {
 		t.Errorf("expected context.Canceled, got %v", err)
