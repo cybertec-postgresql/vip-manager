@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	capi "github.com/hashicorp/consul/api"
 	"github.com/cybertec-postgresql/vip-manager/vipconfig"
+	capi "github.com/hashicorp/consul/api"
 	"github.com/testcontainers/testcontainers-go"
 	tcconsul "github.com/testcontainers/testcontainers-go/modules/consul"
 	"go.uber.org/zap"

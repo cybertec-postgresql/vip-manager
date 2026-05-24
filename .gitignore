@@ -1,5 +1,6 @@
 *.deb
 *.rpm
 *.exe
+*.out
 tmp/
 .vscode/
