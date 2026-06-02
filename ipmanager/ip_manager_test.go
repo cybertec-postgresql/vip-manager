@@ -356,13 +356,12 @@ func TestNewIPManager_ValidIPv6(t *testing.T) {
 func TestNewIPManager_Hetzner(t *testing.T) {
 	t.Parallel()
 	states := make(chan bool)
-	conf := minimalConfig("10.0.0.1", "lo")
+	conf := minimalConfig("10.0.0.1", "definitely_nonexistent_iface_9999")
 	conf.HostingType = "hetzner"
-	// Hetzner configurer can be created successfully, but loopback interface lookup
-	// will fail during initialization, returning an error
+	// Hetzner configurer initialization will fail because the interface doesn't exist
 	_, err := NewIPManager(conf, states)
 	if err == nil {
-		t.Error("expected error for loopback interface on hetzner")
+		t.Error("expected error for nonexistent interface")
 		return
 	}
 	if !strings.Contains(err.Error(), "failed to get interface") {
