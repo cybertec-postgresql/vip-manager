@@ -358,11 +358,13 @@ func TestNewIPManager_Hetzner(t *testing.T) {
 	states := make(chan bool)
 	conf := minimalConfig("10.0.0.1", "lo")
 	conf.HostingType = "hetzner"
-	// This will fail because hetzner requires additional config, but tests that
-	// we can construct with hetzner hosting type
+	// Hetzner configurer validates config at initialization time, expecting loopback
+	// interface to fail with "no such network interface" error
 	_, err := NewIPManager(conf, states)
-	// We expect an error, but it shouldn't be a parse error
 	if err == nil {
-		t.Error("expected error for hetzner without required config")
+		t.Error("expected error for loopback interface on hetzner")
+	}
+	if !strings.Contains(err.Error(), "failed to get interface") {
+		t.Errorf("unexpected error: %v", err)
 	}
 }
