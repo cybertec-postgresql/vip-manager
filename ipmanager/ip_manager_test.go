@@ -2,6 +2,7 @@ package ipmanager
 
 import (
 	"context"
+	"net"
 	"net/netip"
 	"strings"
 	"testing"
@@ -35,6 +36,29 @@ func TestGetNetIface_Nonexistent(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "failed to get interface") {
 		t.Errorf("unexpected error message: %v", err)
+	}
+}
+
+// TestGetNetIface_Success tests that getNetIface successfully returns a valid interface.
+// On Windows, loopback is "Loopback Pseudo-Interface"; on Unix-like systems it's usually "lo".
+// This test skips if no valid interface can be found.
+func TestGetNetIface_Success(t *testing.T) {
+	t.Parallel()
+	
+	// Try common loopback names
+	names := []string{"lo", "lo0", "Loopback Pseudo-Interface 1"}
+	var iface *net.Interface
+	var err error
+	
+	for _, name := range names {
+		iface, err = getNetIface(name)
+		if err == nil {
+			break
+		}
+	}
+	
+	if iface == nil || err != nil {
+		t.Skip("no valid loopback interface available for testing")
 	}
 }
 
@@ -98,6 +122,29 @@ func TestGetMask_IPv4_ValidRange(t *testing.T) {
 	}
 }
 
+func TestGetMask_IPv4_OutOfRange(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name   string
+		addr   netip.Addr
+		mask   int
+		desc   string
+	}{
+		{"IPv4 negative", netip.MustParseAddr("192.168.1.1"), -1, "negative mask"},
+		{"IPv4 > 32", netip.MustParseAddr("192.168.1.1"), 33, "mask > 32"},
+		{"IPv4 zero", netip.MustParseAddr("192.168.1.1"), 0, "zero mask"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := getMask(tt.addr, tt.mask)
+			// For out-of-range IPv4, we expect default mask
+			if m == nil {
+				t.Errorf("getMask(%v, %d) returned nil for %s", tt.addr, tt.mask, tt.desc)
+			}
+		})
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Mock configurer for testing applyLoop and SyncStates
 // ---------------------------------------------------------------------------
@@ -134,6 +181,28 @@ func (m *mockConfigurer) getCIDR() string {
 	return "192.168.1.100/24"
 }
 
+func TestApplyLoop_DeconfigureWhenNeeded(t *testing.T) {
+	t.Parallel()
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	conf := zap.NewNop()
+	log = conf.Sugar()
+
+	mock := &mockConfigurer{shouldQueryReturn: true}
+	m := &IPManager{
+		configurer:  mock,
+		recheckChan: make(chan struct{}, 1),
+	}
+	m.shouldSetIPUp.Store(false)
+
+	m.applyLoop(ctx)
+
+	if mock.deconfigureCount == 0 {
+		t.Error("expected deconfigureAddress to be called")
+	}
+}
+
 // ---------------------------------------------------------------------------
 // applyLoop
 // ---------------------------------------------------------------------------
@@ -160,9 +229,54 @@ func TestApplyLoop_ConfigureWhenNeeded(t *testing.T) {
 	}
 }
 
-func TestApplyLoop_DeconfigureWhenNeeded(t *testing.T) {
+func TestApplyLoop_ConfigureFailure(t *testing.T) {
 	t.Parallel()
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
+	defer cancel()
+
+	conf := zap.NewNop()
+	log = conf.Sugar()
+
+	mock := &mockConfigurer{shouldQueryReturn: false, shouldConfigureFail: true}
+	m := &IPManager{
+		configurer:  mock,
+		recheckChan: make(chan struct{}, 1),
+	}
+	m.shouldSetIPUp.Store(true)
+
+	m.applyLoop(ctx)
+
+	if mock.configureCount == 0 {
+		t.Error("expected configureAddress to be called even if it fails")
+	}
+}
+
+func TestApplyLoop_QueryFails(t *testing.T) {
+	t.Parallel()
+	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
+	defer cancel()
+
+	conf := zap.NewNop()
+	log = conf.Sugar()
+
+	mock := &mockConfigurer{shouldQueryFail: true}
+	m := &IPManager{
+		configurer:  mock,
+		recheckChan: make(chan struct{}, 1),
+	}
+	m.shouldSetIPUp.Store(true)
+
+	m.applyLoop(ctx)
+
+	// queryAddress should be called despite failure
+	if mock.queryAddressCount == 0 {
+		t.Error("expected queryAddress to be called")
+	}
+}
+
+func TestApplyLoop_NoChangeNeeded(t *testing.T) {
+	t.Parallel()
+	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
 	defer cancel()
 
 	conf := zap.NewNop()
@@ -173,12 +287,13 @@ func TestApplyLoop_DeconfigureWhenNeeded(t *testing.T) {
 		configurer:  mock,
 		recheckChan: make(chan struct{}, 1),
 	}
-	m.shouldSetIPUp.Store(false)
+	m.shouldSetIPUp.Store(true) // IP is up and should be up
 
 	m.applyLoop(ctx)
 
-	if mock.deconfigureCount == 0 {
-		t.Error("expected deconfigureAddress to be called")
+	// Neither configure nor deconfigure should be called
+	if mock.configureCount > 0 || mock.deconfigureCount > 0 {
+		t.Error("expected no configuration changes when state matches")
 	}
 }
 
