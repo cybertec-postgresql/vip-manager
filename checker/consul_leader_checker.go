@@ -60,6 +60,7 @@ checkLoop:
 				break checkLoop
 			}
 			c.Logger.Sugar().Error("consul error: ", err)
+			// Signal false on connection error so VIP is removed if endpoint is unreachable
 			out <- false
 			time.Sleep(time.Duration(c.Interval) * time.Millisecond)
 			continue

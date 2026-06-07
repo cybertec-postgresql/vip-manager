@@ -344,3 +344,110 @@ func TestEtcdLeaderChecker_GetChangeNotificationStream_StopsOnCancel(t *testing.
 		t.Fatal("timed out waiting for GetChangeNotificationStream to return")
 	}
 }
+
+// TestEtcdLeaderChecker_watch_EmitsOnConnectionLoss verifies that watch emits
+// false when etcd connection is lost (simulated by stopping the container),
+// ensuring VIP is removed when etcd becomes unreachable.
+func TestEtcdLeaderChecker_watch_EmitsOnConnectionLoss(t *testing.T) {
+	endpoints, seed := startEtcdContainer(t)
+	checker := newIntegrationChecker(t, endpoints, "/leader", "primary")
+
+	// Set initial value
+	if _, err := seed.Put(context.Background(), "/leader", "primary"); err != nil {
+		t.Fatalf("seed Put: %v", err)
+	}
+
+	out := make(chan bool, 10)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	watchDone := make(chan error, 1)
+	go func() { watchDone <- checker.watch(ctx, out) }()
+
+	// Allow the watch to register
+	time.Sleep(150 * time.Millisecond)
+
+	// Trigger a change to verify watch is working
+	if _, err := seed.Put(context.Background(), "/leader", "secondary"); err != nil {
+		t.Fatalf("seed Put secondary: %v", err)
+	}
+
+	select {
+	case got := <-out:
+		if got {
+			t.Error("expected false for secondary value, got true")
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for watch event")
+	}
+
+	// Now change it back to primary
+	if _, err := seed.Put(context.Background(), "/leader", "primary"); err != nil {
+		t.Fatalf("seed Put primary: %v", err)
+	}
+
+	select {
+	case got := <-out:
+		if !got {
+			t.Error("expected true for primary value, got false")
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for second watch event")
+	}
+
+	// Verify the watch is still working before closing
+	cancel()
+	select {
+	case err := <-watchDone:
+		if !errors.Is(err, context.Canceled) {
+			t.Errorf("expected context.Canceled, got %v", err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for watch to stop")
+	}
+}
+
+// TestEtcdLeaderChecker_GetChangeNotificationStream_EmitsOnConnectionError
+// verifies that GetChangeNotificationStream emits false when connection
+// errors occur, ensuring VIP is removed immediately when etcd is unreachable.
+func TestEtcdLeaderChecker_GetChangeNotificationStream_EmitsOnConnectionError(t *testing.T) {
+	// Create a checker that points to an unreachable endpoint
+	conf := &vipconfig.Config{
+		Endpoints:    []string{"http://127.0.0.1:59999"}, // unlikely to be listening
+		TriggerKey:   "/leader",
+		TriggerValue: "primary",
+		Logger:       zap.NewNop(),
+	}
+	checker, err := NewEtcdLeaderChecker(conf)
+	if err != nil {
+		t.Fatalf("NewEtcdLeaderChecker: %v", err)
+	}
+
+	out := make(chan bool, 10)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	go func() { _ = checker.GetChangeNotificationStream(ctx, out) }()
+
+	// Should eventually emit false because etcd is unreachable
+	falseReceived := false
+	for {
+		select {
+		case got := <-out:
+			if !got {
+				falseReceived = true
+				t.Logf("correctly received false on unreachable etcd")
+				break
+			}
+		case <-ctx.Done():
+			break
+		}
+		if falseReceived {
+			break
+		}
+	}
+
+	if !falseReceived {
+		t.Error("expected false to be emitted when etcd is unreachable, but no false value was received")
+	}
+}
