@@ -118,13 +118,22 @@ func (elc *EtcdLeaderChecker) watch(ctx context.Context, out chan<- bool) error 
 			if err := watchResp.Err(); err != nil {
 				elc.Logger.Error("Watch error", zap.String("key", elc.TriggerKey), zap.Error(err))
 				// Signal false on watch error so VIP is removed if connection is lost
-				out <- false
+				// Guard the send with ctx to avoid deadlock during shutdown
+				select {
+				case out <- false:
+				case <-ctx.Done():
+					return ctx.Err()
+				}
 				watchChan = elc.Watch(ctx, elc.TriggerKey)
 				continue
 			}
 			for _, event := range watchResp.Events {
-				out <- string(event.Kv.Value) == elc.TriggerValue
-				elc.Logger.Sugar().Info("Current value from DCS: ", string(event.Kv.Value))
+				select {
+				case out <- string(event.Kv.Value) == elc.TriggerValue:
+					elc.Logger.Sugar().Info("Current value from DCS: ", string(event.Kv.Value))
+				case <-ctx.Done():
+					return ctx.Err()
+				}
 			}
 		}
 	}

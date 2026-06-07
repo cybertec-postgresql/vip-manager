@@ -61,13 +61,22 @@ checkLoop:
 			}
 			c.Logger.Sugar().Error("consul error: ", err)
 			// Signal false on connection error so VIP is removed if endpoint is unreachable
-			out <- false
+			// Guard the send with ctx to avoid deadlock during shutdown
+			select {
+			case out <- false:
+			case <-ctx.Done():
+				break checkLoop
+			}
 			time.Sleep(time.Duration(c.Interval) * time.Millisecond)
 			continue
 		}
 		if resp == nil {
 			c.Logger.Sugar().Errorf("Cannot get variable for key %s. Will try again in a second.", c.TriggerKey)
-			out <- false
+			select {
+			case out <- false:
+			case <-ctx.Done():
+				break checkLoop
+			}
 			time.Sleep(time.Duration(c.Interval) * time.Millisecond)
 			continue
 		}
