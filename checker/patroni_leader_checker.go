@@ -10,7 +10,7 @@ import (
 	"github.com/cybertec-postgresql/vip-manager/vipconfig"
 )
 
-// PatroniLeaderChecker will use Patroni REST API to check the leader.
+// PatroniLeaderChecker will use Patroni REST API to check the trigger value.
 // --trigger-key is used to specify the endpoint to check, e.g. /leader.
 // --trigger-value is used to specify the HTTP code to expect, e.g. 200.
 type PatroniLeaderChecker struct {
@@ -50,15 +50,25 @@ func (c *PatroniLeaderChecker) GetChangeNotificationStream(ctx context.Context, 
 			url := c.Endpoints[0] + c.TriggerKey
 			r, err := c.Get(url)
 			if err != nil {
-				c.Logger.Sugar().Errorf("patroni REST API error connecting to %s: %v", url, err)
-				out <- false
+				c.Logger.Sugar().Errorf("REST API error connecting to %s: %v", url, err)
+				// Signal false on connection error so VIP is removed if endpoint is unreachable
+				// Guard the send with ctx to avoid deadlock during shutdown
+				select {
+				case out <- false:
+				case <-ctx.Done():
+					return nil
+				}
 				continue
 			}
-			r.Body.Close() //throw away the body
+			r.Body.Close() // throw away the body
 			if r.StatusCode < 200 || r.StatusCode >= 300 {
-				c.Logger.Sugar().Warnf("patroni REST API returned non-success status code %d for %s (expected %s)", r.StatusCode, url, c.TriggerValue)
+				c.Logger.Sugar().Warnf("REST API returned non-success status code %d for %s (expected %s)", r.StatusCode, url, c.TriggerValue)
 			}
-			out <- strconv.Itoa(r.StatusCode) == c.TriggerValue
+			select {
+			case out <- strconv.Itoa(r.StatusCode) == c.TriggerValue:
+			case <-ctx.Done():
+				return nil
+			}
 		}
 	}
 }

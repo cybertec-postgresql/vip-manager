@@ -73,11 +73,13 @@ func getTransport(conf *vipconfig.Config) (*tls.Config, error) {
 	return tlsClientConfig, nil
 }
 
-// get gets the current leader from etcd
+// get gets the current value from etcd
 func (elc *EtcdLeaderChecker) get(ctx context.Context, out chan<- bool) {
 	resp, err := elc.Get(ctx, elc.TriggerKey)
 	if err != nil {
-		elc.Logger.Error("Failed to get etcd value", zap.String("key", elc.TriggerKey), zap.Error(err))
+		elc.Logger.Error("Failed to get value from etcd",
+			zap.String("key", elc.TriggerKey),
+			zap.Error(err))
 		out <- false
 		return
 	}
@@ -87,17 +89,19 @@ func (elc *EtcdLeaderChecker) get(ctx context.Context, out chan<- bool) {
 		return
 	}
 	if len(resp.Kvs) == 0 {
-		elc.Logger.Sugar().Info("No value found for key ", elc.TriggerKey, " - DCS may not have a leader yet")
+		elc.Logger.Sugar().Info("No value found for key ", elc.TriggerKey, " - DCS may not have set it yet")
 		out <- false
 		return
 	}
 	for _, kv := range resp.Kvs {
-		elc.Logger.Sugar().Info("Current leader from DCS:", string(kv.Value))
-		out <- string(kv.Value) == elc.TriggerValue
+		value := string(kv.Value)
+		matches := value == elc.TriggerValue
+		elc.Logger.Sugar().Info("Current value from DCS:", value)
+		out <- matches
 	}
 }
 
-// watch monitors the leader change from etcd
+// watch monitors value changes from etcd
 func (elc *EtcdLeaderChecker) watch(ctx context.Context, out chan<- bool) error {
 	elc.Logger.Sugar().Info("Setting WATCH on ", elc.TriggerKey)
 	watchChan := elc.Watch(ctx, elc.TriggerKey)
@@ -113,12 +117,23 @@ func (elc *EtcdLeaderChecker) watch(ctx context.Context, out chan<- bool) error 
 			}
 			if err := watchResp.Err(); err != nil {
 				elc.Logger.Error("Watch error", zap.String("key", elc.TriggerKey), zap.Error(err))
-				elc.get(ctx, out) // RPC failed, try to get the key directly to be on the safe side
+				// Signal false on watch error so VIP is removed if connection is lost
+				// Guard the send with ctx to avoid deadlock during shutdown
+				select {
+				case out <- false:
+				case <-ctx.Done():
+					return ctx.Err()
+				}
+				watchChan = elc.Watch(ctx, elc.TriggerKey)
 				continue
 			}
 			for _, event := range watchResp.Events {
-				out <- string(event.Kv.Value) == elc.TriggerValue
-				elc.Logger.Sugar().Info("Current leader from DCS: ", string(event.Kv.Value))
+				select {
+				case out <- string(event.Kv.Value) == elc.TriggerValue:
+					elc.Logger.Sugar().Info("Current value from DCS: ", string(event.Kv.Value))
+				case <-ctx.Done():
+					return ctx.Err()
+				}
 			}
 		}
 	}
