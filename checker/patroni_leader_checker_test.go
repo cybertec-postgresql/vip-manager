@@ -114,20 +114,20 @@ func TestGetChangeNotificationStream_StatusNoMatch(t *testing.T) {
 	}
 }
 
-// TestGetChangeNotificationStream_NonSuccessMatch verifies that a non-2xx
-// status code that happens to equal the trigger value still emits true
-// (the warning log does not prevent correct evaluation).
-func TestGetChangeNotificationStream_NonSuccessMatch(t *testing.T) {
+// TestGetChangeNotificationStream_Timeout verifies that a timeout waiting for a response
+// causes false to be emitted.
+func TestGetChangeNotificationStream_Timeout(t *testing.T) {
 	t.Parallel()
+	// Create a handler that delays the response beyond the client timeout
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusServiceUnavailable) // 503
+		time.Sleep(5 * time.Second)
+		w.WriteHeader(http.StatusOK)
 	}))
 	defer srv.Close()
 
-	// Patroni uses 503 to signal "not the leader" – but if an operator
-	// configures trigger-value=503 they expect true here.
-	conf := patroniConfig(srv.URL, "/leader", "503")
-	if !runStream(t, conf) {
-		t.Error("expected true when non-2xx status code matches trigger value")
+	conf := patroniConfig(srv.URL, "/leader", "200")
+	result := runStream(t, conf)
+	if result != false {
+		t.Error("expected false on timeout")
 	}
 }
