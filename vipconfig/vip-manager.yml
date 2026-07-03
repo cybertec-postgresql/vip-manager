@@ -36,7 +36,7 @@ etcd-key-file: "/path/to/etcd/client/key/file"
 consul-token: "Julian's secret token"
 
 # how often things should be retried and how long to wait between retries. (currently only affects arpClient)
-retry-num: 2
+retry-num: 3
 retry-after: 250  #in milliseconds
 
 # verbose logs (currently only supported for hetzner)
