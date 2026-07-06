@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"sync"
+	"syscall"
 
 	"github.com/cybertec-postgresql/vip-manager/checker"
 	"github.com/cybertec-postgresql/vip-manager/ipmanager"
@@ -52,10 +53,21 @@ func main() {
 
 	go func() {
 		c := make(chan os.Signal, 1)
-		signal.Notify(c, os.Interrupt)
-		<-c
-		log.Info("Received exit signal")
-		cancel()
+		signal.Notify(c, os.Interrupt, syscall.SIGHUP)
+		for sig := range c {
+			if sig == syscall.SIGHUP {
+				// Reopen the log file so that logrotate (via "systemctl kill
+				// -s HUP") can move the current file aside. No-op on stdout.
+				log.Info("Received SIGHUP, reopening log file")
+				if err := conf.ReopenLog(); err != nil {
+					log.Errorf("Failed to reopen log file: %s", err)
+				}
+				continue
+			}
+			log.Info("Received exit signal")
+			cancel()
+			return
+		}
 	}()
 
 	var wg sync.WaitGroup

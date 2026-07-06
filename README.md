@@ -148,6 +148,7 @@ This is a list of all available configuration items:
 | `etcd-cert-file`  | `VIP_ETCD_CERT_FILE`  | no        | `/etc/etcd/client.cert.pem` | A client certificate that is used to authenticate against etcd endpoints. Requires `etcd-ca-file` to be set as well. |
 | `etcd-key-file`   | `VIP_ETCD_KEY_FILE`   | no        | `/etc/etcd/client.key.pem`  | A private key for the client certificate, used to decrypt messages sent by etcd endpoints. Required when `etcd-cert-file` is specified. |
 | `verbose`         | `VIP_VERBOSE`         | no        | `true`                      | Enable more verbose logging. Currently only the manager-type=hetzner provides additional logs. |
+| `log-file`        | `VIP_LOG_FILE`        | no        | `/var/log/vip-manager.log`  | Path to a log file. When set, logs are written to this file instead of stdout. Send `SIGHUP` to make vip-manager close and reopen the file, so log-rotation tools such as `logrotate` can rotate it. When empty (the default), logs go to stdout (and thus the systemd journal). |
 
 ## Configuration - Patroni REST API
 
@@ -178,6 +179,37 @@ Either:
 
 > [!NOTE]
 > Currently only supported for `hetzner`
+
+## Log rotation
+
+By default vip-manager logs to stdout, so under systemd the logs end up in the
+journal, which handles its own rotation. If you instead configure an explicit
+log file with `log-file` (e.g. `VIP_LOG_FILE=/var/log/vip-manager.log`), you are
+responsible for rotating that file.
+
+vip-manager follows the usual daemon convention: on `SIGHUP` it closes and
+reopens the configured log file. This lets `logrotate` move the current file
+aside and have vip-manager start writing to a freshly created file, so the old,
+rotated file can be compressed/removed and storage is not filled over time.
+
+Example `/etc/logrotate.d/vip-manager`:
+
+```text
+/var/log/vip-manager.log {
+    daily
+    rotate 7
+    compress
+    delaycompress
+    missingok
+    notifempty
+    postrotate
+        systemctl kill -s HUP vip-manager.service 2>/dev/null || true
+    endscript
+}
+```
+
+If you don't run under systemd, replace the `postrotate` command with a plain
+`kill -HUP $(cat /run/vip-manager.pid)` (or however you track the PID).
 
 ## Author
 

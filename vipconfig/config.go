@@ -6,6 +6,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -42,7 +43,13 @@ type Config struct {
 
 	Verbose bool `mapstructure:"verbose"`
 
+	LogFile string `mapstructure:"log-file"`
+
 	Logger *zap.Logger
+
+	// logReopener is set when logging to a file so that the file can be closed
+	// and reopened on SIGHUP (see ReopenLog). It is nil when logging to stdout.
+	logReopener *reopenableFile
 }
 
 func defineFlags() *pflag.FlagSet {
@@ -78,6 +85,8 @@ func defineFlags() *pflag.FlagSet {
 	flags.Int("retry-num", 3, "Number of times interactions with outside components are retried.")
 
 	flags.Bool("verbose", false, "Be verbose. Currently only implemented for manager-type=hetzner .")
+
+	flags.String("log-file", "", "Path to a log file. If empty, logs are written to stdout. Send SIGHUP to reopen the file after rotation (e.g. logrotate).")
 
 	flags.SortFlags = false
 	return flags
@@ -285,44 +294,81 @@ func newConfig(args []string) (*Config, error) {
 }
 
 func (conf *Config) initLogger() {
-	lcfg := zap.Config{
-		Level: zap.NewAtomicLevelAt(map[bool]zapcore.Level{
-			false: zap.InfoLevel,
-			true:  zap.DebugLevel}[conf.Verbose]),
+	level := zap.NewAtomicLevelAt(map[bool]zapcore.Level{
+		false: zap.InfoLevel,
+		true:  zap.DebugLevel}[conf.Verbose])
 
-		Development: false,
+	// copied from "zap.NewProductionEncoderConfig" with some updates
+	encoderConfig := zapcore.EncoderConfig{
+		TimeKey:        "ts",
+		LevelKey:       "level",
+		NameKey:        "logger",
+		CallerKey:      "caller",
+		MessageKey:     "msg",
+		StacktraceKey:  "stacktrace",
+		LineEnding:     zapcore.DefaultLineEnding,
+		EncodeLevel:    zapcore.CapitalColorLevelEncoder,
+		EncodeTime:     zapcore.ISO8601TimeEncoder,
+		EncodeDuration: zapcore.StringDurationEncoder,
 
-		Sampling: &zap.SamplingConfig{
-			Initial:    100,
-			Thereafter: 100,
-		},
-		Encoding: "console",
-
-		// copied from "zap.NewProductionEncoderConfig" with some updates
-		EncoderConfig: zapcore.EncoderConfig{
-			TimeKey:        "ts",
-			LevelKey:       "level",
-			NameKey:        "logger",
-			CallerKey:      "caller",
-			MessageKey:     "msg",
-			StacktraceKey:  "stacktrace",
-			LineEnding:     zapcore.DefaultLineEnding,
-			EncodeLevel:    zapcore.CapitalColorLevelEncoder,
-			EncodeTime:     zapcore.ISO8601TimeEncoder,
-			EncodeDuration: zapcore.StringDurationEncoder,
-
-			EncodeCaller: map[bool]zapcore.CallerEncoder{
-				false: nil,
-				true:  zapcore.ShortCallerEncoder}[conf.Verbose],
-		},
-
-		// Use "/dev/null" to discard all
-		OutputPaths:      []string{"stdout"},
-		ErrorOutputPaths: []string{"stderr"},
+		EncodeCaller: map[bool]zapcore.CallerEncoder{
+			false: nil,
+			true:  zapcore.ShortCallerEncoder}[conf.Verbose],
 	}
-	var err error
-	conf.Logger, err = lcfg.Build()
+
+	// When no log file is configured, keep the original stdout behaviour.
+	if conf.LogFile == "" {
+		lcfg := zap.Config{
+			Level:       level,
+			Development: false,
+			Sampling: &zap.SamplingConfig{
+				Initial:    100,
+				Thereafter: 100,
+			},
+			Encoding:      "console",
+			EncoderConfig: encoderConfig,
+
+			// Use "/dev/null" to discard all
+			OutputPaths:      []string{"stdout"},
+			ErrorOutputPaths: []string{"stderr"},
+		}
+		var err error
+		conf.Logger, err = lcfg.Build()
+		if err != nil {
+			panic(err)
+		}
+		return
+	}
+
+	// A log file is configured: build the core manually so that we control the
+	// underlying writer and can close/reopen it on SIGHUP (see ReopenLog).
+	reopener, err := newReopenableFile(conf.LogFile)
 	if err != nil {
 		panic(err)
 	}
+	conf.logReopener = reopener
+
+	// ANSI colour codes do not belong in a log file, so use the plain encoder.
+	encoderConfig.EncodeLevel = zapcore.CapitalLevelEncoder
+
+	core := zapcore.NewCore(
+		zapcore.NewConsoleEncoder(encoderConfig),
+		zapcore.AddSync(reopener),
+		level,
+	)
+	// Match the sampling used by the stdout logger above.
+	core = zapcore.NewSamplerWithOptions(core, time.Second, 100, 100)
+
+	// AddCaller + AddStacktrace mirror what zap.Config.Build() adds by default.
+	conf.Logger = zap.New(core, zap.AddCaller(), zap.AddStacktrace(zapcore.ErrorLevel))
+}
+
+// ReopenLog closes and reopens the configured log file so log-rotation tools
+// (e.g. logrotate) can move the current file aside and have vip-manager write
+// to a freshly created file. It is a no-op when logging to stdout.
+func (conf *Config) ReopenLog() error {
+	if conf.logReopener == nil {
+		return nil
+	}
+	return conf.logReopener.Reopen()
 }

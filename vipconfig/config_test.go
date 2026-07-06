@@ -378,6 +378,76 @@ func TestInitLogger_Verbose(t *testing.T) {
 	_ = conf.Logger.Sync()
 }
 
+func TestInitLogger_WritesToLogFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "vip-manager.log")
+	conf := &Config{LogFile: path}
+	conf.initLogger()
+	if conf.Logger == nil {
+		t.Fatal("expected non-nil logger")
+	}
+	if conf.logReopener == nil {
+		t.Fatal("expected logReopener to be set when LogFile is configured")
+	}
+
+	conf.Logger.Info("hello from the log file")
+	_ = conf.Logger.Sync()
+
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read log file: %v", err)
+	}
+	if !strings.Contains(string(content), "hello from the log file") {
+		t.Errorf("expected logged message in file, got %q", content)
+	}
+	// The file encoder must not embed ANSI colour codes.
+	if strings.Contains(string(content), "\x1b[") {
+		t.Errorf("log file should not contain ANSI colour codes, got %q", content)
+	}
+}
+
+func TestReopenLog_NoLogFileIsNoop(t *testing.T) {
+	conf := &Config{}
+	conf.initLogger()
+	if conf.logReopener != nil {
+		t.Fatal("expected nil logReopener when logging to stdout")
+	}
+	if err := conf.ReopenLog(); err != nil {
+		t.Errorf("expected nil error from ReopenLog in stdout mode, got %v", err)
+	}
+}
+
+func TestReopenLog_WithLogFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "vip-manager.log")
+	conf := &Config{LogFile: path}
+	conf.initLogger()
+
+	conf.Logger.Info("before reopen")
+	_ = conf.Logger.Sync()
+
+	// Simulate logrotate renaming the file, then ask vip-manager to reopen.
+	rotated := path + ".1"
+	if err := os.Rename(path, rotated); err != nil {
+		t.Fatalf("rename: %v", err)
+	}
+	if err := conf.ReopenLog(); err != nil {
+		t.Fatalf("ReopenLog: %v", err)
+	}
+
+	conf.Logger.Info("after reopen")
+	_ = conf.Logger.Sync()
+
+	fresh, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read fresh log file: %v", err)
+	}
+	if !strings.Contains(string(fresh), "after reopen") {
+		t.Errorf("expected post-reopen message in fresh file, got %q", fresh)
+	}
+	if strings.Contains(string(fresh), "before reopen") {
+		t.Errorf("fresh file should not contain pre-reopen message, got %q", fresh)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // defineFlags
 // ---------------------------------------------------------------------------
@@ -393,6 +463,7 @@ func TestDefineFlags_AllFlagsPresent(t *testing.T) {
 		"interval", "manager-type",
 		"retry-after", "retry-num",
 		"verbose",
+		"log-file",
 	}
 	flags := defineFlags()
 	for _, name := range expected {
@@ -551,5 +622,23 @@ func TestNewConfig_InvalidFlag(t *testing.T) {
 	_, err := newConfig([]string{"--nonexistent-flag=value"})
 	if err == nil {
 		t.Error("expected error for unknown flag")
+	}
+}
+
+func TestNewConfig_LogFileFlag(t *testing.T) {
+	path := minimalConfigFile(t)
+	logPath := filepath.Join(t.TempDir(), "vip-manager.log")
+	conf, err := newConfig([]string{
+		fmt.Sprintf("--config=%s", path),
+		fmt.Sprintf("--log-file=%s", logPath),
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if conf.LogFile != logPath {
+		t.Errorf("LogFile: got %q, want %q", conf.LogFile, logPath)
+	}
+	if conf.logReopener == nil {
+		t.Error("expected logReopener to be set when --log-file is passed")
 	}
 }
