@@ -42,7 +42,8 @@ retry-after: 250  #in milliseconds
 # verbose logs (currently only supported for hetzner)
 verbose: false
 
-# optional path to a log file. when set, logs are written here instead of stdout.
+# optional path to a log file. when set, logs are written here instead of stdout,
+# and the process's stdout/stderr (including panics) are redirected here too.
 # send SIGHUP (e.g. from logrotate's postrotate) to close and reopen the file
 # after it has been rotated. leave unset/empty to log to stdout (systemd journal).
 # log-file: /var/log/vip-manager.log

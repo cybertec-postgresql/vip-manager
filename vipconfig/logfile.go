@@ -13,17 +13,31 @@ import (
 type reopenableFile struct {
 	path string
 	mu   sync.Mutex // guards f; Reopen may race with Write/Sync from log goroutines
-	f    *os.File
+
+	// captureStd, when true, redirects the process's stdout/stderr file
+	// descriptors to the log file whenever it is (re)opened, so that panics and
+	// any output not routed through the logger are also captured.
+	captureStd bool
+	f          *os.File
 }
 
 // newReopenableFile opens (creating if necessary) the log file at path in append
 // mode and returns a reopenableFile ready to be used as a zapcore.WriteSyncer.
-func newReopenableFile(path string) (*reopenableFile, error) {
+// When captureStd is true, the process's stdout and stderr are redirected to the
+// file as well (see redirectStdStreams).
+func newReopenableFile(path string, captureStd bool) (*reopenableFile, error) {
 	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return nil, err
 	}
-	return &reopenableFile{path: path, f: f}, nil
+	r := &reopenableFile{path: path, captureStd: captureStd, f: f}
+	if captureStd {
+		if err := redirectStdStreams(f); err != nil {
+			_ = f.Close()
+			return nil, err
+		}
+	}
+	return r, nil
 }
 
 // Write implements io.Writer.
@@ -56,5 +70,8 @@ func (r *reopenableFile) Reopen() error {
 		return err
 	}
 	r.f = f
+	if r.captureStd {
+		return redirectStdStreams(f)
+	}
 	return nil
 }

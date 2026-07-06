@@ -342,7 +342,9 @@ func (conf *Config) initLogger() {
 
 	// A log file is configured: build the core manually so that we control the
 	// underlying writer and can close/reopen it on SIGHUP (see ReopenLog).
-	reopener, err := newReopenableFile(conf.LogFile)
+	// captureStd=true also redirects the process's stdout/stderr to the file, so
+	// that panics and any output not routed through the logger are captured too.
+	reopener, err := newReopenableFile(conf.LogFile, true)
 	if err != nil {
 		panic(err)
 	}

@@ -15,7 +15,7 @@ func TestReopenableFile_ReopenSwapsInode(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "vip-manager.log")
 
-	rf, err := newReopenableFile(path)
+	rf, err := newReopenableFile(path, false)
 	if err != nil {
 		t.Fatalf("newReopenableFile: %v", err)
 	}
@@ -68,7 +68,7 @@ func TestReopenableFile_AppendsToExisting(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rf, err := newReopenableFile(path)
+	rf, err := newReopenableFile(path, false)
 	if err != nil {
 		t.Fatalf("newReopenableFile: %v", err)
 	}
@@ -86,7 +86,7 @@ func TestReopenableFile_AppendsToExisting(t *testing.T) {
 func TestReopenableFile_NewFileError(t *testing.T) {
 	// A path whose parent directory does not exist must fail to open.
 	path := filepath.Join(t.TempDir(), "nonexistent-dir", "vip-manager.log")
-	if _, err := newReopenableFile(path); err == nil {
+	if _, err := newReopenableFile(path, false); err == nil {
 		t.Error("expected error opening file in nonexistent directory")
 	}
 }
