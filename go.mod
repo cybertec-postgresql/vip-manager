@@ -12,7 +12,7 @@ require (
 	github.com/testcontainers/testcontainers-go/modules/etcd v0.43.0
 	go.etcd.io/etcd/client/v3 v3.6.12
 	go.uber.org/zap v1.28.0
-	golang.org/x/sys v0.46.0
+	golang.org/x/sys v0.47.0
 )
 
 require (
