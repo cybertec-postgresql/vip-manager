@@ -447,3 +447,60 @@ func TestEtcdLeaderChecker_GetChangeNotificationStream_EmitsOnConnectionError(t 
 		t.Error("expected false to be emitted when etcd is unreachable, but no false value was received")
 	}
 }
+
+// TestEtcdLeaderChecker_watch_ResyncsOnCanceledWatch is a regression test
+// for https://github.com/cybertec-postgresql/vip-manager/issues/394: when the
+// watch channel dies (canceled by the server or closed) and the leader
+// changes while the watch is down, the checker must re-sync the state via
+// get() instead of silently re-arming the watch and keeping stale state.
+func TestEtcdLeaderChecker_watch_ResyncsOnCanceledWatch(t *testing.T) {
+	endpoints, seed := startEtcdContainer(t)
+	checker := newIntegrationChecker(t, endpoints, "/leader", "primary")
+
+	// Make this node the leader so a stale state would keep the VIP up.
+	if _, err := seed.Put(context.Background(), "/leader", "primary"); err != nil {
+		t.Fatalf("seed Put: %v", err)
+	}
+
+	out := make(chan bool, 10)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	watchDone := make(chan error, 1)
+	go func() { watchDone <- checker.watch(ctx, out) }()
+
+	// Allow the watch to register on the server.
+	time.Sleep(150 * time.Millisecond)
+
+	// Kill all watch streams: closing the client's Watcher closes the watch
+	// channel, simulating a server-side cancellation / dead watch.
+	if err := checker.Watcher.Close(); err != nil {
+		t.Fatalf("Watcher.Close: %v", err)
+	}
+
+	// While the watch is dead, the leader changes to another node. The old
+	// code lost this event forever; the fix re-fetches the value via get().
+	if _, err := seed.Put(context.Background(), "/leader", "secondary"); err != nil {
+		t.Fatalf("Put leader change: %v", err)
+	}
+
+	// The re-sync must emit false because this node is no longer the leader.
+	select {
+	case got := <-out:
+		if got {
+			t.Error("expected false after leader change during dead watch, got true")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for re-synced state after watch channel died")
+	}
+
+	cancel()
+	select {
+	case err := <-watchDone:
+		if !errors.Is(err, context.Canceled) {
+			t.Errorf("expected context.Canceled from watch, got %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for watch goroutine to exit")
+	}
+}
