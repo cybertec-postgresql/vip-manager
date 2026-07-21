@@ -148,7 +148,7 @@ func TestNewEtcdLeaderChecker_ValidConfig(t *testing.T) {
 // Integration tests – require a running Docker daemon
 // ---------------------------------------------------------------------------
 
-const etcdImage = "gcr.io/etcd-development/etcd:v3.5.14"
+const etcdImage = "gcr.io/etcd-development/etcd:v3.7.0"
 
 // startEtcdContainer starts a real etcd container and returns the client
 // endpoints and a pre-authenticated seed client for writing test data.
@@ -176,6 +176,18 @@ func startEtcdContainer(t *testing.T) (endpoints []string, seed *clientv3.Client
 		t.Fatalf("create seed client: %v", err)
 	}
 	t.Cleanup(func() { _ = seed.Close() })
+
+	// Wait for a leader to be elected before returning. WithRequireLeader
+	// cancels watches immediately when no leader is present, so tests that
+	// rely on watch events would race against the initial election otherwise.
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		st, err := seed.Status(ctx, endpoints[0])
+		if err == nil && st.Leader != 0 {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
 	return
 }
 

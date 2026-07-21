@@ -129,9 +129,13 @@ func (elc *EtcdLeaderChecker) watch(ctx context.Context, out chan<- bool) error 
 				// The watch is dead. Any events that occurred while
 				// the watch was down may have been lost, so after re-arming
 				// the watch we re-fetch the current value via get()
+				var watchErr error
+				if ok {
+					watchErr = watchResp.Err()
+				}
 				elc.Logger.Error("WATCH on key lost, re-establishing and re-syncing state",
 					zap.String("key", elc.TriggerKey),
-					zap.Error(watchResp.Err()))
+					zap.Error(watchErr))
 				// Back off briefly to avoid a busy loop when etcd is unreachable
 				select {
 				case <-time.After(time.Second):
