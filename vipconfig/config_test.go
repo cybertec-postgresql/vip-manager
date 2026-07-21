@@ -553,3 +553,28 @@ func TestNewConfig_InvalidFlag(t *testing.T) {
 		t.Error("expected error for unknown flag")
 	}
 }
+
+// ---------------------------------------------------------------------------
+// NewConfig (public API)
+// ---------------------------------------------------------------------------
+
+func TestNewConfig_CreatesConfig(t *testing.T) {
+	// NewConfig reads from os.Args, so we need to set them via os.Args
+	// Save original os.Args
+	oldArgs := os.Args
+	defer func() { os.Args = oldArgs }()
+
+	path := minimalConfigFile(t)
+	os.Args = []string{oldArgs[0], fmt.Sprintf("--config=%s", path)}
+	
+	conf, err := NewConfig()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if conf == nil {
+		t.Fatal("expected non-nil config")
+	}
+	if conf.IP != "10.0.0.1" {
+		t.Errorf("IP: got %q, want 10.0.0.1", conf.IP)
+	}
+}
