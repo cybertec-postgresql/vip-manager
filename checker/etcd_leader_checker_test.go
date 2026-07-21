@@ -148,7 +148,7 @@ func TestNewEtcdLeaderChecker_ValidConfig(t *testing.T) {
 // Integration tests – require a running Docker daemon
 // ---------------------------------------------------------------------------
 
-const etcdImage = "gcr.io/etcd-development/etcd:v3.5.14"
+const etcdImage = "gcr.io/etcd-development/etcd:v3.7.0"
 
 // startEtcdContainer starts a real etcd container and returns the client
 // endpoints and a pre-authenticated seed client for writing test data.
