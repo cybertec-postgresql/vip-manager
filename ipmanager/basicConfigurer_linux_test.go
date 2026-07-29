@@ -101,7 +101,7 @@ func TestSendPacketLinux_LoopbackInterface(t *testing.T) {
 	// 2. Bind
 	// 3. Sendto
 	err = sendPacketLinux(*lo, packet)
-	
+
 	// Sending on loopback might fail or succeed depending on kernel configuration
 	// We just want to ensure the function doesn't panic and handles errors appropriately
 	if err != nil {
@@ -134,10 +134,10 @@ func TestSendPacketLinux_ValidInterface(t *testing.T) {
 	for i := range ifaces {
 		iface := &ifaces[i]
 		// Look for an interface that is up and has a valid hardware address
-		if iface.Flags&net.FlagUp != 0 && 
-		   iface.HardwareAddr != nil && 
-		   len(iface.HardwareAddr) == 6 &&
-		   iface.HardwareAddr.String() != "00:00:00:00:00:00" {
+		if iface.Flags&net.FlagUp != 0 &&
+			iface.HardwareAddr != nil &&
+			len(iface.HardwareAddr) == 6 &&
+			iface.HardwareAddr.String() != "00:00:00:00:00:00" {
 			testIface = iface
 			break
 		}
@@ -163,7 +163,7 @@ func TestSendPacketLinux_ValidInterface(t *testing.T) {
 
 	// Send the packet - this exercises all code paths in sendPacketLinux
 	err = sendPacketLinux(*testIface, packet)
-	
+
 	// The send might succeed or fail depending on network configuration
 	// We're mainly testing that all code paths execute without panic
 	if err != nil {
@@ -207,10 +207,31 @@ func TestSendPacketLinux_EmptyPacket(t *testing.T) {
 
 	// Try to send an empty packet
 	err = sendPacketLinux(*lo, []byte{})
-	
+
 	// May succeed or fail, but should not panic
 	if err != nil {
 		t.Logf("sendPacketLinux with empty packet returned: %v", err)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// configureAddress
+// ---------------------------------------------------------------------------
+
+func TestBasicConfigurer_configureAddress_RequiresRoot(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("test must run as non-root to verify permission checks")
+	}
+
+	conf := zap.NewNop()
+	log = conf.Sugar()
+
+	c := &BasicConfigurer{
+		IPConfiguration: &IPConfiguration{
+			VIP:     netip.MustParseAddr("192.0.2.1"), // TEST-NET-1 (RFC 5737)
+			Netmask: net.CIDRMask(24, 32),
+			Iface: net.Interface{
+				Name:         "lo",
 				HardwareAddr: net.HardwareAddr{0x00, 0x11, 0x22, 0x33, 0x44, 0x55},
 			},
 		},
@@ -360,8 +381,119 @@ func TestBasicConfigurer_runAddressConfiguration_Delete(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// runAddressConfiguration - test success path
+// ---------------------------------------------------------------------------
+
+func TestBasicConfigurer_runAddressConfiguration_SuccessPath(t *testing.T) {
+	if os.Getuid() != 0 {
+		t.Skip("runAddressConfiguration tests require root privileges")
+	}
+
+	conf := zap.NewNop()
+	log = conf.Sugar()
+
+	// Get the loopback interface
+	lo, err := net.InterfaceByName("lo")
+	if err != nil {
+		t.Skip("loopback interface not available")
+	}
+
+	testIP := netip.MustParseAddr("192.0.2.77")
+	c := &BasicConfigurer{
+		IPConfiguration: &IPConfiguration{
+			VIP:     testIP,
+			Netmask: net.CIDRMask(32, 32),
+			Iface: net.Interface{
+				Index:        lo.Index,
+				Name:         lo.Name,
+				HardwareAddr: net.HardwareAddr{0x00, 0x11, 0x22, 0x33, 0x44, 0x55},
+			},
+		},
+	}
+
+	// Ensure cleanup
+	defer c.runAddressConfiguration("delete")
+
+	// Test successful add
+	if result := c.runAddressConfiguration("add"); result {
+		t.Log("runAddressConfiguration(add) succeeded")
+		// Clean up
+		c.runAddressConfiguration("delete")
+	} else {
+		t.Log("runAddressConfiguration(add) failed (may be due to system restrictions)")
+	}
+}
+
+// ---------------------------------------------------------------------------
 // Integration test: configure and deconfigure on loopback (requires root)
 // ---------------------------------------------------------------------------
+
+func TestBasicConfigurer_Integration_RealInterfaceAddRemove(t *testing.T) {
+	if os.Getuid() != 0 {
+		t.Skip("integration test requires root privileges")
+	}
+
+	conf := zap.NewNop()
+	log = conf.Sugar()
+
+	// Find a real network interface (not loopback) with proper MAC
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		t.Fatalf("failed to get network interfaces: %v", err)
+	}
+
+	var testIface *net.Interface
+	for i := range ifaces {
+		iface := &ifaces[i]
+		if iface.Flags&net.FlagUp != 0 &&
+			iface.HardwareAddr != nil &&
+			len(iface.HardwareAddr) == 6 &&
+			iface.HardwareAddr.String() != "00:00:00:00:00:00" &&
+			iface.Name != "lo" {
+			testIface = iface
+			break
+		}
+	}
+
+	if testIface == nil {
+		t.Skip("no suitable network interface found for testing")
+	}
+
+	testIP := netip.MustParseAddr("192.0.2.88")
+	c := &BasicConfigurer{
+		IPConfiguration: &IPConfiguration{
+			VIP:     testIP,
+			Netmask: net.CIDRMask(32, 32),
+			Iface:   *testIface,
+		},
+	}
+
+	// Ensure cleanup
+	defer c.deconfigureAddress()
+
+	// Test: Add the address
+	if !c.configureAddress() {
+		t.Log("Note: configureAddress failed (may be due to system restrictions)")
+		return
+	}
+
+	t.Log("Successfully configured address with ARP")
+
+	// Verify the address was added
+	if !c.queryAddress() {
+		t.Error("queryAddress returned false after successful configureAddress")
+	}
+
+	// Test: Remove the address
+	if !c.deconfigureAddress() {
+		t.Error("deconfigureAddress failed after successful configureAddress")
+	} else {
+		// Verify removal
+		if c.queryAddress() {
+			t.Error("queryAddress returned true after deconfigureAddress")
+		}
+	}
+}
 
 func TestBasicConfigurer_Integration_LoopbackAddRemove(t *testing.T) {
 	if os.Getuid() != 0 {
