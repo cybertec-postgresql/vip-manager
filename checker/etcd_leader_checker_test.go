@@ -238,7 +238,7 @@ func TestEtcdLeaderChecker_get_KeyAbsent(t *testing.T) {
 	}
 }
 
-// TestEtcdLeaderChecker_get_ExpiredContext verifies that get returns an error when the context is expired.
+// TestEtcdLeaderChecker_get_ExpiredContext verifies that get returns false when the context is expired.
 func TestEtcdLeaderChecker_get_ExpiredContext(t *testing.T) {
 	endpoints, seed := startEtcdContainer(t)
 	if _, err := seed.Put(context.Background(), "/leader", "primary"); err != nil {
@@ -254,9 +254,11 @@ func TestEtcdLeaderChecker_get_ExpiredContext(t *testing.T) {
 
 	select {
 	case got := <-out:
-		t.Errorf("expected no output due to expired context, but got: %v", got)
+		if got != false {
+			t.Errorf("expected false due to expired context, but got: %v", got)
+		}
 	case <-time.After(1 * time.Second):
-		// No output received, which is expected
+		t.Error("expected output (false) due to expired context, but got no output")
 	}
 }
 
