@@ -44,19 +44,19 @@ func TestGetNetIface_Nonexistent(t *testing.T) {
 // This test skips if no valid interface can be found.
 func TestGetNetIface_Success(t *testing.T) {
 	t.Parallel()
-	
+
 	// Try common loopback names
 	names := []string{"lo", "lo0", "Loopback Pseudo-Interface 1"}
 	var iface *net.Interface
 	var err error
-	
+
 	for _, name := range names {
 		iface, err = getNetIface(name)
 		if err == nil {
 			break
 		}
 	}
-	
+
 	if iface == nil || err != nil {
 		t.Skip("no valid loopback interface available for testing")
 	}
@@ -101,10 +101,10 @@ func TestNewIPManager_InvalidInterface(t *testing.T) {
 func TestGetMask_IPv4_ValidRange(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
-		name   string
-		addr   netip.Addr
-		mask   int
-		want   string
+		name string
+		addr netip.Addr
+		mask int
+		want string
 	}{
 		{"IPv4 /24", netip.MustParseAddr("192.168.1.1"), 24, "ffffff00"},
 		{"IPv4 /32", netip.MustParseAddr("192.168.1.1"), 32, "ffffffff"},
@@ -125,10 +125,10 @@ func TestGetMask_IPv4_ValidRange(t *testing.T) {
 func TestGetMask_IPv4_OutOfRange(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
-		name   string
-		addr   netip.Addr
-		mask   int
-		desc   string
+		name string
+		addr netip.Addr
+		mask int
+		desc string
 	}{
 		{"IPv4 negative", netip.MustParseAddr("192.168.1.1"), -1, "negative mask"},
 		{"IPv4 > 32", netip.MustParseAddr("192.168.1.1"), 33, "mask > 32"},
@@ -150,13 +150,13 @@ func TestGetMask_IPv4_OutOfRange(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 type mockConfigurer struct {
-	queryAddressCount  int
-	configureCount     int
-	deconfigureCount   int
-	shouldQueryFail    bool
-	shouldConfigureFail bool
+	queryAddressCount     int
+	configureCount        int
+	deconfigureCount      int
+	shouldQueryFail       bool
+	shouldConfigureFail   bool
 	shouldDeconfigureFail bool
-	shouldQueryReturn  bool
+	shouldQueryReturn     bool
 }
 
 func (m *mockConfigurer) queryAddress() bool {

@@ -130,6 +130,21 @@ func TestNewEtcdLeaderChecker_TLSError(t *testing.T) {
 	}
 }
 
+// TestNewEtcdLeaderChecker_InvalidValidConfig verifies that an invalid etcd
+// config (e.g., unreachable endpoints) is wrapped with "failed to connect to etcd".
+func TestNewEtcdLeaderChecker_InvalidConfig(t *testing.T) {
+	t.Parallel()
+	conf := etcdConfig()
+	conf.Endpoints = []string{} // unreachable
+	_, err := NewEtcdLeaderChecker(conf)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "failed to connect to etcd") {
+		t.Errorf("unexpected error message: %v", err)
+	}
+}
+
 // TestNewEtcdLeaderChecker_ValidConfig verifies that the checker is created
 // without error when endpoints and TLS are valid. The etcd client connects
 // lazily so no live server is required.
@@ -220,6 +235,34 @@ func TestEtcdLeaderChecker_get_KeyAbsent(t *testing.T) {
 
 	if got := <-out; got {
 		t.Error("expected false for absent key, got true")
+	}
+}
+
+// TestEtcdLeaderChecker_get_ExpiredContext verifies that get handles an expired context correctly.
+// Due to the race condition in the send() select statement, it may send false or nothing.
+func TestEtcdLeaderChecker_get_ExpiredContext(t *testing.T) {
+	endpoints, seed := startEtcdContainer(t)
+	if _, err := seed.Put(context.Background(), "/leader", "primary"); err != nil {
+		t.Fatalf("seed Put: %v", err)
+	}
+	checker := newIntegrationChecker(t, endpoints, "/leader", "primary")
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel() // Immediately cancel the context
+
+	out := make(chan bool, 1)
+	checker.get(ctx, out)
+
+	// Due to the race in send()'s select statement, either outcome is valid:
+	// - The send may complete before the context check (sends false)
+	// - The context check may win (sends nothing)
+	select {
+	case got := <-out:
+		if got != false {
+			t.Errorf("if output is sent with expired context, expected false, but got: %v", got)
+		}
+	case <-time.After(100 * time.Millisecond):
+		// No output is also acceptable due to the race condition
 	}
 }
 
