@@ -54,8 +54,19 @@ jobs:
         args: --verbose
 
     - name: Test
+      if: runner.os != 'Linux'
       run: |
         go test -failfast -v -coverprofile profile.cov ./...
+
+    - name: Test (Linux with privileged container)
+      if: runner.os == 'Linux'
+      run: |
+        # Run tests in privileged container to enable raw socket and IP configuration tests
+        docker run --rm --privileged \
+          -v ${{ github.workspace }}:/work \
+          -w /work \
+          golang:1.26 \
+          sh -c "apt-get update && apt-get install -y iproute2 && go test -failfast -v -coverprofile profile.cov ./..."
 
     - name: Coveralls
       if: runner.os == 'Linux'
