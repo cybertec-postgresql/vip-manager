@@ -223,6 +223,28 @@ func TestEtcdLeaderChecker_get_KeyAbsent(t *testing.T) {
 	}
 }
 
+// TestEtcdLeaderChecker_get_ExpiredContext verifies that get returns an error when the context is expired.
+func TestEtcdLeaderChecker_get_ExpiredContext(t *testing.T) {
+	endpoints, seed := startEtcdContainer(t)
+	if _, err := seed.Put(context.Background(), "/leader", "primary"); err != nil {
+		t.Fatalf("seed Put: %v", err)
+	}
+	checker := newIntegrationChecker(t, endpoints, "/leader", "primary")
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel() // Immediately cancel the context
+
+	out := make(chan bool, 1)
+	checker.get(ctx, out)
+
+	select {
+	case got := <-out:
+		t.Errorf("expected no output due to expired context, but got: %v", got)
+	case <-time.After(1 * time.Second):
+		// No output received, which is expected
+	}
+}
+
 // TestEtcdLeaderChecker_get_MatchingValue verifies that get emits true when
 // the key value matches TriggerValue.
 func TestEtcdLeaderChecker_get_MatchingValue(t *testing.T) {
