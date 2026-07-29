@@ -8,6 +8,8 @@ import (
 	"os"
 	"syscall"
 	"testing"
+
+	"go.uber.org/zap"
 )
 
 // ---------------------------------------------------------------------------
@@ -143,6 +145,9 @@ func TestBasicConfigurer_configureAddress_RequiresRoot(t *testing.T) {
 		t.Skip("test must run as non-root to verify permission checks")
 	}
 
+	conf := zap.NewNop()
+	log = conf.Sugar()
+
 	c := &BasicConfigurer{
 		IPConfiguration: &IPConfiguration{
 			VIP:     netip.MustParseAddr("192.0.2.1"), // TEST-NET-1 (RFC 5737)
@@ -165,6 +170,9 @@ func TestBasicConfigurer_configureAddress_NonexistentInterface(t *testing.T) {
 	if os.Getuid() != 0 {
 		t.Skip("configureAddress tests require root privileges")
 	}
+
+	conf := zap.NewNop()
+	log = conf.Sugar()
 
 	c := &BasicConfigurer{
 		IPConfiguration: &IPConfiguration{
@@ -192,6 +200,9 @@ func TestBasicConfigurer_deconfigureAddress_RequiresRoot(t *testing.T) {
 		t.Skip("test must run as non-root to verify permission checks")
 	}
 
+	conf := zap.NewNop()
+	log = conf.Sugar()
+
 	c := &BasicConfigurer{
 		IPConfiguration: &IPConfiguration{
 			VIP:     netip.MustParseAddr("192.0.2.1"),
@@ -214,6 +225,9 @@ func TestBasicConfigurer_deconfigureAddress_NonexistentInterface(t *testing.T) {
 	if os.Getuid() != 0 {
 		t.Skip("deconfigureAddress tests require root privileges")
 	}
+
+	conf := zap.NewNop()
+	log = conf.Sugar()
 
 	c := &BasicConfigurer{
 		IPConfiguration: &IPConfiguration{
@@ -241,6 +255,9 @@ func TestBasicConfigurer_runAddressConfiguration_Add(t *testing.T) {
 		t.Skip("runAddressConfiguration tests require root privileges")
 	}
 
+	conf := zap.NewNop()
+	log = conf.Sugar()
+
 	c := &BasicConfigurer{
 		IPConfiguration: &IPConfiguration{
 			VIP:     netip.MustParseAddr("192.0.2.1"),
@@ -263,6 +280,9 @@ func TestBasicConfigurer_runAddressConfiguration_Delete(t *testing.T) {
 	if os.Getuid() != 0 {
 		t.Skip("runAddressConfiguration tests require root privileges")
 	}
+
+	conf := zap.NewNop()
+	log = conf.Sugar()
 
 	c := &BasicConfigurer{
 		IPConfiguration: &IPConfiguration{
@@ -290,6 +310,9 @@ func TestBasicConfigurer_Integration_LoopbackAddRemove(t *testing.T) {
 	if os.Getuid() != 0 {
 		t.Skip("integration test requires root privileges")
 	}
+
+	conf := zap.NewNop()
+	log = conf.Sugar()
 
 	// Get the loopback interface
 	lo, err := net.InterfaceByName("lo")
