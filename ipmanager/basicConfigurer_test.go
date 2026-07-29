@@ -101,6 +101,85 @@ func TestBasicConfigurer_queryAddress_MissingInterface(t *testing.T) {
 	}
 }
 
+func TestBasicConfigurer_queryAddress_RealInterface_NotAssigned(t *testing.T) {
+	t.Parallel()
+
+	// Get the loopback interface which should exist on all systems
+	lo, err := net.InterfaceByName("lo")
+	if err != nil {
+		t.Skip("loopback interface not available")
+	}
+
+	// Use an address that is very unlikely to be assigned to loopback
+	c := &BasicConfigurer{
+		IPConfiguration: &IPConfiguration{
+			VIP:     netip.MustParseAddr("203.0.113.99"), // TEST-NET-3 (RFC 5737)
+			Netmask: net.CIDRMask(32, 32),
+			Iface: net.Interface{
+				Name:         lo.Name,
+				HardwareAddr: net.HardwareAddr{0x00, 0x11, 0x22, 0x33, 0x44, 0x55},
+			},
+		},
+	}
+
+	// Should return false since this address is not assigned
+	if got := c.queryAddress(); got {
+		t.Errorf("queryAddress() = %v, want false for unassigned address", got)
+	}
+}
+
+func TestBasicConfigurer_queryAddress_RealInterface_Assigned(t *testing.T) {
+	t.Parallel()
+
+	// Get the loopback interface
+	lo, err := net.InterfaceByName("lo")
+	if err != nil {
+		t.Skip("loopback interface not available")
+	}
+
+	// Get addresses assigned to loopback
+	addrs, err := lo.Addrs()
+	if err != nil || len(addrs) == 0 {
+		t.Skip("cannot get addresses for loopback interface")
+	}
+
+	// Find an IPv4 address
+	var testAddr netip.Addr
+	var testMask net.IPMask
+	for _, addr := range addrs {
+		if ipNet, ok := addr.(*net.IPNet); ok {
+			if ipNet.IP.To4() != nil {
+				testAddr, err = netip.ParseAddr(ipNet.IP.String())
+				if err != nil {
+					continue
+				}
+				testMask = ipNet.Mask
+				break
+			}
+		}
+	}
+
+	if !testAddr.IsValid() {
+		t.Skip("no IPv4 address found on loopback")
+	}
+
+	c := &BasicConfigurer{
+		IPConfiguration: &IPConfiguration{
+			VIP:     testAddr,
+			Netmask: testMask,
+			Iface: net.Interface{
+				Name:         lo.Name,
+				HardwareAddr: net.HardwareAddr{0x00, 0x11, 0x22, 0x33, 0x44, 0x55},
+			},
+		},
+	}
+
+	// Should return true since this address is actually assigned to loopback
+	if got := c.queryAddress(); !got {
+		t.Errorf("queryAddress() = %v, want true for assigned address %s", got, testAddr)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // createGratuitousARP
 // ---------------------------------------------------------------------------
