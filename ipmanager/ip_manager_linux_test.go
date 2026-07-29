@@ -27,7 +27,7 @@ func TestGetNetIface_InterfaceDown(t *testing.T) {
 
 	// Ensure cleanup
 	t.Cleanup(func() {
-		exec.Command("ip", "link", "delete", dummyName).Run()
+		_ = exec.Command("ip", "link", "delete", dummyName).Run()
 	})
 
 	// Interface is created in DOWN state by default, but let's be explicit
