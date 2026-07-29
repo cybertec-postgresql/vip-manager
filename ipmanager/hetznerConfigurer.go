@@ -23,9 +23,12 @@ const (
 // this API is used to manage the vip, whenever hostintype `hetzner` is set.
 type HetznerConfigurer struct {
 	*IPConfiguration
-	cachedState  int
-	lastAPICheck time.Time
-	verbose      bool
+	cachedState     int
+	lastAPICheck    time.Time
+	verbose         bool
+	credentialsFile string
+	runCommand      func(name string, arg ...string) ([]byte, error)
+	getOutboundIP   func() (net.IP, error)
 }
 
 func newHetznerConfigurer(config *IPConfiguration, verbose bool) (*HetznerConfigurer, error) {
@@ -33,7 +36,13 @@ func newHetznerConfigurer(config *IPConfiguration, verbose bool) (*HetznerConfig
 		IPConfiguration: config,
 		cachedState:     unknown,
 		lastAPICheck:    time.Unix(0, 0),
-		verbose:         verbose}
+		verbose:         verbose,
+		credentialsFile: "/etc/hetzner",
+		runCommand: func(name string, arg ...string) ([]byte, error) {
+			return exec.Command(name, arg...).Output()
+		},
+		getOutboundIP: getOutboundIP,
+	}
 	return c, nil
 }
 
@@ -57,9 +66,7 @@ func (c *HetznerConfigurer) curlQueryFailover(post bool) (string, error) {
 	/**
 	 * The credentials for the API are loaded from a file stored in /etc/hetzner .
 	 */
-	//TODO: make credentialsFile dynamically changeable?
-	credentialsFile := "/etc/hetzner"
-	f, err := os.Open(credentialsFile)
+	f, err := os.Open(c.credentialsFile)
 	if err != nil {
 		log.Error("can't open passwordfile", err)
 		return "", err
@@ -75,15 +82,26 @@ func (c *HetznerConfigurer) curlQueryFailover(post bool) (string, error) {
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
 		line := scanner.Text()
+		if len(line) < 4 {
+			continue
+		}
 		switch line[:4] {
 		case "user":
-			user = line[6 : len(line)-1]
+			if len(line) > 6 {
+				user = line[6 : len(line)-1]
+			}
 		case "pass":
-			password = line[6 : len(line)-1]
+			if len(line) > 6 {
+				password = line[6 : len(line)-1]
+			}
 		}
 	}
+	if err := scanner.Err(); err != nil {
+		log.Error("error reading credentials file", err)
+		return "", fmt.Errorf("error reading credentials file: %w", err)
+	}
 	if user == "" || password == "" {
-		log.Infoln("Couldn't retrieve username or password from file", credentialsFile)
+		log.Infoln("Couldn't retrieve username or password from file", c.credentialsFile)
 		return "", errors.New("couldn't retrieve username or password from file")
 	}
 
@@ -96,20 +114,20 @@ func (c *HetznerConfigurer) curlQueryFailover(post bool) (string, error) {
 	 * If it is set to false, the current state (i.e. route)
 	 * for the failover-ip will be retrieved.
 	 */
-	var cmd *exec.Cmd
+	var args []string
 	if post {
-		myOwnIP, err := getOutboundIP()
+		myOwnIP, err := c.getOutboundIP()
 		if err != nil {
 			log.Error("Error determining this machine's IP address.", err)
 			return "", fmt.Errorf("error determining this machine's IP address: %w", err)
 		}
 		log.Infof("my_own_ip: %s\n", myOwnIP.String())
 
-		cmd = exec.Command("curl",
+		args = []string{
 			"--ipv4",
-			"-u", user+":"+password,
-			"https://robot-ws.your-server.de/failover/"+c.VIP.String(),
-			"-d", "active_server_ip="+myOwnIP.String())
+			"-u", user + ":" + password,
+			"https://robot-ws.your-server.de/failover/" + c.VIP.String(),
+			"-d", "active_server_ip=" + myOwnIP.String()}
 
 		log.Debugf("%s %s %s '%s' %s %s %s",
 			"curl",
@@ -118,10 +136,10 @@ func (c *HetznerConfigurer) curlQueryFailover(post bool) (string, error) {
 			"https://robot-ws.your-server.de/failover/"+c.VIP.String(),
 			"-d", "active_server_ip="+myOwnIP.String())
 	} else {
-		cmd = exec.Command("curl",
+		args = []string{
 			"--ipv4",
-			"-u", user+":"+password,
-			"https://robot-ws.your-server.de/failover/"+c.VIP.String())
+			"-u", user + ":" + password,
+			"https://robot-ws.your-server.de/failover/" + c.VIP.String()}
 
 		log.Debugf("%s %s %s %s %s",
 			"curl",
@@ -130,7 +148,7 @@ func (c *HetznerConfigurer) curlQueryFailover(post bool) (string, error) {
 			"https://robot-ws.your-server.de/failover/"+c.VIP.String())
 	}
 
-	out, err := cmd.Output()
+	out, err := c.runCommand("curl", args...)
 
 	if err != nil {
 		return "", err
@@ -212,19 +230,18 @@ func (c *HetznerConfigurer) queryAddress() bool {
 
 	str, err := c.curlQueryFailover(false)
 	if err != nil {
-		//TODO
 		c.cachedState = unknown
-	} else {
-		c.lastAPICheck = time.Now()
+		return false
 	}
+	c.lastAPICheck = time.Now()
 
 	currentFailoverDestinationIP, err := c.getActiveIPFromJSON(str)
 	if err != nil {
-		//TODO
 		c.cachedState = unknown
+		return false
 	}
 
-	myOwnIP, err := getOutboundIP()
+	myOwnIP, err := c.getOutboundIP()
 	if err != nil {
 		log.Error("Error determining this machine's IP address.", err)
 		c.cachedState = unknown
@@ -269,7 +286,7 @@ func (c *HetznerConfigurer) runAddressConfiguration() bool {
 
 	c.lastAPICheck = time.Now()
 
-	myOwnIP, err := getOutboundIP()
+	myOwnIP, err := c.getOutboundIP()
 	if err != nil {
 		log.Error("Error determining this machine's IP address.", err)
 		c.cachedState = unknown
