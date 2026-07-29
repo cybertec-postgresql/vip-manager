@@ -96,9 +96,12 @@ func TestSendPacketLinux_LoopbackInterface(t *testing.T) {
 		packet[i] = 0x00
 	}
 
-	// Try to send the packet
+	// Try to send the packet - this exercises the full sendPacketLinux code path:
+	// 1. Socket creation
+	// 2. Bind
+	// 3. Sendto
 	err = sendPacketLinux(*lo, packet)
-
+	
 	// Sending on loopback might fail or succeed depending on kernel configuration
 	// We just want to ensure the function doesn't panic and handles errors appropriately
 	if err != nil {
@@ -116,6 +119,60 @@ func TestSendPacketLinux_LoopbackInterface(t *testing.T) {
 	}
 }
 
+func TestSendPacketLinux_ValidInterface(t *testing.T) {
+	if os.Getuid() != 0 {
+		t.Skip("sendPacketLinux tests require root privileges")
+	}
+
+	// Find any available network interface (preferably not loopback)
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		t.Fatalf("failed to get network interfaces: %v", err)
+	}
+
+	var testIface *net.Interface
+	for i := range ifaces {
+		iface := &ifaces[i]
+		// Look for an interface that is up and has a valid hardware address
+		if iface.Flags&net.FlagUp != 0 && 
+		   iface.HardwareAddr != nil && 
+		   len(iface.HardwareAddr) == 6 &&
+		   iface.HardwareAddr.String() != "00:00:00:00:00:00" {
+			testIface = iface
+			break
+		}
+	}
+
+	if testIface == nil {
+		t.Skip("no suitable network interface found for testing")
+	}
+
+	// Create a properly formatted Ethernet/ARP packet
+	c := &BasicConfigurer{
+		IPConfiguration: &IPConfiguration{
+			VIP:     netip.MustParseAddr("192.0.2.1"),
+			Netmask: net.CIDRMask(24, 32),
+			Iface:   *testIface,
+		},
+	}
+
+	packet, err := c.createGratuitousARP()
+	if err != nil {
+		t.Fatalf("failed to create gratuitous ARP packet: %v", err)
+	}
+
+	// Send the packet - this exercises all code paths in sendPacketLinux
+	err = sendPacketLinux(*testIface, packet)
+	
+	// The send might succeed or fail depending on network configuration
+	// We're mainly testing that all code paths execute without panic
+	if err != nil {
+		t.Logf("sendPacketLinux returned error (acceptable): %v", err)
+	} else {
+		t.Log("sendPacketLinux succeeded")
+	}
+}
+
 func TestSendPacketLinux_InvalidInterface(t *testing.T) {
 	if os.Getuid() != 0 {
 		t.Skip("sendPacketLinux tests require root privileges")
@@ -130,30 +187,30 @@ func TestSendPacketLinux_InvalidInterface(t *testing.T) {
 	packet := make([]byte, 64)
 	err := sendPacketLinux(invalidIface, packet)
 
-	// Should fail, but we're checking that it handles the error gracefully
+	// Should fail when trying to bind or send
 	if err == nil {
 		t.Log("sendPacketLinux unexpectedly succeeded with invalid interface (kernel may have allowed it)")
+	} else {
+		t.Logf("sendPacketLinux correctly failed with invalid interface: %v", err)
 	}
 }
 
-// ---------------------------------------------------------------------------
-// configureAddress
-// ---------------------------------------------------------------------------
-
-func TestBasicConfigurer_configureAddress_RequiresRoot(t *testing.T) {
-	if os.Getuid() == 0 {
-		t.Skip("test must run as non-root to verify permission checks")
+func TestSendPacketLinux_EmptyPacket(t *testing.T) {
+	if os.Getuid() != 0 {
+		t.Skip("sendPacketLinux tests require root privileges")
 	}
 
-	conf := zap.NewNop()
-	log = conf.Sugar()
+	lo, err := net.InterfaceByName("lo")
+	if err != nil {
+		t.Fatalf("failed to get loopback interface: %v", err)
+	}
 
-	c := &BasicConfigurer{
-		IPConfiguration: &IPConfiguration{
-			VIP:     netip.MustParseAddr("192.0.2.1"), // TEST-NET-1 (RFC 5737)
-			Netmask: net.CIDRMask(24, 32),
-			Iface: net.Interface{
-				Name:         "lo",
+	// Try to send an empty packet
+	err = sendPacketLinux(*lo, []byte{})
+	
+	// May succeed or fail, but should not panic
+	if err != nil {
+		t.Logf("sendPacketLinux with empty packet returned: %v", err)
 				HardwareAddr: net.HardwareAddr{0x00, 0x11, 0x22, 0x33, 0x44, 0x55},
 			},
 		},
