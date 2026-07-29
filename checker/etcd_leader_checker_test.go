@@ -130,6 +130,21 @@ func TestNewEtcdLeaderChecker_TLSError(t *testing.T) {
 	}
 }
 
+// TestNewEtcdLeaderChecker_InvalidValidConfig verifies that an invalid etcd
+// config (e.g., unreachable endpoints) is wrapped with "failed to connect to etcd".
+func TestNewEtcdLeaderChecker_InvalidConfig(t *testing.T) {
+	t.Parallel()
+	conf := etcdConfig()
+	conf.Endpoints = []string{} // unreachable
+	_, err := NewEtcdLeaderChecker(conf)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "failed to connect to etcd") {
+		t.Errorf("unexpected error message: %v", err)
+	}
+}
+
 // TestNewEtcdLeaderChecker_ValidConfig verifies that the checker is created
 // without error when endpoints and TLS are valid. The etcd client connects
 // lazily so no live server is required.
