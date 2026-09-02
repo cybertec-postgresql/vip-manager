@@ -146,7 +146,7 @@ This is a list of all available configuration items:
 | `etcd-ca-file`    | `VIP_ETCD_CA_FILE`    | no        | `/etc/etcd/ca.cert.pem`     | A certificate authority file that can be used to verify the certificate provided by etcd endpoints. Make sure to change `dcs-endpoints` to reflect that `https` is used. |
 | `etcd-cert-file`  | `VIP_ETCD_CERT_FILE`  | no        | `/etc/etcd/client.cert.pem` | A client certificate that is used to authenticate against etcd endpoints. Requires `etcd-ca-file` to be set as well. |
 | `etcd-key-file`   | `VIP_ETCD_KEY_FILE`   | no        | `/etc/etcd/client.key.pem`  | A private key for the client certificate, used to decrypt messages sent by etcd endpoints. Required when `etcd-cert-file` is specified. |
-| `verbose`         | `VIP_VERBOSE`         | no        | `true`                      | Enable more verbose logging. Currently only the manager-type=hetzner provides additional logs. |
+| `verbose`         | `VIP_VERBOSE`         | no        | `true`                      | Enable more verbose logging: debug messages, source code locations, stack traces for errors, the retry chatter of the etcd client and additional logs for `manager-type=hetzner`. |
 
 ## Configuration - Patroni REST API
 
@@ -175,8 +175,20 @@ Either:
 - set `verbose` to `true` in `/etc/default/vip-manager.yml`
 - set `VIP_VERBOSE=true`
 
-> [!NOTE]
-> Currently only supported for `hetzner`
+## Logging during an outage
+
+A DCS that is unreachable fails the very same check once per `interval`, which
+would flood the log with identical messages. Such a repeating message is
+therefore reported once, then only once a minute, together with the number of
+occurrences that were suppressed in between:
+
+```text
+2026-08-30T02:26:56.366+0800    ERROR   REST API error connecting to http://127.0.0.1:8008/leader: ... connect: connection refused
+2026-08-30T02:27:56.383+0800    ERROR   REST API error connecting to http://127.0.0.1:8008/leader: ... connect: connection refused    {"suppressed": 59, "repeating_for": 1m0.017s}
+2026-08-30T02:28:12.401+0800    INFO    REST API at http://127.0.0.1:8008/leader is reachable again      {"occurrences": 76, "lasted": 1m16.035s}
+```
+
+A message that changes, and the recovery, are always reported immediately.
 
 ## Author
 

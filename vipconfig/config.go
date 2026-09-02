@@ -292,6 +292,11 @@ func (conf *Config) initLogger() {
 
 		Development: false,
 
+		// stack traces add four lines to every error, and errors such as
+		// "connection refused" repeat once per scan interval while the DCS is
+		// down, so keep them for troubleshooting sessions only
+		DisableStacktrace: !conf.Verbose,
+
 		Sampling: &zap.SamplingConfig{
 			Initial:    100,
 			Thereafter: 100,

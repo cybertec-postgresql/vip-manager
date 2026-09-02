@@ -15,11 +15,12 @@ import (
 type ConsulLeaderChecker struct {
 	*vipconfig.Config
 	*api.Client
+	queryLog *logThrottler // throttles repeated failures to read the key
 }
 
 // NewConsulLeaderChecker returns a new instance
 func NewConsulLeaderChecker(con *vipconfig.Config) (lc *ConsulLeaderChecker, err error) {
-	lc = &ConsulLeaderChecker{Config: con}
+	lc = &ConsulLeaderChecker{Config: con, queryLog: newLogThrottler(con.Logger)}
 
 	url, err := url.Parse(con.Endpoints[0])
 	if err != nil {
@@ -59,7 +60,7 @@ checkLoop:
 			if ctx.Err() != nil {
 				break checkLoop
 			}
-			c.Logger.Sugar().Error("consul error: ", err)
+			c.queryLog.error(fmt.Sprintf("consul error: %v", err))
 			// Signal false on connection error so VIP is removed if endpoint is unreachable
 			// Guard the send with ctx to avoid deadlock during shutdown
 			select {
@@ -71,7 +72,7 @@ checkLoop:
 			continue
 		}
 		if resp == nil {
-			c.Logger.Sugar().Errorf("Cannot get variable for key %s. Will try again in a second.", c.TriggerKey)
+			c.queryLog.error(fmt.Sprintf("Cannot get variable for key %s. Will try again in a second.", c.TriggerKey))
 			select {
 			case out <- false:
 			case <-ctx.Done():
@@ -80,6 +81,8 @@ checkLoop:
 			time.Sleep(time.Duration(c.Interval) * time.Millisecond)
 			continue
 		}
+
+		c.queryLog.success(fmt.Sprintf("Successfully read the key %s from consul again", c.TriggerKey))
 
 		state := string(resp.Value) == c.TriggerValue
 		queryOptions.WaitIndex = resp.ModifyIndex

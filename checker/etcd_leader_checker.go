@@ -11,12 +11,15 @@ import (
 	"github.com/cybertec-postgresql/vip-manager/vipconfig"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 // EtcdLeaderChecker is used to check state of the leader key in Etcd
 type EtcdLeaderChecker struct {
 	*vipconfig.Config
 	*clientv3.Client
+	getLog   *logThrottler // throttles repeated failures to read the key
+	watchLog *logThrottler // throttles repeated failures of the WATCH
 }
 
 // NewEtcdLeaderChecker returns a new instance
@@ -32,13 +35,28 @@ func NewEtcdLeaderChecker(conf *vipconfig.Config) (*EtcdLeaderChecker, error) {
 		DialKeepAliveTime:    time.Second,
 		Username:             conf.EtcdUser,
 		Password:             conf.EtcdPassword,
-		Logger:               conf.Logger,
+		Logger:               clientLogger(conf),
 	}
 	c, err := clientv3.New(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to etcd at endpoints %v: %w", conf.Endpoints, err)
 	}
-	return &EtcdLeaderChecker{conf, c}, nil
+	return &EtcdLeaderChecker{
+		Config:   conf,
+		Client:   c,
+		getLog:   newLogThrottler(conf.Logger),
+		watchLog: newLogThrottler(conf.Logger),
+	}, nil
+}
+
+// clientLogger returns the logger handed over to the etcd client. Unless
+// verbose logging is requested, the retry chatter of the client is limited to
+// errors, because it repeats once per scan interval while etcd is unreachable.
+func clientLogger(conf *vipconfig.Config) *zap.Logger {
+	if conf.Verbose {
+		return conf.Logger
+	}
+	return conf.Logger.WithOptions(zap.IncreaseLevel(zapcore.ErrorLevel))
 }
 
 func getTransport(conf *vipconfig.Config) (*tls.Config, error) {
@@ -89,22 +107,24 @@ func (elc *EtcdLeaderChecker) get(ctx context.Context, out chan<- bool) {
 	defer cancel()
 	resp, err := elc.Get(getCtx, elc.TriggerKey)
 	if err != nil {
-		elc.Logger.Error("Failed to get value from etcd",
+		elc.getLog.error("Failed to get value from etcd",
 			zap.String("key", elc.TriggerKey),
 			zap.Error(err))
 		send(false)
 		return
 	}
 	if resp == nil {
-		elc.Logger.Error("Received nil response from etcd", zap.String("key", elc.TriggerKey))
+		elc.getLog.error("Received nil response from etcd", zap.String("key", elc.TriggerKey))
 		send(false)
 		return
 	}
 	if len(resp.Kvs) == 0 {
-		elc.Logger.Sugar().Info("No value found for key ", elc.TriggerKey, " - DCS may not have set it yet")
+		elc.getLog.info("No value found for the key - DCS may not have set it yet",
+			zap.String("key", elc.TriggerKey))
 		send(false)
 		return
 	}
+	elc.getLog.success("Successfully read the value from etcd again", zap.String("key", elc.TriggerKey))
 	for _, kv := range resp.Kvs {
 		value := string(kv.Value)
 		matches := value == elc.TriggerValue
@@ -133,7 +153,7 @@ func (elc *EtcdLeaderChecker) watch(ctx context.Context, out chan<- bool) error 
 				if ok {
 					watchErr = watchResp.Err()
 				}
-				elc.Logger.Error("WATCH on key lost, re-establishing and re-syncing state",
+				elc.watchLog.error("WATCH on key lost, re-establishing and re-syncing state",
 					zap.String("key", elc.TriggerKey),
 					zap.Error(watchErr))
 				// Back off briefly to avoid a busy loop when etcd is unreachable
@@ -143,12 +163,15 @@ func (elc *EtcdLeaderChecker) watch(ctx context.Context, out chan<- bool) error 
 					return ctx.Err()
 				}
 				watchChan = elc.Watch(watchCtx, elc.TriggerKey)
-				elc.Logger.Sugar().Info("Resetting cancelled WATCH on ", elc.TriggerKey)
+				// re-establishing is already reported above, so this merely
+				// confirms it and stays out of the way during an outage
+				elc.Logger.Sugar().Debug("Resetting cancelled WATCH on ", elc.TriggerKey)
 				// Re-fetch the current value: events may have been missed
 				// while the watch was down (e.g. a leader change)
 				elc.get(ctx, out)
 				continue
 			}
+			elc.watchLog.success("WATCH on key is working again", zap.String("key", elc.TriggerKey))
 			for _, event := range watchResp.Events {
 				select {
 				case out <- string(event.Kv.Value) == elc.TriggerValue:

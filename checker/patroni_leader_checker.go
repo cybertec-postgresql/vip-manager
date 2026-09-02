@@ -2,6 +2,7 @@ package checker
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"time"
 
@@ -16,6 +17,8 @@ import (
 type PatroniLeaderChecker struct {
 	*vipconfig.Config
 	*http.Client
+	requestLog *logThrottler // throttles repeated request failures
+	statusLog  *logThrottler // throttles repeated non-success status codes
 }
 
 // NewPatroniLeaderChecker returns a new instance
@@ -35,8 +38,10 @@ func NewPatroniLeaderChecker(conf *vipconfig.Config) (*PatroniLeaderChecker, err
 	}
 
 	return &PatroniLeaderChecker{
-		Config: conf,
-		Client: client,
+		Config:     conf,
+		Client:     client,
+		requestLog: newLogThrottler(conf.Logger),
+		statusLog:  newLogThrottler(conf.Logger),
 	}, nil
 }
 
@@ -50,7 +55,7 @@ func (c *PatroniLeaderChecker) GetChangeNotificationStream(ctx context.Context, 
 			url := c.Endpoints[0] + c.TriggerKey
 			r, err := c.Get(url)
 			if err != nil {
-				c.Logger.Sugar().Errorf("REST API error connecting to %s: %v", url, err)
+				c.requestLog.error(fmt.Sprintf("REST API error connecting to %s: %v", url, err))
 				// Signal false on connection error so VIP is removed if endpoint is unreachable
 				// Guard the send with ctx to avoid deadlock during shutdown
 				select {
@@ -61,8 +66,11 @@ func (c *PatroniLeaderChecker) GetChangeNotificationStream(ctx context.Context, 
 				continue
 			}
 			r.Body.Close() // throw away the body
+			c.requestLog.success(fmt.Sprintf("REST API at %s is reachable again", url))
 			if r.StatusCode < 200 || r.StatusCode >= 300 {
-				c.Logger.Sugar().Warnf("REST API returned non-success status code %d for %s (expected %s)", r.StatusCode, url, c.TriggerValue)
+				c.statusLog.warn(fmt.Sprintf("REST API returned non-success status code %d for %s (expected %s)", r.StatusCode, url, c.TriggerValue))
+			} else {
+				c.statusLog.success(fmt.Sprintf("REST API at %s returned success status code %d again", url, r.StatusCode))
 			}
 			select {
 			case out <- strconv.Itoa(r.StatusCode) == c.TriggerValue:
