@@ -10,14 +10,10 @@ import (
 	"slices"
 	"testing"
 	"time"
-
-	"go.uber.org/zap"
 )
 
 func setupHetznerTest(t *testing.T) {
 	t.Helper()
-	conf := zap.NewNop()
-	log = conf.Sugar()
 }
 
 func testHetznerIPConfiguration(vip string) *IPConfiguration {
