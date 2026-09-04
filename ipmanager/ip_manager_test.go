@@ -191,9 +191,6 @@ func TestApplyLoop_DeconfigureWhenNeeded(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
 
-	conf := zap.NewNop()
-	log = conf.Sugar()
-
 	mock := &mockConfigurer{shouldQueryReturn: true}
 	m := &IPManager{
 		configurer:  mock,
@@ -217,9 +214,6 @@ func TestApplyLoop_ConfigureWhenNeeded(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
 
-	conf := zap.NewNop()
-	log = conf.Sugar()
-
 	mock := &mockConfigurer{shouldQueryReturn: false}
 	m := &IPManager{
 		configurer:  mock,
@@ -238,9 +232,6 @@ func TestApplyLoop_ConfigureFailure(t *testing.T) {
 	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
 	defer cancel()
-
-	conf := zap.NewNop()
-	log = conf.Sugar()
 
 	mock := &mockConfigurer{shouldQueryReturn: false, shouldConfigureFail: true}
 	m := &IPManager{
@@ -261,9 +252,6 @@ func TestApplyLoop_QueryFails(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
 	defer cancel()
 
-	conf := zap.NewNop()
-	log = conf.Sugar()
-
 	mock := &mockConfigurer{shouldQueryFail: true}
 	m := &IPManager{
 		configurer:  mock,
@@ -283,9 +271,6 @@ func TestApplyLoop_NoChangeNeeded(t *testing.T) {
 	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
 	defer cancel()
-
-	conf := zap.NewNop()
-	log = conf.Sugar()
 
 	mock := &mockConfigurer{shouldQueryReturn: true}
 	m := &IPManager{
@@ -310,9 +295,6 @@ func TestSyncStates_StateChange(t *testing.T) {
 	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
-
-	conf := zap.NewNop()
-	log = conf.Sugar()
 
 	mock := &mockConfigurer{shouldQueryReturn: false}
 	m := &IPManager{

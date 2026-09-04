@@ -19,15 +19,22 @@ type ipConfigurer interface {
 	getCIDR() string
 }
 
-var log *zap.SugaredLogger
-
 // IPManager implements the main functionality of the VIP manager
 type IPManager struct {
 	configurer ipConfigurer
+	logger     *zap.SugaredLogger
 
 	states        <-chan bool
 	shouldSetIPUp atomic.Bool
 	recheckChan   chan struct{}
+}
+
+// log returns the logger of the manager, see IPConfiguration.log
+func (m *IPManager) log() *zap.SugaredLogger {
+	if m.logger == nil {
+		return zap.NewNop().Sugar()
+	}
+	return m.logger
 }
 
 func getMask(vip netip.Addr, mask int) net.IPMask {
@@ -73,10 +80,12 @@ func NewIPManager(conf *vipconfig.Config, states <-chan bool) (m *IPManager, err
 		RetryNum:   conf.RetryNum,
 		RetryAfter: conf.RetryAfter,
 	}
+	sugar := conf.Logger.Sugar()
+	ipConf.Logger = sugar
 	m = &IPManager{
 		states: states,
+		logger: sugar,
 	}
-	log = conf.Logger.Sugar()
 	m.recheckChan = make(chan struct{})
 	switch conf.HostingType {
 	case "hetzner":
@@ -94,13 +103,20 @@ func NewIPManager(conf *vipconfig.Config, states <-chan bool) (m *IPManager, err
 
 func (m *IPManager) applyLoop(ctx context.Context) {
 	strUpDown := map[bool]string{true: "up", false: "down"}
+	var lastIsUp, lastShouldBeUp, reported bool
 	for {
 		isIPUp := m.configurer.queryAddress()
 		shouldSetIPUp := m.shouldSetIPUp.Load()
-		log.Infof("IP address %s is %s, must be %s",
-			m.configurer.getCIDR(),
-			strUpDown[isIPUp],
-			strUpDown[shouldSetIPUp])
+		// the address is rechecked every few seconds and hardly ever changes,
+		// so report it once and then only when something about it changed.
+		// Repeating it forever used to be a good part of the vip-manager log.
+		message := "IP address %s is %s, must be %s"
+		if !reported || isIPUp != lastIsUp || shouldSetIPUp != lastShouldBeUp {
+			m.log().Infof(message, m.configurer.getCIDR(), strUpDown[isIPUp], strUpDown[shouldSetIPUp])
+			reported, lastIsUp, lastShouldBeUp = true, isIPUp, shouldSetIPUp
+		} else {
+			m.log().Debugf(message, m.configurer.getCIDR(), strUpDown[isIPUp], strUpDown[shouldSetIPUp])
+		}
 		if isIPUp != shouldSetIPUp {
 			var isOk bool
 			if shouldSetIPUp {
@@ -109,7 +125,7 @@ func (m *IPManager) applyLoop(ctx context.Context) {
 				isOk = m.configurer.deconfigureAddress()
 			}
 			if !isOk {
-				log.Error("Failed to configure virtual ip for this machine")
+				m.log().Error("Failed to configure virtual ip for this machine")
 			}
 		}
 		select {
