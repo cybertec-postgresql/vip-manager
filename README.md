@@ -167,6 +167,14 @@ user="myUsername"
 pass="myPassword"
 ```
 
+The file holds the password of an account that can reroute the failover IP, so
+it should be readable by its owner only. vip-manager logs a warning when the
+file is accessible by group or others:
+
+```shell
+chmod 600 /etc/hetzner
+```
+
 ## Debugging
 
 Either:
