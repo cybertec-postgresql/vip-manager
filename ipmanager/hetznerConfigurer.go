@@ -2,6 +2,7 @@ package ipmanager
 
 import (
 	"bufio"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -202,7 +203,7 @@ func (c *HetznerConfigurer) queryFailover(post bool) (string, error) {
  * curlQueryFailover function and in turn from the curl calls to the API.
  */
 func (c *HetznerConfigurer) getActiveIPFromJSON(str string) (net.IP, error) {
-	var f map[string]interface{}
+	var f map[string]any
 
 	log.Debugf("JSON response: %s\n", str)
 
@@ -212,39 +213,50 @@ func (c *HetznerConfigurer) getActiveIPFromJSON(str string) (net.IP, error) {
 		return nil, err
 	}
 
-	if f["error"] != nil {
-		errormap := f["error"].(map[string]interface{})
+	// every field is read with a checked type assertion: the API describes a
+	// failed request in an "error" object, and an object that does not carry
+	// every field - or a "failover" that is not an object at all - used to
+	// take the whole process down with a type assertion panic, in the middle
+	// of a failover
+	if errormap, ok := f["error"].(map[string]any); ok {
+		status, _ := errormap["status"].(float64)
+		code, _ := errormap["code"].(string)
+		message, _ := errormap["message"].(string)
 
 		log.Errorf("There was an error accessing the Hetzner API!\n"+
-			" status: %f\n code: %s\n message: %s\n",
-			errormap["status"].(float64),
-			errormap["code"].(string),
-			errormap["message"].(string))
-		return nil, errors.New("error response from Hetzner API returned")
+			" status: %.0f\n code: %s\n message: %s\n",
+			status, code, message)
+		return nil, fmt.Errorf("error response from Hetzner API returned: %s", cmp.Or(message, code, "no message"))
 	}
 
-	if f["failover"] != nil {
-		failovermap := f["failover"].(map[string]interface{})
-
-		ip := failovermap["ip"].(string)
-		netmask := failovermap["netmask"].(string)
-		serverIP := failovermap["server_ip"].(string)
-		serverNumber := failovermap["server_number"].(float64)
-		activeServerIP := failovermap["active_server_ip"].(string)
-
-		log.Infoln("Result of the failover query was: ",
-			"failover-ip=", ip,
-			"netmask=", netmask,
-			"server_ip=", serverIP,
-			"server_number=", serverNumber,
-			"active_server_ip=", activeServerIP,
-		)
-
-		return net.ParseIP(activeServerIP), nil
-
+	failovermap, ok := f["failover"].(map[string]any)
+	if !ok {
+		return nil, errors.New("the answer of the Hetzner API describes no failover IP")
 	}
 
-	return nil, errors.New("why did we end up here?")
+	activeServerIP, ok := failovermap["active_server_ip"].(string)
+	if !ok {
+		return nil, errors.New("the answer of the Hetzner API carries no active_server_ip")
+	}
+
+	ip, _ := failovermap["ip"].(string)
+	netmask, _ := failovermap["netmask"].(string)
+	serverIP, _ := failovermap["server_ip"].(string)
+	serverNumber, _ := failovermap["server_number"].(float64)
+
+	log.Infoln("Result of the failover query was: ",
+		"failover-ip=", ip,
+		"netmask=", netmask,
+		"server_ip=", serverIP,
+		"server_number=", serverNumber,
+		"active_server_ip=", activeServerIP,
+	)
+
+	parsed := net.ParseIP(activeServerIP)
+	if parsed == nil {
+		return nil, fmt.Errorf("the Hetzner API reported %q as the active server IP, which is not an address", activeServerIP)
+	}
+	return parsed, nil
 }
 
 func (c *HetznerConfigurer) queryAddress() bool {

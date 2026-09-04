@@ -776,23 +776,45 @@ func TestHetznerConfigurer_getActiveIPFromJSON_MissingFields(t *testing.T) {
 			}`,
 		},
 		{
-			name: "failover is not an object",
+			name: "active_server_ip is not an address",
 			response: `{
-				"failover": "not an object"
+				"failover": {
+					"active_server_ip": "not an address"
+				}
 			}`,
+		},
+		{
+			name:     "failover is not an object",
+			response: `{"failover": "not an object"}`,
+		},
+		{
+			name:     "an error answer as the API sends it",
+			response: `{"error":{"status":401,"code":"UNAUTHORIZED","message":"Unauthorized"}}`,
+		},
+		{
+			name:     "an error answer without a status",
+			response: `{"error":{"code":"UNAUTHORIZED","message":"Unauthorized"}}`,
+		},
+		{
+			name:     "an error answer with nothing in it",
+			response: `{"error":{}}`,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// This will panic with current implementation due to type assertions
-			// We're testing that the panic is caught or the function handles it
+			t.Parallel()
+			// an answer that does not look as expected must be reported, not
+			// take the process down in the middle of a failover
 			defer func() {
-				if r := recover(); r == nil {
-					t.Error("expected panic for type assertion but got none")
+				if r := recover(); r != nil {
+					t.Errorf("getActiveIPFromJSON panicked: %v", r)
 				}
 			}()
-			_, _ = c.getActiveIPFromJSON(tt.response)
+			ip, err := c.getActiveIPFromJSON(tt.response)
+			if err == nil {
+				t.Errorf("expected an error, got the address %v", ip)
+			}
 		})
 	}
 }
