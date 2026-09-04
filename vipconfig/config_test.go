@@ -439,8 +439,8 @@ func TestDefineFlags_ParseValues(t *testing.T) {
 	if got, _ := flags.GetString("ip"); got != "10.0.0.1" {
 		t.Errorf("ip: got %q, want 10.0.0.1", got)
 	}
-	if got, _ := flags.GetString("netmask"); got != "24" {
-		t.Errorf("netmask: got %q, want \"24\"", got)
+	if got, _ := flags.GetInt("netmask"); got != 24 {
+		t.Errorf("netmask: got %d, want 24", got)
 	}
 	if got, _ := flags.GetString("dcs-type"); got != "consul" {
 		t.Errorf("dcs-type: got %q, want consul", got)
