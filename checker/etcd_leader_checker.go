@@ -84,9 +84,12 @@ func getTransport(conf *vipconfig.Config) (*tls.Config, error) {
 	tlsClientConfig := new(tls.Config)
 	if caCertPool != nil {
 		tlsClientConfig.RootCAs = caCertPool
-		if certificates != nil {
-			tlsClientConfig.Certificates = certificates
-		}
+	}
+	// the client certificate does not depend on a CA certificate being given,
+	// it only looked that way because the assignment was nested in the branch
+	// above and the configuration happens to demand both together
+	if certificates != nil {
+		tlsClientConfig.Certificates = certificates
 	}
 	return tlsClientConfig, nil
 }
