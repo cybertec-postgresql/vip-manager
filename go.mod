@@ -1,6 +1,6 @@
 module github.com/cybertec-postgresql/vip-manager
 
-go 1.26
+go 1.26.0
 
 require (
 	github.com/google/gopacket v1.1.19
@@ -12,7 +12,7 @@ require (
 	github.com/testcontainers/testcontainers-go/modules/etcd v0.44.0
 	go.etcd.io/etcd/client/v3 v3.7.1
 	go.uber.org/zap v1.28.0
-	golang.org/x/sys v0.47.0
+	golang.org/x/sys v0.48.0
 )
 
 require (
