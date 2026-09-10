@@ -152,23 +152,28 @@ func TestBasicConfigurer_configureAddress_Windows_IPv4(t *testing.T) {
 // TestBasicConfigurer_configureAddress_Windows_IPv4In6 pins down that a
 // ::ffff:a.b.c.d VIP takes the IPv4 path with the unmapped 4 byte address,
 // rather than being truncated to the first four bytes of its 16 byte form.
+// getMask() hands such a VIP a 16 byte mask, so the mask must be rebuilt from
+// its prefix length as well.
 func TestBasicConfigurer_configureAddress_Windows_IPv4In6(t *testing.T) {
 	mockLogger(t)
 	mockIfaceLookupOK(t)
 	failUnicast(t)
 
 	addCalled := false
-	mockAddIPAddress(t, func(address, _, _ uint32, nteContext, _ *uint32) error {
+	mockAddIPAddress(t, func(address, mask, _ uint32, nteContext, _ *uint32) error {
 		addCalled = true
 		// 192.0.2.1, not the leading zeroes of ::ffff:192.0.2.1.
 		if want := uint32(0x010200C0); address != want {
 			t.Errorf("address = 0x%08X, want 0x%08X", address, want)
 		}
+		if want := uint32(0x00FFFFFF); mask != want {
+			t.Errorf("mask = 0x%08X, want 0x%08X", mask, want)
+		}
 		*nteContext = 3
 		return nil
 	})
 
-	c := windowsConfigurer("::ffff:192.0.2.1", net.CIDRMask(24, 32))
+	c := windowsConfigurer("::ffff:192.0.2.1", getMask(netip.MustParseAddr("::ffff:192.0.2.1"), 24))
 	if got := c.configureAddress(); !got {
 		t.Fatal("configureAddress() = false, want true")
 	}
@@ -257,6 +262,19 @@ func TestBasicConfigurer_configureAddress_Windows_Failures(t *testing.T) {
 				mockIfaceLookupOK(t)
 				mockAddIPAddress(t, func(uint32, uint32, uint32, *uint32, *uint32) error {
 					return errors.New("access denied")
+				})
+			},
+		},
+		{
+			name: "prefix too long for an IPv4 address",
+			vip:  "::ffff:192.0.2.1",
+			mask: net.CIDRMask(64, 128),
+			setup: func(t *testing.T) {
+				mockIfaceLookupOK(t)
+				failUnicast(t)
+				mockAddIPAddress(t, func(uint32, uint32, uint32, *uint32, *uint32) error {
+					t.Error("AddIPAddress must not be called with a prefix wider than /32")
+					return nil
 				})
 			},
 		},

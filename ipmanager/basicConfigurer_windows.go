@@ -3,6 +3,7 @@ package ipmanager
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"net"
 
 	"golang.org/x/sys/windows"
@@ -54,9 +55,17 @@ func (c *BasicConfigurer) configureAddress() bool {
 
 // addIPv4Address adds an IPv4 VIP through the legacy, IPv4-only API.
 func (c *BasicConfigurer) addIPv4Address(iface *net.Interface) error {
+	// getMask() picks the width from what netip reports, and a ::ffff:a.b.c.d
+	// VIP is reported as IPv6, so c.Netmask can be 16 bytes wide here. Rebuild
+	// the mask from its prefix length rather than reading its first four bytes,
+	// which would silently turn a /64 into a /32.
+	prefix := netmaskSize(c.Netmask)
+	if prefix > 32 {
+		return fmt.Errorf("prefix length /%d is out of range for the IPv4 address %s", prefix, c.VIP.Unmap())
+	}
 	var (
 		ip          = binary.LittleEndian.Uint32(c.VIP.Unmap().AsSlice())
-		mask        = binary.LittleEndian.Uint32(c.Netmask)
+		mask        = binary.LittleEndian.Uint32(net.CIDRMask(prefix, 32))
 		nteinstance uint32
 	)
 	return addIPAddressFn(ip, mask, uint32(iface.Index), &c.ntecontext, &nteinstance)
