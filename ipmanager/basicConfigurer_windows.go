@@ -2,56 +2,104 @@ package ipmanager
 
 import (
 	"encoding/binary"
+	"errors"
 	"net"
+
+	"golang.org/x/sys/windows"
 
 	"github.com/cybertec-postgresql/vip-manager/iphlpapi"
 )
 
-func sendPacketWindows(iface net.Interface, packetData []byte) error {
-	// Open a raw socket using Winsock
-	conn, err := net.Dial("ip4:ethernet", iface.HardwareAddr.String())
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-	// Send the packet
-	_, err = conn.Write(packetData)
-	return err
-}
+// Seams over the Win32 calls and the interface lookup, so the dispatch and the
+// failure paths can be tested without touching the host's network stack.
+var (
+	addIPAddressFn     = iphlpapi.AddIPAddress
+	deleteIPAddressFn  = iphlpapi.DeleteIPAddress
+	initUnicastRowFn   = iphlpapi.InitializeUnicastIpAddressEntry
+	createUnicastFn    = iphlpapi.CreateUnicastIpAddressEntry
+	deleteUnicastFn    = iphlpapi.DeleteUnicastIpAddressEntry
+	interfaceByNameFn  = net.InterfaceByName
+	errNoAddressToDrop = errors.New("no address was configured by this instance")
+)
 
-// configureAddress assigns virtual IP address
+// configureAddress assigns virtual IP address.
+//
+// Unlike on Linux, no gratuitous ARP or Neighbor Advertisement is composed
+// here: Windows runs Duplicate Address Detection and announces the new address
+// to the link itself when it is added through the iphlpapi calls below.
 func (c *BasicConfigurer) configureAddress() bool {
 	log.Infof("Configuring address %s on %s", c.getCIDR(), c.Iface.Name)
-	var (
-		ip          = binary.LittleEndian.Uint32(c.VIP.AsSlice())
-		mask        = binary.LittleEndian.Uint32(c.Netmask)
-		nteinstance uint32
-	)
-	iface, err := net.InterfaceByName(c.Iface.Name)
+
+	iface, err := interfaceByNameFn(c.Iface.Name)
 	if err != nil {
 		log.Error("Failed to access interface: ", err)
 		return false
 	}
-	err = iphlpapi.AddIPAddress(ip, mask, uint32(iface.Index), &c.ntecontext, &nteinstance)
+
+	// Is4 alone would miss a ::ffff:a.b.c.d VIP, which is an IPv4 address.
+	if c.VIP.Is4() || c.VIP.Is4In6() {
+		err = c.addIPv4Address(iface)
+	} else {
+		err = c.addIPv6Address(iface)
+	}
 	if err != nil {
 		log.Error("Failed to add address: ", err)
 		return false
 	}
 
-	if buff, err := c.createGratuitousARP(); err != nil {
-		log.Warn("Failed to compose gratuitous ARP request: ", err)
-	} else {
-		if err := sendPacketWindows(c.Iface, buff); err != nil {
-			log.Warn("Failed to send gratuitous ARP request: ", err)
-		}
-	}
+	log.Debug("Windows announces the new address to the link itself, " +
+		"no gratuitous ARP or Neighbor Advertisement is sent by vip-manager")
 	return true
+}
+
+// addIPv4Address adds an IPv4 VIP through the legacy, IPv4-only API.
+func (c *BasicConfigurer) addIPv4Address(iface *net.Interface) error {
+	var (
+		ip          = binary.LittleEndian.Uint32(c.VIP.Unmap().AsSlice())
+		mask        = binary.LittleEndian.Uint32(c.Netmask)
+		nteinstance uint32
+	)
+	return addIPAddressFn(ip, mask, uint32(iface.Index), &c.ntecontext, &nteinstance)
+}
+
+// addIPv6Address adds an IPv6 VIP. AddIPAddress cannot be used here: it takes
+// a 32 bit address and is IPv4 only.
+func (c *BasicConfigurer) addIPv6Address(iface *net.Interface) error {
+	row := &windows.MibUnicastIpAddressRow{}
+	initUnicastRowFn(row)
+
+	row.InterfaceIndex = uint32(iface.Index)
+	row.Address.Family = windows.AF_INET6
+	row.Address.Addr = c.VIP.As16()
+	row.OnLinkPrefixLength = uint8(netmaskSize(c.Netmask))
+
+	if err := createUnicastFn(row); err != nil {
+		return err
+	}
+	c.ipv6row = row
+	return nil
 }
 
 // deconfigureAddress drops virtual IP address
 func (c *BasicConfigurer) deconfigureAddress() bool {
 	log.Infof("Removing address %s on %s", c.getCIDR(), c.Iface.Name)
-	err := iphlpapi.DeleteIPAddress(c.ntecontext)
+
+	var err error
+	switch {
+	case c.ipv6row != nil:
+		err = deleteUnicastFn(c.ipv6row)
+		if err == nil {
+			c.ipv6row = nil
+		}
+	case c.ntecontext != 0:
+		err = deleteIPAddressFn(c.ntecontext)
+		if err == nil {
+			c.ntecontext = 0
+		}
+	default:
+		err = errNoAddressToDrop
+	}
+
 	if err != nil {
 		log.Errorf("Failed to remove address %s: %v", c.getCIDR(), err)
 		return false

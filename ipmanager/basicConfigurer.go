@@ -17,11 +17,11 @@ import (
 // nearby routers and other devices.
 type BasicConfigurer struct {
 	*IPConfiguration
-	ntecontext uint32 //used by Windows to delete IP address
+	osState // platform specific handles, used by Windows to delete the address
 }
 
 func newBasicConfigurer(config *IPConfiguration) (*BasicConfigurer, error) {
-	c := &BasicConfigurer{IPConfiguration: config, ntecontext: 0}
+	c := &BasicConfigurer{IPConfiguration: config, osState: osState{}}
 	if c.Iface.HardwareAddr == nil || c.Iface.HardwareAddr.String() == "00:00:00:00:00:00" {
 		return nil, errors.New(`cannot run vip-manager on the loopback device
 as its hardware address is the local address (00:00:00:00:00:00),

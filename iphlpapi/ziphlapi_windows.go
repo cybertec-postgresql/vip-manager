@@ -40,12 +40,23 @@ func errnoErr(e syscall.Errno) error {
 var (
 	modiphlpapi = windows.NewLazySystemDLL("iphlpapi.dll")
 
-	procAddIPAddress    = modiphlpapi.NewProc("AddIPAddress")
-	procDeleteIPAddress = modiphlpapi.NewProc("DeleteIPAddress")
+	procAddIPAddress                    = modiphlpapi.NewProc("AddIPAddress")
+	procCreateUnicastIpAddressEntry     = modiphlpapi.NewProc("CreateUnicastIpAddressEntry")
+	procDeleteIPAddress                 = modiphlpapi.NewProc("DeleteIPAddress")
+	procDeleteUnicastIpAddressEntry     = modiphlpapi.NewProc("DeleteUnicastIpAddressEntry")
+	procInitializeUnicastIpAddressEntry = modiphlpapi.NewProc("InitializeUnicastIpAddressEntry")
 )
 
 func AddIPAddress(Address uint32, IpMask uint32, IfIndex uint32, NTEContext *uint32, NTEInstance *uint32) (errcode error) {
-	r0, _, _ := syscall.Syscall6(procAddIPAddress.Addr(), 5, uintptr(Address), uintptr(IpMask), uintptr(IfIndex), uintptr(unsafe.Pointer(NTEContext)), uintptr(unsafe.Pointer(NTEInstance)), 0)
+	r0, _, _ := syscall.SyscallN(procAddIPAddress.Addr(), uintptr(Address), uintptr(IpMask), uintptr(IfIndex), uintptr(unsafe.Pointer(NTEContext)), uintptr(unsafe.Pointer(NTEInstance)))
+	if r0 != 0 {
+		errcode = syscall.Errno(r0)
+	}
+	return
+}
+
+func CreateUnicastIpAddressEntry(Row *windows.MibUnicastIpAddressRow) (errcode error) {
+	r0, _, _ := syscall.SyscallN(procCreateUnicastIpAddressEntry.Addr(), uintptr(unsafe.Pointer(Row)))
 	if r0 != 0 {
 		errcode = syscall.Errno(r0)
 	}
@@ -53,9 +64,22 @@ func AddIPAddress(Address uint32, IpMask uint32, IfIndex uint32, NTEContext *uin
 }
 
 func DeleteIPAddress(NTEContext uint32) (errcode error) {
-	r0, _, _ := syscall.Syscall(procDeleteIPAddress.Addr(), 1, uintptr(NTEContext), 0, 0)
+	r0, _, _ := syscall.SyscallN(procDeleteIPAddress.Addr(), uintptr(NTEContext))
 	if r0 != 0 {
 		errcode = syscall.Errno(r0)
 	}
+	return
+}
+
+func DeleteUnicastIpAddressEntry(Row *windows.MibUnicastIpAddressRow) (errcode error) {
+	r0, _, _ := syscall.SyscallN(procDeleteUnicastIpAddressEntry.Addr(), uintptr(unsafe.Pointer(Row)))
+	if r0 != 0 {
+		errcode = syscall.Errno(r0)
+	}
+	return
+}
+
+func InitializeUnicastIpAddressEntry(Row *windows.MibUnicastIpAddressRow) {
+	syscall.SyscallN(procInitializeUnicastIpAddressEntry.Addr(), uintptr(unsafe.Pointer(Row)))
 	return
 }

@@ -78,9 +78,6 @@ func TestNewBasicConfigurer_Success(t *testing.T) {
 	if c.IPConfiguration != cfg {
 		t.Error("configurer did not retain the provided IPConfiguration")
 	}
-	if c.ntecontext != 0 {
-		t.Errorf("expected ntecontext to be initialized to 0, got %d", c.ntecontext)
-	}
 }
 
 // ---------------------------------------------------------------------------
