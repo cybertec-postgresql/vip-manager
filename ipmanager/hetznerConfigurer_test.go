@@ -356,7 +356,7 @@ func TestHetznerConfigurer_queryFailover_OutboundIPError(t *testing.T) {
 	}
 }
 
-func TestHetznerConfigurer_queryFailover_CommandError(t *testing.T) {
+func TestHetznerConfigurer_queryFailover_APIError(t *testing.T) {
 	t.Parallel()
 	setupHetznerTest(t)
 
