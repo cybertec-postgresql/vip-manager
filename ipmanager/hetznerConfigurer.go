@@ -65,6 +65,8 @@ func newHetznerClient() *http.Client {
 	return &http.Client{
 		Timeout: 30 * time.Second,
 		Transport: &http.Transport{
+			// curl honored HTTPS_PROXY and friends, so keep doing that
+			Proxy: http.ProxyFromEnvironment,
 			DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
 				if network == "tcp" || network == "tcp6" {
 					network = "tcp4"
@@ -123,7 +125,7 @@ func (c *HetznerConfigurer) readCredentials() (user string, password string, err
 		if !found {
 			continue
 		}
-		value = strings.Trim(strings.TrimSpace(value), `"'`)
+		value = unquote(strings.TrimSpace(value))
 		switch strings.TrimSpace(key) {
 		case "user", "username":
 			user = value
@@ -140,6 +142,16 @@ func (c *HetznerConfigurer) readCredentials() (user string, password string, err
 		return "", "", errors.New("couldn't retrieve username or password from file")
 	}
 	return user, password, nil
+}
+
+// unquote removes one pair of matching quotes around value. A quote that is
+// part of the value, such as the last character of an unquoted password, is
+// kept.
+func unquote(value string) string {
+	if len(value) >= 2 && (value[0] == '"' || value[0] == '\'') && value[len(value)-1] == value[0] {
+		return value[1 : len(value)-1]
+	}
+	return value
 }
 
 // queryFailover asks the Robot API about the failover IP. If post is set, the

@@ -356,7 +356,7 @@ func TestHetznerConfigurer_queryFailover_OutboundIPError(t *testing.T) {
 	}
 }
 
-func TestHetznerConfigurer_queryFailover_APIError(t *testing.T) {
+func TestHetznerConfigurer_queryFailover_APIUnreachable(t *testing.T) {
 	t.Parallel()
 	setupHetznerTest(t)
 
@@ -663,8 +663,8 @@ func TestHetznerConfigurer_queryFailover_MalformedCredentials(t *testing.T) {
 
 	dir := t.TempDir()
 	path := filepath.Join(dir, "hetzner")
-	// Write credentials that match the prefix but are too short to extract values
-	if err := os.WriteFile(path, []byte("user=\"\npass=\"\n"), 0o600); err != nil {
+	// Write credentials whose values are empty, quoted and unquoted
+	if err := os.WriteFile(path, []byte("user=\"\"\npass=\n"), 0o600); err != nil {
 		t.Fatalf("failed to write credentials file: %v", err)
 	}
 
@@ -876,6 +876,10 @@ func TestHetznerConfigurer_readCredentials(t *testing.T) {
 		{"without quotes", "user=myUsername\npass=myPassword\n", "myUsername", "myPassword", false},
 		{"single quotes", "user='myUsername'\npass='myPassword'\n", "myUsername", "myPassword", false},
 		{"long names", "username=\"myUsername\"\npassword=\"myPassword\"\n", "myUsername", "myPassword", false},
+		{"unquoted value ending in a quote", "user=myUsername\npass=myPassword'\n", "myUsername", "myPassword'", false},
+		{"unquoted value starting with a quote", "user=myUsername\npass=\"myPassword\n", "myUsername", "\"myPassword", false},
+		{"quotes inside quotes", "user=myUsername\npass='\"myPassword\"'\n", "myUsername", "\"myPassword\"", false},
+		{"mismatched quotes", "user=myUsername\npass=\"myPassword'\n", "myUsername", "\"myPassword'", false},
 		{"password only", "pass=\"myPassword\"\n", "", "", true},
 		{"nothing usable", "# a comment\n\n", "", "", true},
 	}
@@ -1064,5 +1068,36 @@ func TestHetznerConfigurer_configureAddress_OutboundIPErrorAfterFailover(t *test
 	}
 	if c.cachedState != unknown {
 		t.Errorf("cachedState = %d, want unknown", c.cachedState)
+	}
+}
+
+// TestNewHetznerClient_Transport verifies what replaced "curl --ipv4": the
+// connections go over IPv4 only, and the proxy settings of the environment
+// are honored as curl did
+func TestNewHetznerClient_Transport(t *testing.T) {
+	t.Parallel()
+
+	transport, ok := newHetznerClient().Transport.(*http.Transport)
+	if !ok {
+		t.Fatalf("expected an *http.Transport, got %T", newHetznerClient().Transport)
+	}
+	if transport.Proxy == nil {
+		t.Error("expected the proxy settings of the environment to be honored")
+	}
+
+	// an IPv6 address cannot be dialed over tcp4, which fails with an address
+	// error before any packet is sent, so this works without IPv6 on the host
+	for _, network := range []string{"tcp", "tcp6"} {
+		t.Run(network, func(t *testing.T) {
+			t.Parallel()
+			conn, err := transport.DialContext(t.Context(), network, "[::1]:1")
+			if conn != nil {
+				_ = conn.Close()
+			}
+			var addrErr *net.AddrError
+			if !errors.As(err, &addrErr) {
+				t.Errorf("expected the dial over %s to be pinned to IPv4, got %v", network, err)
+			}
+		})
 	}
 }
