@@ -1,6 +1,7 @@
 package ipmanager
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"io"
@@ -11,12 +12,15 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 func setupHetznerTest(t *testing.T) {
@@ -927,5 +931,138 @@ func TestHetznerConfigurer_queryFailover_KeepsCredentialsOutOfTheURL(t *testing.
 	}
 	if strings.Contains(requestURI, "s3cret") || strings.Contains(requestURI, "testuser") {
 		t.Errorf("credentials leaked into the request URI: %s", requestURI)
+	}
+}
+
+// TestHetznerConfigurer_readCredentials_WarnsAboutLoosePermissions is not
+// parallel, because it swaps the package logger to look at the warning
+func TestHetznerConfigurer_readCredentials_WarnsAboutLoosePermissions(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("file permission bits are not meaningful on Windows")
+	}
+	core, logs := observer.New(zapcore.WarnLevel)
+	old := log
+	log = zap.New(core).Sugar()
+	t.Cleanup(func() { log = old })
+
+	path := writeHetznerCredentialsFile(t, t.TempDir(), "testuser", "testpass")
+	if err := os.Chmod(path, 0o644); err != nil {
+		t.Fatalf("failed to change the mode of the credentials file: %v", err)
+	}
+
+	c := newTestHetznerConfigurer(t)
+	c.credentialsFile = path
+
+	if _, _, err := c.readCredentials(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if n := logs.FilterMessageSnippet("accessible by group or others").Len(); n != 1 {
+		t.Errorf("expected one warning about the file permissions, got %d", n)
+	}
+}
+
+func TestHetznerConfigurer_readCredentials_ScannerError(t *testing.T) {
+	t.Parallel()
+	setupHetznerTest(t)
+
+	// a line longer than the scanner buffer makes the scanner fail
+	path := filepath.Join(t.TempDir(), "hetzner")
+	content := "user=\"" + strings.Repeat("x", bufio.MaxScanTokenSize) + "\"\n"
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatalf("failed to write credentials file: %v", err)
+	}
+
+	c := newTestHetznerConfigurer(t)
+	c.credentialsFile = path
+
+	if _, _, err := c.readCredentials(); err == nil {
+		t.Fatal("expected an error for an unreadable credentials file, got nil")
+	}
+}
+
+func TestHetznerConfigurer_queryFailover_InvalidAPIURL(t *testing.T) {
+	t.Parallel()
+	setupHetznerTest(t)
+
+	for _, post := range []bool{false, true} {
+		t.Run(fmt.Sprintf("post=%v", post), func(t *testing.T) {
+			t.Parallel()
+			c := newTestHetznerConfigurer(t)
+			c.credentialsFile = writeHetznerCredentialsFile(t, t.TempDir(), "testuser", "testpass")
+			c.getOutboundIP = func() (net.IP, error) { return net.ParseIP("10.0.0.5"), nil }
+			c.apiURL = "http://in valid\x7f"
+
+			if _, err := c.queryFailover(post); err == nil {
+				t.Fatal("expected an error for an invalid API URL, got nil")
+			}
+		})
+	}
+}
+
+func TestHetznerConfigurer_queryFailover_TruncatedBody(t *testing.T) {
+	t.Parallel()
+	setupHetznerTest(t)
+
+	c := newTestHetznerConfigurer(t)
+	c.credentialsFile = writeHetznerCredentialsFile(t, t.TempDir(), "testuser", "testpass")
+
+	// the answer announces more bytes than it delivers
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Length", "100")
+		_, _ = io.WriteString(w, "{}")
+	}))
+	t.Cleanup(server.Close)
+	c.apiURL = server.URL
+
+	if _, err := c.queryFailover(false); err == nil {
+		t.Fatal("expected an error for a truncated answer, got nil")
+	}
+}
+
+func TestHetznerConfigurer_queryFailover_ErrorStatusWithoutBody(t *testing.T) {
+	t.Parallel()
+	setupHetznerTest(t)
+
+	c := newTestHetznerConfigurer(t)
+	c.credentialsFile = writeHetznerCredentialsFile(t, t.TempDir(), "testuser", "testpass")
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	t.Cleanup(server.Close)
+	c.apiURL = server.URL
+
+	_, err := c.queryFailover(false)
+	if err == nil {
+		t.Fatal("expected an error for an empty error answer, got nil")
+	}
+	if !strings.Contains(err.Error(), "503") {
+		t.Errorf("expected the status in the error, got %v", err)
+	}
+}
+
+func TestHetznerConfigurer_configureAddress_OutboundIPErrorAfterFailover(t *testing.T) {
+	t.Parallel()
+	setupHetznerTest(t)
+
+	c := newTestHetznerConfigurer(t)
+	c.credentialsFile = writeHetznerCredentialsFile(t, t.TempDir(), "testuser", "testpass")
+
+	// the request succeeds, but the address cannot be determined afterwards
+	var calls int
+	c.getOutboundIP = func() (net.IP, error) {
+		calls++
+		if calls > 1 {
+			return nil, errors.New("no outbound IP")
+		}
+		return net.ParseIP("10.0.0.5"), nil
+	}
+	stubHetznerAPI(t, c, `{"failover":{"ip":"192.168.1.10","netmask":"255.255.255.255","server_ip":"10.0.0.1","server_number":12345,"active_server_ip":"10.0.0.5"}}`)
+
+	if got := c.configureAddress(); got {
+		t.Errorf("configureAddress() = %v, want false when the outbound IP lookup fails", got)
+	}
+	if c.cachedState != unknown {
+		t.Errorf("cachedState = %d, want unknown", c.cachedState)
 	}
 }
