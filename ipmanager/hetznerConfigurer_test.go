@@ -1,17 +1,26 @@
 package ipmanager
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
+	"io"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"net/netip"
+	"net/url"
 	"os"
 	"path/filepath"
-	"slices"
+	"runtime"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 func setupHetznerTest(t *testing.T) {
@@ -82,8 +91,11 @@ func TestNewHetznerConfigurer_Success(t *testing.T) {
 	if c.credentialsFile != "/etc/hetzner" {
 		t.Errorf("expected default credentials file path, got %q", c.credentialsFile)
 	}
-	if c.runCommand == nil {
-		t.Error("expected runCommand to be initialized")
+	if c.client == nil {
+		t.Error("expected the HTTP client to be initialized")
+	}
+	if c.apiURL != hetznerAPI {
+		t.Errorf("expected the default API URL, got %q", c.apiURL)
 	}
 	if c.getOutboundIP == nil {
 		t.Error("expected getOutboundIP to be initialized")
@@ -170,15 +182,62 @@ func TestHetznerConfigurer_getActiveIPFromJSON_UnexpectedStructure(t *testing.T)
 }
 
 // ---------------------------------------------------------------------------
-// curlQueryFailover
+// queryFailover
 // ---------------------------------------------------------------------------
 
-type recordedCommand struct {
-	name string
-	args []string
+// hetznerAPIStub records what the configurer sent to the Robot API and
+// answers with a canned body. The configurer keeps its production client, so
+// the tests go through the same IPv4 pinned transport.
+type hetznerAPIStub struct {
+	mu     sync.Mutex
+	count  int
+	method string
+	path   string
+	user   string
+	pass   string
+	auth   bool
+	form   url.Values
 }
 
-func TestHetznerConfigurer_curlQueryFailover_GET(t *testing.T) {
+func (s *hetznerAPIStub) snapshot() hetznerAPIStub {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return hetznerAPIStub{count: s.count, method: s.method, path: s.path, user: s.user, pass: s.pass, auth: s.auth, form: s.form}
+}
+
+func (s *hetznerAPIStub) calls() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.count
+}
+
+// stubHetznerAPI points the configurer at a local server answering with body
+func stubHetznerAPI(t *testing.T, c *HetznerConfigurer, body string) *hetznerAPIStub {
+	t.Helper()
+	stub := &hetznerAPIStub{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = r.ParseForm()
+		user, pass, ok := r.BasicAuth()
+		stub.mu.Lock()
+		stub.count++
+		stub.method, stub.path, stub.user, stub.pass, stub.auth, stub.form = r.Method, r.URL.Path, user, pass, ok, r.PostForm
+		stub.mu.Unlock()
+		_, _ = io.WriteString(w, body)
+	}))
+	t.Cleanup(server.Close)
+	c.apiURL = server.URL
+	return stub
+}
+
+// unreachableHetznerAPI points the configurer at a server that is already gone
+func unreachableHetznerAPI(t *testing.T, c *HetznerConfigurer) {
+	t.Helper()
+	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	c.apiURL = server.URL
+	server.Close()
+}
+
+func TestHetznerConfigurer_queryFailover_GET(t *testing.T) {
 	t.Parallel()
 	setupHetznerTest(t)
 
@@ -187,14 +246,9 @@ func TestHetznerConfigurer_curlQueryFailover_GET(t *testing.T) {
 
 	c := newTestHetznerConfigurer(t)
 	c.credentialsFile = credPath
+	stub := stubHetznerAPI(t, c, `{"failover":{"ip":"192.168.1.10","netmask":"255.255.255.255","server_ip":"10.0.0.1","server_number":12345,"active_server_ip":"10.0.0.1"}}`)
 
-	var recorded recordedCommand
-	c.runCommand = func(name string, arg ...string) ([]byte, error) {
-		recorded = recordedCommand{name: name, args: arg}
-		return []byte(`{"failover":{"ip":"192.168.1.10","netmask":"255.255.255.255","server_ip":"10.0.0.1","server_number":12345,"active_server_ip":"10.0.0.1"}}`), nil
-	}
-
-	resp, err := c.curlQueryFailover(false)
+	resp, err := c.queryFailover(false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -202,20 +256,19 @@ func TestHetznerConfigurer_curlQueryFailover_GET(t *testing.T) {
 		t.Error("expected non-empty response")
 	}
 
-	if recorded.name != "curl" {
-		t.Errorf("expected command curl, got %q", recorded.name)
+	got := stub.snapshot()
+	if got.method != http.MethodGet {
+		t.Errorf("method = %q, want GET", got.method)
 	}
-	wantArgs := []string{
-		"--ipv4",
-		"-u", "testuser:testpass",
-		"https://robot-ws.your-server.de/failover/192.168.1.10",
+	if want := "/failover/192.168.1.10"; got.path != want {
+		t.Errorf("path = %q, want %q", got.path, want)
 	}
-	if !slices.Equal(recorded.args, wantArgs) {
-		t.Errorf("curl args = %v, want %v", recorded.args, wantArgs)
+	if !got.auth || got.user != "testuser" || got.pass != "testpass" {
+		t.Errorf("credentials were not sent in the Authorization header: auth=%v user=%q", got.auth, got.user)
 	}
 }
 
-func TestHetznerConfigurer_curlQueryFailover_POST(t *testing.T) {
+func TestHetznerConfigurer_queryFailover_POST(t *testing.T) {
 	t.Parallel()
 	setupHetznerTest(t)
 
@@ -227,14 +280,9 @@ func TestHetznerConfigurer_curlQueryFailover_POST(t *testing.T) {
 	c.getOutboundIP = func() (net.IP, error) {
 		return net.ParseIP("10.0.0.5"), nil
 	}
+	stub := stubHetznerAPI(t, c, `{"failover":{"ip":"192.168.1.10","netmask":"255.255.255.255","server_ip":"10.0.0.1","server_number":12345,"active_server_ip":"10.0.0.5"}}`)
 
-	var recorded recordedCommand
-	c.runCommand = func(name string, arg ...string) ([]byte, error) {
-		recorded = recordedCommand{name: name, args: arg}
-		return []byte(`{"failover":{"ip":"192.168.1.10","netmask":"255.255.255.255","server_ip":"10.0.0.1","server_number":12345,"active_server_ip":"10.0.0.5"}}`), nil
-	}
-
-	resp, err := c.curlQueryFailover(true)
+	resp, err := c.queryFailover(true)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -242,31 +290,35 @@ func TestHetznerConfigurer_curlQueryFailover_POST(t *testing.T) {
 		t.Error("expected non-empty response")
 	}
 
-	wantArgs := []string{
-		"--ipv4",
-		"-u", "testuser:testpass",
-		"https://robot-ws.your-server.de/failover/192.168.1.10",
-		"-d", "active_server_ip=10.0.0.5",
+	got := stub.snapshot()
+	if got.method != http.MethodPost {
+		t.Errorf("method = %q, want POST", got.method)
 	}
-	if !slices.Equal(recorded.args, wantArgs) {
-		t.Errorf("curl args = %v, want %v", recorded.args, wantArgs)
+	if want := "/failover/192.168.1.10"; got.path != want {
+		t.Errorf("path = %q, want %q", got.path, want)
+	}
+	if !got.auth || got.user != "testuser" || got.pass != "testpass" {
+		t.Errorf("credentials were not sent in the Authorization header: auth=%v user=%q", got.auth, got.user)
+	}
+	if want := "10.0.0.5"; got.form.Get("active_server_ip") != want {
+		t.Errorf("active_server_ip = %q, want %q", got.form.Get("active_server_ip"), want)
 	}
 }
 
-func TestHetznerConfigurer_curlQueryFailover_MissingCredentialsFile(t *testing.T) {
+func TestHetznerConfigurer_queryFailover_MissingCredentialsFile(t *testing.T) {
 	t.Parallel()
 	setupHetznerTest(t)
 
 	c := newTestHetznerConfigurer(t)
 	c.credentialsFile = filepath.Join(t.TempDir(), "does-not-exist")
 
-	_, err := c.curlQueryFailover(false)
+	_, err := c.queryFailover(false)
 	if err == nil {
 		t.Fatal("expected error for missing credentials file, got nil")
 	}
 }
 
-func TestHetznerConfigurer_curlQueryFailover_MissingUserOrPass(t *testing.T) {
+func TestHetznerConfigurer_queryFailover_MissingUserOrPass(t *testing.T) {
 	t.Parallel()
 	setupHetznerTest(t)
 
@@ -279,13 +331,13 @@ func TestHetznerConfigurer_curlQueryFailover_MissingUserOrPass(t *testing.T) {
 	c := newTestHetznerConfigurer(t)
 	c.credentialsFile = path
 
-	_, err := c.curlQueryFailover(false)
+	_, err := c.queryFailover(false)
 	if err == nil {
 		t.Fatal("expected error when password is missing, got nil")
 	}
 }
 
-func TestHetznerConfigurer_curlQueryFailover_OutboundIPError(t *testing.T) {
+func TestHetznerConfigurer_queryFailover_OutboundIPError(t *testing.T) {
 	t.Parallel()
 	setupHetznerTest(t)
 
@@ -298,13 +350,13 @@ func TestHetznerConfigurer_curlQueryFailover_OutboundIPError(t *testing.T) {
 		return nil, errors.New("no outbound IP")
 	}
 
-	_, err := c.curlQueryFailover(true)
+	_, err := c.queryFailover(true)
 	if err == nil {
 		t.Fatal("expected error when outbound IP lookup fails, got nil")
 	}
 }
 
-func TestHetznerConfigurer_curlQueryFailover_CommandError(t *testing.T) {
+func TestHetznerConfigurer_queryFailover_APIUnreachable(t *testing.T) {
 	t.Parallel()
 	setupHetznerTest(t)
 
@@ -313,13 +365,11 @@ func TestHetznerConfigurer_curlQueryFailover_CommandError(t *testing.T) {
 
 	c := newTestHetznerConfigurer(t)
 	c.credentialsFile = credPath
-	c.runCommand = func(string, ...string) ([]byte, error) {
-		return nil, errors.New("curl failed")
-	}
+	unreachableHetznerAPI(t, c)
 
-	_, err := c.curlQueryFailover(false)
+	_, err := c.queryFailover(false)
 	if err == nil {
-		t.Fatal("expected error when curl fails, got nil")
+		t.Fatal("expected error when the API cannot be reached, got nil")
 	}
 }
 
@@ -335,17 +385,13 @@ func TestHetznerConfigurer_queryAddress_CachedConfigured(t *testing.T) {
 	c.cachedState = configured
 	c.lastAPICheck = time.Now()
 
-	called := false
-	c.runCommand = func(string, ...string) ([]byte, error) {
-		called = true
-		return nil, nil
-	}
+	stub := stubHetznerAPI(t, c, "")
 
 	if got := c.queryAddress(); !got {
 		t.Errorf("queryAddress() = %v, want true for cached configured state", got)
 	}
-	if called {
-		t.Error("expected queryAddress to use cached state without calling curl")
+	if stub.calls() > 0 {
+		t.Error("expected queryAddress to use the cached state without asking the API")
 	}
 }
 
@@ -357,17 +403,13 @@ func TestHetznerConfigurer_queryAddress_CachedReleased(t *testing.T) {
 	c.cachedState = released
 	c.lastAPICheck = time.Now()
 
-	called := false
-	c.runCommand = func(string, ...string) ([]byte, error) {
-		called = true
-		return nil, nil
-	}
+	stub := stubHetznerAPI(t, c, "")
 
 	if got := c.queryAddress(); got {
 		t.Errorf("queryAddress() = %v, want false for cached released state", got)
 	}
-	if called {
-		t.Error("expected queryAddress to use cached state without calling curl")
+	if stub.calls() > 0 {
+		t.Error("expected queryAddress to use the cached state without asking the API")
 	}
 }
 
@@ -386,9 +428,7 @@ func TestHetznerConfigurer_queryAddress_ExpiredCache_MatchesOwnIP(t *testing.T) 
 	c.getOutboundIP = func() (net.IP, error) {
 		return net.ParseIP("10.0.0.5"), nil
 	}
-	c.runCommand = func(string, ...string) ([]byte, error) {
-		return []byte(`{"failover":{"ip":"192.168.1.10","netmask":"255.255.255.255","server_ip":"10.0.0.1","server_number":12345,"active_server_ip":"10.0.0.5"}}`), nil
-	}
+	stubHetznerAPI(t, c, `{"failover":{"ip":"192.168.1.10","netmask":"255.255.255.255","server_ip":"10.0.0.1","server_number":12345,"active_server_ip":"10.0.0.5"}}`)
 
 	if got := c.queryAddress(); !got {
 		t.Errorf("queryAddress() = %v, want true when failover points to this machine", got)
@@ -413,9 +453,7 @@ func TestHetznerConfigurer_queryAddress_ExpiredCache_DifferentIP(t *testing.T) {
 	c.getOutboundIP = func() (net.IP, error) {
 		return net.ParseIP("10.0.0.5"), nil
 	}
-	c.runCommand = func(string, ...string) ([]byte, error) {
-		return []byte(`{"failover":{"ip":"192.168.1.10","netmask":"255.255.255.255","server_ip":"10.0.0.1","server_number":12345,"active_server_ip":"10.0.0.9"}}`), nil
-	}
+	stubHetznerAPI(t, c, `{"failover":{"ip":"192.168.1.10","netmask":"255.255.255.255","server_ip":"10.0.0.1","server_number":12345,"active_server_ip":"10.0.0.9"}}`)
 
 	if got := c.queryAddress(); got {
 		t.Errorf("queryAddress() = %v, want false when failover points elsewhere", got)
@@ -425,7 +463,7 @@ func TestHetznerConfigurer_queryAddress_ExpiredCache_DifferentIP(t *testing.T) {
 	}
 }
 
-func TestHetznerConfigurer_queryAddress_CurlError(t *testing.T) {
+func TestHetznerConfigurer_queryAddress_APIError(t *testing.T) {
 	t.Parallel()
 	setupHetznerTest(t)
 
@@ -439,12 +477,10 @@ func TestHetznerConfigurer_queryAddress_CurlError(t *testing.T) {
 	c.getOutboundIP = func() (net.IP, error) {
 		return net.ParseIP("10.0.0.5"), nil
 	}
-	c.runCommand = func(string, ...string) ([]byte, error) {
-		return nil, errors.New("curl failed")
-	}
+	unreachableHetznerAPI(t, c)
 
 	if got := c.queryAddress(); got {
-		t.Errorf("queryAddress() = %v, want false when curl fails", got)
+		t.Errorf("queryAddress() = %v, want false when the API cannot be reached", got)
 	}
 }
 
@@ -462,9 +498,7 @@ func TestHetznerConfigurer_queryAddress_OutboundIPError(t *testing.T) {
 	c.getOutboundIP = func() (net.IP, error) {
 		return nil, errors.New("no outbound IP")
 	}
-	c.runCommand = func(string, ...string) ([]byte, error) {
-		return []byte(`{"failover":{"ip":"192.168.1.10","netmask":"255.255.255.255","server_ip":"10.0.0.1","server_number":12345,"active_server_ip":"10.0.0.5"}}`), nil
-	}
+	stubHetznerAPI(t, c, `{"failover":{"ip":"192.168.1.10","netmask":"255.255.255.255","server_ip":"10.0.0.1","server_number":12345,"active_server_ip":"10.0.0.5"}}`)
 
 	if got := c.queryAddress(); got {
 		t.Errorf("queryAddress() = %v, want false when outbound IP lookup fails", got)
@@ -488,9 +522,7 @@ func TestHetznerConfigurer_configureAddress_Success(t *testing.T) {
 	c.getOutboundIP = func() (net.IP, error) {
 		return net.ParseIP("10.0.0.5"), nil
 	}
-	c.runCommand = func(string, ...string) ([]byte, error) {
-		return []byte(`{"failover":{"ip":"192.168.1.10","netmask":"255.255.255.255","server_ip":"10.0.0.1","server_number":12345,"active_server_ip":"10.0.0.5"}}`), nil
-	}
+	stubHetznerAPI(t, c, `{"failover":{"ip":"192.168.1.10","netmask":"255.255.255.255","server_ip":"10.0.0.1","server_number":12345,"active_server_ip":"10.0.0.5"}}`)
 
 	if got := c.configureAddress(); !got {
 		t.Errorf("configureAddress() = %v, want true on successful failover", got)
@@ -500,7 +532,7 @@ func TestHetznerConfigurer_configureAddress_Success(t *testing.T) {
 	}
 }
 
-func TestHetznerConfigurer_configureAddress_CurlError(t *testing.T) {
+func TestHetznerConfigurer_configureAddress_APIError(t *testing.T) {
 	t.Parallel()
 	setupHetznerTest(t)
 
@@ -509,12 +541,10 @@ func TestHetznerConfigurer_configureAddress_CurlError(t *testing.T) {
 
 	c := newTestHetznerConfigurer(t)
 	c.credentialsFile = credPath
-	c.runCommand = func(string, ...string) ([]byte, error) {
-		return nil, errors.New("curl failed")
-	}
+	unreachableHetznerAPI(t, c)
 
 	if got := c.configureAddress(); got {
-		t.Errorf("configureAddress() = %v, want false when curl fails", got)
+		t.Errorf("configureAddress() = %v, want false when the API cannot be reached", got)
 	}
 	if c.cachedState != unknown {
 		t.Errorf("cachedState = %d, want unknown", c.cachedState)
@@ -533,9 +563,7 @@ func TestHetznerConfigurer_configureAddress_DifferentIP(t *testing.T) {
 	c.getOutboundIP = func() (net.IP, error) {
 		return net.ParseIP("10.0.0.5"), nil
 	}
-	c.runCommand = func(string, ...string) ([]byte, error) {
-		return []byte(`{"failover":{"ip":"192.168.1.10","netmask":"255.255.255.255","server_ip":"10.0.0.1","server_number":12345,"active_server_ip":"10.0.0.9"}}`), nil
-	}
+	stubHetznerAPI(t, c, `{"failover":{"ip":"192.168.1.10","netmask":"255.255.255.255","server_ip":"10.0.0.1","server_number":12345,"active_server_ip":"10.0.0.9"}}`)
 
 	if got := c.configureAddress(); got {
 		t.Errorf("configureAddress() = %v, want false when API reports different active IP", got)
@@ -557,9 +585,7 @@ func TestHetznerConfigurer_configureAddress_OutboundIPError(t *testing.T) {
 	c.getOutboundIP = func() (net.IP, error) {
 		return nil, errors.New("no outbound IP")
 	}
-	c.runCommand = func(string, ...string) ([]byte, error) {
-		return []byte(`{"failover":{"ip":"192.168.1.10","netmask":"255.255.255.255","server_ip":"10.0.0.1","server_number":12345,"active_server_ip":"10.0.0.5"}}`), nil
-	}
+	stubHetznerAPI(t, c, `{"failover":{"ip":"192.168.1.10","netmask":"255.255.255.255","server_ip":"10.0.0.1","server_number":12345,"active_server_ip":"10.0.0.5"}}`)
 
 	if got := c.configureAddress(); got {
 		t.Errorf("configureAddress() = %v, want false when outbound IP lookup fails", got)
@@ -589,7 +615,7 @@ func TestHetznerConfigurer_deconfigureAddress(t *testing.T) {
 // Additional error path tests
 // ---------------------------------------------------------------------------
 
-func TestHetznerConfigurer_curlQueryFailover_ShortLine(t *testing.T) {
+func TestHetznerConfigurer_queryFailover_ShortLine(t *testing.T) {
 	t.Parallel()
 	setupHetznerTest(t)
 
@@ -602,18 +628,16 @@ func TestHetznerConfigurer_curlQueryFailover_ShortLine(t *testing.T) {
 
 	c := newTestHetznerConfigurer(t)
 	c.credentialsFile = path
-	c.runCommand = func(string, ...string) ([]byte, error) {
-		return []byte(`{"failover":{"ip":"192.168.1.10","netmask":"255.255.255.255","server_ip":"10.0.0.1","server_number":12345,"active_server_ip":"10.0.0.1"}}`), nil
-	}
+	stubHetznerAPI(t, c, `{"failover":{"ip":"192.168.1.10","netmask":"255.255.255.255","server_ip":"10.0.0.1","server_number":12345,"active_server_ip":"10.0.0.1"}}`)
 
 	// Should succeed - short lines are skipped
-	_, err := c.curlQueryFailover(false)
+	_, err := c.queryFailover(false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
-func TestHetznerConfigurer_curlQueryFailover_OnlyShortLines(t *testing.T) {
+func TestHetznerConfigurer_queryFailover_OnlyShortLines(t *testing.T) {
 	t.Parallel()
 	setupHetznerTest(t)
 
@@ -627,27 +651,27 @@ func TestHetznerConfigurer_curlQueryFailover_OnlyShortLines(t *testing.T) {
 	c := newTestHetznerConfigurer(t)
 	c.credentialsFile = path
 
-	_, err := c.curlQueryFailover(false)
+	_, err := c.queryFailover(false)
 	if err == nil {
 		t.Fatal("expected error when no valid credentials found, got nil")
 	}
 }
 
-func TestHetznerConfigurer_curlQueryFailover_MalformedCredentials(t *testing.T) {
+func TestHetznerConfigurer_queryFailover_MalformedCredentials(t *testing.T) {
 	t.Parallel()
 	setupHetznerTest(t)
 
 	dir := t.TempDir()
 	path := filepath.Join(dir, "hetzner")
-	// Write credentials that match the prefix but are too short to extract values
-	if err := os.WriteFile(path, []byte("user=\"\npass=\"\n"), 0o600); err != nil {
+	// Write credentials whose values are empty, quoted and unquoted
+	if err := os.WriteFile(path, []byte("user=\"\"\npass=\n"), 0o600); err != nil {
 		t.Fatalf("failed to write credentials file: %v", err)
 	}
 
 	c := newTestHetznerConfigurer(t)
 	c.credentialsFile = path
 
-	_, err := c.curlQueryFailover(false)
+	_, err := c.queryFailover(false)
 	if err == nil {
 		t.Fatal("expected error when credentials are empty, got nil")
 	}
@@ -667,9 +691,7 @@ func TestHetznerConfigurer_queryAddress_ParseJSONError(t *testing.T) {
 	c.getOutboundIP = func() (net.IP, error) {
 		return net.ParseIP("10.0.0.5"), nil
 	}
-	c.runCommand = func(string, ...string) ([]byte, error) {
-		return []byte(`invalid json`), nil
-	}
+	stubHetznerAPI(t, c, `invalid json`)
 
 	if got := c.queryAddress(); got {
 		t.Errorf("queryAddress() = %v, want false when JSON parsing fails", got)
@@ -692,12 +714,10 @@ func TestHetznerConfigurer_queryAddress_BothErrorsOccur(t *testing.T) {
 	c.lastAPICheck = time.Now().Add(-2 * time.Hour)
 
 	// Both curl and JSON parsing will fail
-	c.runCommand = func(string, ...string) ([]byte, error) {
-		return nil, errors.New("curl failed")
-	}
+	unreachableHetznerAPI(t, c)
 
 	if got := c.queryAddress(); got {
-		t.Errorf("queryAddress() = %v, want false when curl fails", got)
+		t.Errorf("queryAddress() = %v, want false when the API cannot be reached", got)
 	}
 	if c.cachedState != unknown {
 		t.Errorf("cachedState = %d, want unknown", c.cachedState)
@@ -716,9 +736,7 @@ func TestHetznerConfigurer_configureAddress_JSONParseError(t *testing.T) {
 	c.getOutboundIP = func() (net.IP, error) {
 		return net.ParseIP("10.0.0.5"), nil
 	}
-	c.runCommand = func(string, ...string) ([]byte, error) {
-		return []byte(`{invalid json}`), nil
-	}
+	stubHetznerAPI(t, c, `{invalid json}`)
 
 	if got := c.configureAddress(); got {
 		t.Errorf("configureAddress() = %v, want false when JSON parse fails", got)
@@ -762,23 +780,45 @@ func TestHetznerConfigurer_getActiveIPFromJSON_MissingFields(t *testing.T) {
 			}`,
 		},
 		{
-			name: "failover is not an object",
+			name: "active_server_ip is not an address",
 			response: `{
-				"failover": "not an object"
+				"failover": {
+					"active_server_ip": "not an address"
+				}
 			}`,
+		},
+		{
+			name:     "failover is not an object",
+			response: `{"failover": "not an object"}`,
+		},
+		{
+			name:     "an error answer as the API sends it",
+			response: `{"error":{"status":401,"code":"UNAUTHORIZED","message":"Unauthorized"}}`,
+		},
+		{
+			name:     "an error answer without a status",
+			response: `{"error":{"code":"UNAUTHORIZED","message":"Unauthorized"}}`,
+		},
+		{
+			name:     "an error answer with nothing in it",
+			response: `{"error":{}}`,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// This will panic with current implementation due to type assertions
-			// We're testing that the panic is caught or the function handles it
+			t.Parallel()
+			// an answer that does not look as expected must be reported, not
+			// take the process down in the middle of a failover
 			defer func() {
-				if r := recover(); r == nil {
-					t.Error("expected panic for type assertion but got none")
+				if r := recover(); r != nil {
+					t.Errorf("getActiveIPFromJSON panicked: %v", r)
 				}
 			}()
-			_, _ = c.getActiveIPFromJSON(tt.response)
+			ip, err := c.getActiveIPFromJSON(tt.response)
+			if err == nil {
+				t.Errorf("expected an error, got the address %v", ip)
+			}
 		})
 	}
 }
@@ -798,9 +838,7 @@ func TestHetznerConfigurer_queryAddress_NilIPFromJSON(t *testing.T) {
 		return net.ParseIP("10.0.0.5"), nil
 	}
 	// Return response that will be parsed but returns nil IP (edge case)
-	c.runCommand = func(string, ...string) ([]byte, error) {
-		return []byte(`{"unexpected": "structure"}`), nil
-	}
+	stubHetznerAPI(t, c, `{"unexpected": "structure"}`)
 
 	if got := c.queryAddress(); got {
 		t.Errorf("queryAddress() = %v, want false when JSON structure is unexpected", got)
@@ -816,5 +854,250 @@ func TestHetznerConfigurer_getCIDR(t *testing.T) {
 	expected := "192.168.1.10/24"
 	if cidr != expected {
 		t.Errorf("getCIDR() = %v, want %v", cidr, expected)
+	}
+}
+
+// TestHetznerConfigurer_readCredentials verifies that the values are read as
+// written. They used to be cut out of the line by offset, which required
+// exactly user="value" and silently dropped the last character otherwise.
+func TestHetznerConfigurer_readCredentials(t *testing.T) {
+	t.Parallel()
+	setupHetznerTest(t)
+
+	tests := []struct {
+		name     string
+		content  string
+		user     string
+		password string
+		wantErr  bool
+	}{
+		{"documented format", "user=\"myUsername\"\npass=\"myPassword\"\n", "myUsername", "myPassword", false},
+		{"spaces around the equals sign", "user = \"myUsername\"\npass = \"myPassword\"\n", "myUsername", "myPassword", false},
+		{"without quotes", "user=myUsername\npass=myPassword\n", "myUsername", "myPassword", false},
+		{"single quotes", "user='myUsername'\npass='myPassword'\n", "myUsername", "myPassword", false},
+		{"long names", "username=\"myUsername\"\npassword=\"myPassword\"\n", "myUsername", "myPassword", false},
+		{"unquoted value ending in a quote", "user=myUsername\npass=myPassword'\n", "myUsername", "myPassword'", false},
+		{"unquoted value starting with a quote", "user=myUsername\npass=\"myPassword\n", "myUsername", "\"myPassword", false},
+		{"quotes inside quotes", "user=myUsername\npass='\"myPassword\"'\n", "myUsername", "\"myPassword\"", false},
+		{"mismatched quotes", "user=myUsername\npass=\"myPassword'\n", "myUsername", "\"myPassword'", false},
+		{"password only", "pass=\"myPassword\"\n", "", "", true},
+		{"nothing usable", "# a comment\n\n", "", "", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			path := filepath.Join(t.TempDir(), "hetzner")
+			if err := os.WriteFile(path, []byte(tt.content), 0o600); err != nil {
+				t.Fatalf("failed to write credentials file: %v", err)
+			}
+			c := newTestHetznerConfigurer(t)
+			c.credentialsFile = path
+
+			user, password, err := c.readCredentials()
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected an error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if user != tt.user || password != tt.password {
+				t.Errorf("got user %q password %q, want %q and %q", user, password, tt.user, tt.password)
+			}
+		})
+	}
+}
+
+// TestHetznerConfigurer_queryFailover_KeepsCredentialsOutOfTheURL makes sure
+// the credentials go into the Authorization header only. In the URL they would
+// end up in the logs of every proxy on the way.
+func TestHetznerConfigurer_queryFailover_KeepsCredentialsOutOfTheURL(t *testing.T) {
+	t.Parallel()
+	setupHetznerTest(t)
+
+	credPath := writeHetznerCredentialsFile(t, t.TempDir(), "testuser", "s3cret")
+
+	c := newTestHetznerConfigurer(t)
+	c.credentialsFile = credPath
+
+	var requestURI string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestURI = r.URL.String()
+		_, _ = io.WriteString(w, "{}")
+	}))
+	defer server.Close()
+	c.apiURL = server.URL
+
+	if _, err := c.queryFailover(false); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if strings.Contains(requestURI, "s3cret") || strings.Contains(requestURI, "testuser") {
+		t.Errorf("credentials leaked into the request URI: %s", requestURI)
+	}
+}
+
+// TestHetznerConfigurer_readCredentials_WarnsAboutLoosePermissions is not
+// parallel, because it swaps the package logger to look at the warning
+func TestHetznerConfigurer_readCredentials_WarnsAboutLoosePermissions(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("file permission bits are not meaningful on Windows")
+	}
+	core, logs := observer.New(zapcore.WarnLevel)
+	old := log
+	log = zap.New(core).Sugar()
+	t.Cleanup(func() { log = old })
+
+	path := writeHetznerCredentialsFile(t, t.TempDir(), "testuser", "testpass")
+	if err := os.Chmod(path, 0o644); err != nil {
+		t.Fatalf("failed to change the mode of the credentials file: %v", err)
+	}
+
+	c := newTestHetznerConfigurer(t)
+	c.credentialsFile = path
+
+	if _, _, err := c.readCredentials(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if n := logs.FilterMessageSnippet("accessible by group or others").Len(); n != 1 {
+		t.Errorf("expected one warning about the file permissions, got %d", n)
+	}
+}
+
+func TestHetznerConfigurer_readCredentials_ScannerError(t *testing.T) {
+	t.Parallel()
+	setupHetznerTest(t)
+
+	// a line longer than the scanner buffer makes the scanner fail
+	path := filepath.Join(t.TempDir(), "hetzner")
+	content := "user=\"" + strings.Repeat("x", bufio.MaxScanTokenSize) + "\"\n"
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatalf("failed to write credentials file: %v", err)
+	}
+
+	c := newTestHetznerConfigurer(t)
+	c.credentialsFile = path
+
+	if _, _, err := c.readCredentials(); err == nil {
+		t.Fatal("expected an error for an unreadable credentials file, got nil")
+	}
+}
+
+func TestHetznerConfigurer_queryFailover_InvalidAPIURL(t *testing.T) {
+	t.Parallel()
+	setupHetznerTest(t)
+
+	for _, post := range []bool{false, true} {
+		t.Run(fmt.Sprintf("post=%v", post), func(t *testing.T) {
+			t.Parallel()
+			c := newTestHetznerConfigurer(t)
+			c.credentialsFile = writeHetznerCredentialsFile(t, t.TempDir(), "testuser", "testpass")
+			c.getOutboundIP = func() (net.IP, error) { return net.ParseIP("10.0.0.5"), nil }
+			c.apiURL = "http://in valid\x7f"
+
+			if _, err := c.queryFailover(post); err == nil {
+				t.Fatal("expected an error for an invalid API URL, got nil")
+			}
+		})
+	}
+}
+
+func TestHetznerConfigurer_queryFailover_TruncatedBody(t *testing.T) {
+	t.Parallel()
+	setupHetznerTest(t)
+
+	c := newTestHetznerConfigurer(t)
+	c.credentialsFile = writeHetznerCredentialsFile(t, t.TempDir(), "testuser", "testpass")
+
+	// the answer announces more bytes than it delivers
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Length", "100")
+		_, _ = io.WriteString(w, "{}")
+	}))
+	t.Cleanup(server.Close)
+	c.apiURL = server.URL
+
+	if _, err := c.queryFailover(false); err == nil {
+		t.Fatal("expected an error for a truncated answer, got nil")
+	}
+}
+
+func TestHetznerConfigurer_queryFailover_ErrorStatusWithoutBody(t *testing.T) {
+	t.Parallel()
+	setupHetznerTest(t)
+
+	c := newTestHetznerConfigurer(t)
+	c.credentialsFile = writeHetznerCredentialsFile(t, t.TempDir(), "testuser", "testpass")
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	t.Cleanup(server.Close)
+	c.apiURL = server.URL
+
+	_, err := c.queryFailover(false)
+	if err == nil {
+		t.Fatal("expected an error for an empty error answer, got nil")
+	}
+	if !strings.Contains(err.Error(), "503") {
+		t.Errorf("expected the status in the error, got %v", err)
+	}
+}
+
+func TestHetznerConfigurer_configureAddress_OutboundIPErrorAfterFailover(t *testing.T) {
+	t.Parallel()
+	setupHetznerTest(t)
+
+	c := newTestHetznerConfigurer(t)
+	c.credentialsFile = writeHetznerCredentialsFile(t, t.TempDir(), "testuser", "testpass")
+
+	// the request succeeds, but the address cannot be determined afterwards
+	var calls int
+	c.getOutboundIP = func() (net.IP, error) {
+		calls++
+		if calls > 1 {
+			return nil, errors.New("no outbound IP")
+		}
+		return net.ParseIP("10.0.0.5"), nil
+	}
+	stubHetznerAPI(t, c, `{"failover":{"ip":"192.168.1.10","netmask":"255.255.255.255","server_ip":"10.0.0.1","server_number":12345,"active_server_ip":"10.0.0.5"}}`)
+
+	if got := c.configureAddress(); got {
+		t.Errorf("configureAddress() = %v, want false when the outbound IP lookup fails", got)
+	}
+	if c.cachedState != unknown {
+		t.Errorf("cachedState = %d, want unknown", c.cachedState)
+	}
+}
+
+// TestNewHetznerClient_Transport verifies what replaced "curl --ipv4": the
+// connections go over IPv4 only, and the proxy settings of the environment
+// are honored as curl did
+func TestNewHetznerClient_Transport(t *testing.T) {
+	t.Parallel()
+
+	transport, ok := newHetznerClient().Transport.(*http.Transport)
+	if !ok {
+		t.Fatalf("expected an *http.Transport, got %T", newHetznerClient().Transport)
+	}
+	if transport.Proxy == nil {
+		t.Error("expected the proxy settings of the environment to be honored")
+	}
+
+	// an IPv6 address cannot be dialed over tcp4, which fails with an address
+	// error before any packet is sent, so this works without IPv6 on the host
+	for _, network := range []string{"tcp", "tcp6"} {
+		t.Run(network, func(t *testing.T) {
+			t.Parallel()
+			conn, err := transport.DialContext(t.Context(), network, "[::1]:1")
+			if conn != nil {
+				_ = conn.Close()
+			}
+			var addrErr *net.AddrError
+			if !errors.As(err, &addrErr) {
+				t.Errorf("expected the dial over %s to be pinned to IPv4, got %v", network, err)
+			}
+		})
 	}
 }
