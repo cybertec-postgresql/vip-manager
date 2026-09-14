@@ -24,7 +24,7 @@ Manages a virtual IP based on state kept in `etcd`, `Consul` or using `Patroni` 
 
 ## Prerequisites
 
-- `go` >= 1.19
+- `go` >= 1.26, see the `go` directive in `go.mod`
 - `make` (optional)
 - `goreleaser` (optional)
 
