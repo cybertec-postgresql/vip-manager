@@ -54,7 +54,7 @@ func defineFlags() *pflag.FlagSet {
 	flags.Bool("version", false, "Show the version number.")
 
 	flags.String("ip", "", "Virtual IP address to configure.")
-	flags.String("netmask", "", "The netmask used for the IP address. Defaults to -1 which assigns ipv4 default mask.")
+	flags.Int("netmask", -1, "The netmask used for the IP address. Defaults to -1 which assigns the ipv4 default mask, IPv6 addresses need an explicit value.")
 	flags.String("interface", "", "Network interface to configure on .")
 
 	flags.String("trigger-key", "", "Key in the DCS to monitor, e.g. \"/service/batman/leader\".")
