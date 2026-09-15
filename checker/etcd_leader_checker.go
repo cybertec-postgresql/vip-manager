@@ -91,8 +91,21 @@ func getTransport(conf *vipconfig.Config) (*tls.Config, error) {
 	return tlsClientConfig, nil
 }
 
-// get gets the current value from etcd
-func (elc *EtcdLeaderChecker) get(ctx context.Context, out chan<- bool) {
+// sync reads the current value until etcd answers. A single failed read would
+// leave the state at false, and a healthy watch stays silent as long as the
+// key does not change, so the VIP would never come back.
+func (elc *EtcdLeaderChecker) sync(ctx context.Context, out chan<- bool) {
+	for !elc.get(ctx, out) {
+		select {
+		case <-time.After(time.Second):
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+// get gets the current value from etcd and reports whether etcd answered
+func (elc *EtcdLeaderChecker) get(ctx context.Context, out chan<- bool) bool {
 	// send guards the channel send with ctx to avoid blocking on shutdown
 	send := func(state bool) {
 		select {
@@ -111,18 +124,18 @@ func (elc *EtcdLeaderChecker) get(ctx context.Context, out chan<- bool) {
 			zap.String("key", elc.TriggerKey),
 			zap.Error(err))
 		send(false)
-		return
+		return false
 	}
 	if resp == nil {
 		elc.getLog.error("Received nil response from etcd", zap.String("key", elc.TriggerKey))
 		send(false)
-		return
+		return false
 	}
 	if len(resp.Kvs) == 0 {
 		elc.getLog.info("No value found for the key - DCS may not have set it yet",
 			zap.String("key", elc.TriggerKey))
 		send(false)
-		return
+		return true
 	}
 	elc.getLog.success("Successfully read the value from etcd again", zap.String("key", elc.TriggerKey))
 	for _, kv := range resp.Kvs {
@@ -131,6 +144,7 @@ func (elc *EtcdLeaderChecker) get(ctx context.Context, out chan<- bool) {
 		elc.Logger.Sugar().Info("Current value from DCS:", value)
 		send(matches)
 	}
+	return true
 }
 
 // watch monitors value changes from etcd
@@ -168,7 +182,7 @@ func (elc *EtcdLeaderChecker) watch(ctx context.Context, out chan<- bool) error 
 				elc.Logger.Sugar().Debug("Resetting cancelled WATCH on ", elc.TriggerKey)
 				// Re-fetch the current value: events may have been missed
 				// while the watch was down (e.g. a leader change)
-				elc.get(ctx, out)
+				elc.sync(ctx, out)
 				continue
 			}
 			elc.watchLog.success("WATCH on key is working again", zap.String("key", elc.TriggerKey))
@@ -187,7 +201,7 @@ func (elc *EtcdLeaderChecker) watch(ctx context.Context, out chan<- bool) error 
 // GetChangeNotificationStream monitors the leader in etcd
 func (elc *EtcdLeaderChecker) GetChangeNotificationStream(ctx context.Context, out chan<- bool) error {
 	defer elc.Close()
-	go elc.get(ctx, out)
+	go elc.sync(ctx, out)
 	wctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	return elc.watch(wctx, out)

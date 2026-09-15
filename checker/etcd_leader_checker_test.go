@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -558,4 +559,102 @@ func TestEtcdLeaderChecker_watch_ResyncsOnCanceledWatch(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("timed out waiting for watch goroutine to exit")
 	}
+}
+
+// flakyKV fails the first reads as an overloaded etcd would, then recovers.
+type flakyKV struct {
+	clientv3.KV
+	failures atomic.Int32
+}
+
+func (f *flakyKV) Get(ctx context.Context, key string, opts ...clientv3.OpOption) (*clientv3.GetResponse, error) {
+	if f.failures.Add(-1) >= 0 {
+		return nil, context.DeadlineExceeded
+	}
+	return f.KV.Get(ctx, key, opts...)
+}
+
+// lostOnceWatcher hands out a dead watch first and healthy watches afterwards.
+type lostOnceWatcher struct {
+	clientv3.Watcher
+	lost atomic.Bool
+}
+
+func (w *lostOnceWatcher) Watch(ctx context.Context, key string, opts ...clientv3.OpOption) clientv3.WatchChan {
+	if w.lost.CompareAndSwap(false, true) {
+		ch := make(chan clientv3.WatchResponse)
+		close(ch)
+		return ch
+	}
+	return w.Watcher.Watch(ctx, key, opts...)
+}
+
+// waitForTrue fails the test unless true is received before the timeout.
+func waitForTrue(t *testing.T, out <-chan bool, timeout time.Duration) {
+	t.Helper()
+	deadline := time.After(timeout)
+	for {
+		select {
+		case got := <-out:
+			if got {
+				return
+			}
+		case <-deadline:
+			t.Fatal("timed out waiting for true after etcd recovered")
+		}
+	}
+}
+
+// TestEtcdLeaderChecker_watch_RetriesFailedResync is a regression test for
+// https://github.com/cybertec-postgresql/vip-manager/issues/431: when the
+// re-sync after a lost watch fails, the healthy new watch stays silent as the
+// leader key does not change, so the checker must retry the read until etcd
+// answers instead of keeping the VIP down.
+func TestEtcdLeaderChecker_watch_RetriesFailedResync(t *testing.T) {
+	endpoints, seed := startEtcdContainer(t)
+	checker := newIntegrationChecker(t, endpoints, "/leader", "primary")
+	if _, err := seed.Put(context.Background(), "/leader", "primary"); err != nil {
+		t.Fatalf("seed Put: %v", err)
+	}
+	kv := &flakyKV{KV: checker.KV}
+	kv.failures.Store(2)
+	checker.KV = kv
+	checker.Watcher = &lostOnceWatcher{Watcher: checker.Watcher}
+
+	out := make(chan bool, 10)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() { _ = checker.watch(ctx, out) }()
+
+	waitForTrue(t, out, 10*time.Second)
+}
+
+// TestEtcdLeaderChecker_GetChangeNotificationStream_RetriesFailedInitialGet
+// verifies that a failed initial read is retried, as the watch reports
+// nothing until the leader key changes.
+func TestEtcdLeaderChecker_GetChangeNotificationStream_RetriesFailedInitialGet(t *testing.T) {
+	endpoints, seed := startEtcdContainer(t)
+	if _, err := seed.Put(context.Background(), "/leader", "primary"); err != nil {
+		t.Fatalf("seed Put: %v", err)
+	}
+	// GetChangeNotificationStream closes the client itself
+	checker, err := NewEtcdLeaderChecker(&vipconfig.Config{
+		Endpoints:    endpoints,
+		TriggerKey:   "/leader",
+		TriggerValue: "primary",
+		Logger:       zap.NewNop(),
+	})
+	if err != nil {
+		t.Fatalf("NewEtcdLeaderChecker: %v", err)
+	}
+	kv := &flakyKV{KV: checker.KV}
+	kv.failures.Store(2)
+	checker.KV = kv
+
+	out := make(chan bool, 10)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() { _ = checker.GetChangeNotificationStream(ctx, out) }()
+
+	waitForTrue(t, out, 10*time.Second)
 }
