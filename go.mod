@@ -1,6 +1,6 @@
 module github.com/cybertec-postgresql/vip-manager
 
-go 1.26.7
+go 1.27.0
 
 require (
 	github.com/google/gopacket v1.1.19
