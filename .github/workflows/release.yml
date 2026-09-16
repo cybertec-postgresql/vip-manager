@@ -11,13 +11,13 @@ jobs:
     name: goreleaser
     steps:
 
+    - name: Check out code into the Go module directory
+      uses: actions/checkout@v7
+
     - name: Set up Golang
       uses: actions/setup-go@v7
       with:
-        go-version: '1.27'
-
-    - name: Check out code into the Go module directory
-      uses: actions/checkout@v7
+        go-version-file: 'go.mod'
 
     - name: Unshallow
       run: git fetch --prune --unshallow
