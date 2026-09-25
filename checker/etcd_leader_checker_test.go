@@ -529,7 +529,7 @@ func TestEtcdLeaderChecker_watch_ResyncsOnCanceledWatch(t *testing.T) {
 
 	// Kill all watch streams: closing the client's Watcher closes the watch
 	// channel, simulating a server-side cancellation / dead watch.
-	if err := checker.Watcher.Close(); err != nil {
+	if err := checker.client.Watcher.Close(); err != nil {
 		t.Fatalf("Watcher.Close: %v", err)
 	}
 

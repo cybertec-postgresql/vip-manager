@@ -5,6 +5,10 @@
 
 [Unit]
 Description=Manages Virtual IP for Patroni
+# After= alone does not pull the target in, so without the Wants= the ordering
+# has no effect on most systems and vip-manager may start before the interface
+# it is supposed to configure exists
+Wants=network-online.target
 After=network-online.target
 Before=patroni.service
 

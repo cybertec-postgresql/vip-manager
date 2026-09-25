@@ -566,7 +566,7 @@ func TestNewConfig_CreatesConfig(t *testing.T) {
 
 	path := minimalConfigFile(t)
 	os.Args = []string{oldArgs[0], fmt.Sprintf("--config=%s", path)}
-	
+
 	conf, err := NewConfig()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
