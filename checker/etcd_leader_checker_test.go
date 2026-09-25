@@ -482,25 +482,15 @@ func TestEtcdLeaderChecker_GetChangeNotificationStream_EmitsOnConnectionError(t 
 	go func() { _ = checker.GetChangeNotificationStream(ctx, out) }()
 
 	// Should eventually emit false because etcd is unreachable
-	falseReceived := false
 	for {
 		select {
 		case got := <-out:
 			if !got {
-				falseReceived = true
-				t.Logf("correctly received false on unreachable etcd")
-				break
+				return
 			}
 		case <-ctx.Done():
-			break
+			t.Fatal("expected false to be emitted when etcd is unreachable, but no false value was received")
 		}
-		if falseReceived {
-			break
-		}
-	}
-
-	if !falseReceived {
-		t.Error("expected false to be emitted when etcd is unreachable, but no false value was received")
 	}
 }
 
@@ -624,9 +614,20 @@ func TestEtcdLeaderChecker_watch_RetriesFailedResync(t *testing.T) {
 	out := make(chan bool, 10)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go func() { _ = checker.watch(ctx, out, 0) }()
+	watchDone := make(chan struct{})
+	go func() {
+		defer close(watchDone)
+		_ = checker.watch(ctx, out, 0)
+	}()
 
 	waitForTrue(t, out, 10*time.Second)
+
+	cancel()
+	select {
+	case <-watchDone:
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for watch goroutine to exit")
+	}
 }
 
 // TestEtcdLeaderChecker_GetChangeNotificationStream_RetriesFailedInitialGet
@@ -654,7 +655,18 @@ func TestEtcdLeaderChecker_GetChangeNotificationStream_RetriesFailedInitialGet(t
 	out := make(chan bool, 10)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go func() { _ = checker.GetChangeNotificationStream(ctx, out) }()
+	streamDone := make(chan struct{})
+	go func() {
+		defer close(streamDone)
+		_ = checker.GetChangeNotificationStream(ctx, out)
+	}()
 
 	waitForTrue(t, out, 10*time.Second)
+
+	cancel()
+	select {
+	case <-streamDone:
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for GetChangeNotificationStream to return")
+	}
 }
