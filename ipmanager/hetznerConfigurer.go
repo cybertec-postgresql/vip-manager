@@ -2,14 +2,24 @@ package ipmanager
 
 import (
 	"bufio"
+	"cmp"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
+	"net/http"
+	"net/url"
 	"os"
-	"os/exec"
+	"runtime"
+	"strings"
 	"time"
 )
+
+// hetznerAPI is the base URL of the Hetzner Robot API, a field of the
+// configurer so that the tests can point it at a local server
+const hetznerAPI = "https://robot-ws.your-server.de"
 
 const (
 	unknown    = iota // c0 == 0
@@ -27,7 +37,8 @@ type HetznerConfigurer struct {
 	lastAPICheck    time.Time
 	verbose         bool
 	credentialsFile string
-	runCommand      func(name string, arg ...string) ([]byte, error)
+	apiURL          string
+	client          *http.Client
 	getOutboundIP   func() (net.IP, error)
 }
 
@@ -38,12 +49,32 @@ func newHetznerConfigurer(config *IPConfiguration, verbose bool) (*HetznerConfig
 		lastAPICheck:    time.Unix(0, 0),
 		verbose:         verbose,
 		credentialsFile: "/etc/hetzner",
-		runCommand: func(name string, arg ...string) ([]byte, error) {
-			return exec.Command(name, arg...).Output()
-		},
-		getOutboundIP: getOutboundIP,
+		apiURL:          hetznerAPI,
+		client:          newHetznerClient(),
+		getOutboundIP:   getOutboundIP,
 	}
 	return c, nil
+}
+
+// newHetznerClient returns a client that talks IPv4 only, which is all the
+// Hetzner Robot API listens on. Forcing that was the reason this code used to
+// shell out to "curl --ipv4", which put the API password into the command line
+// of a process, and /proc/<pid>/cmdline is readable by every local user.
+func newHetznerClient() *http.Client {
+	dialer := &net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}
+	return &http.Client{
+		Timeout: 30 * time.Second,
+		Transport: &http.Transport{
+			// curl honored HTTPS_PROXY and friends, so keep doing that
+			Proxy: http.ProxyFromEnvironment,
+			DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
+				if network == "tcp" || network == "tcp6" {
+					network = "tcp4"
+				}
+				return dialer.DialContext(ctx, network, address)
+			},
+		},
+	}
 }
 
 /**
@@ -62,101 +93,121 @@ func getOutboundIP() (net.IP, error) {
 	return localAddr.IP, nil
 }
 
-func (c *HetznerConfigurer) curlQueryFailover(post bool) (string, error) {
-	/**
-	 * The credentials for the API are loaded from a file stored in /etc/hetzner .
-	 */
+// readCredentials reads the username and the password for the Robot API from
+// the credentials file, which looks like
+//
+//	user="myUsername"
+//	pass="myPassword"
+//
+// Spaces around the "=" and missing quotes are accepted as well. The values
+// used to be cut out of the line by offset, which silently dropped the last
+// character of an unquoted value.
+func (c *HetznerConfigurer) readCredentials() (user string, password string, err error) {
 	f, err := os.Open(c.credentialsFile)
 	if err != nil {
 		log.Error("can't open passwordfile", err)
-		return "", err
+		return "", "", err
 	}
 	defer f.Close()
 
-	/**
-	 * The retrieval of username and password from the file is rather static,
-	 * so the credentials file must conform to the offsets down below perfectly.
-	 */
-	var user string
-	var password string
+	// the file holds the password of an account that can reroute the failover
+	// IP, so complain when it is readable by more than its owner
+	if info, statErr := f.Stat(); statErr == nil && runtime.GOOS != "windows" {
+		if mode := info.Mode().Perm(); mode&0o077 != 0 {
+			log.Warnf("Credentials file %s is accessible by group or others (mode %#o), consider \"chmod 600 %s\"",
+				c.credentialsFile, mode, c.credentialsFile)
+		}
+	}
+
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
-		line := scanner.Text()
-		if len(line) < 4 {
+		key, value, found := strings.Cut(scanner.Text(), "=")
+		if !found {
 			continue
 		}
-		switch line[:4] {
-		case "user":
-			if len(line) > 6 {
-				user = line[6 : len(line)-1]
-			}
-		case "pass":
-			if len(line) > 6 {
-				password = line[6 : len(line)-1]
-			}
+		value = unquote(strings.TrimSpace(value))
+		switch strings.TrimSpace(key) {
+		case "user", "username":
+			user = value
+		case "pass", "password":
+			password = value
 		}
 	}
 	if err := scanner.Err(); err != nil {
 		log.Error("error reading credentials file", err)
-		return "", fmt.Errorf("error reading credentials file: %w", err)
+		return "", "", fmt.Errorf("error reading credentials file: %w", err)
 	}
 	if user == "" || password == "" {
 		log.Infoln("Couldn't retrieve username or password from file", c.credentialsFile)
-		return "", errors.New("couldn't retrieve username or password from file")
+		return "", "", errors.New("couldn't retrieve username or password from file")
+	}
+	return user, password, nil
+}
+
+// unquote removes one pair of matching quotes around value. A quote that is
+// part of the value, such as the last character of an unquoted password, is
+// kept.
+func unquote(value string) string {
+	if len(value) >= 2 && (value[0] == '"' || value[0] == '\'') && value[len(value)-1] == value[0] {
+		return value[1 : len(value)-1]
+	}
+	return value
+}
+
+// queryFailover asks the Robot API about the failover IP. If post is set, the
+// failover IP is rerouted to this machine, otherwise the current route is
+// returned unchanged.
+func (c *HetznerConfigurer) queryFailover(post bool) (string, error) {
+	user, password, err := c.readCredentials()
+	if err != nil {
+		return "", err
 	}
 
-	/**
-	 * As Hetzner API only allows IPv4 connections, we rely on curl
-	 * instead of GO's own http package,
-	 * as selecting IPv4 transport there doesn't seem trivial.
-	 *
-	 * If post is set to true, a failover will be triggered.
-	 * If it is set to false, the current state (i.e. route)
-	 * for the failover-ip will be retrieved.
-	 */
-	var args []string
+	endpoint := c.apiURL + "/failover/" + c.VIP.String()
+	var req *http.Request
 	if post {
 		myOwnIP, err := c.getOutboundIP()
 		if err != nil {
 			log.Error("Error determining this machine's IP address.", err)
 			return "", fmt.Errorf("error determining this machine's IP address: %w", err)
 		}
-		log.Infof("my_own_ip: %s\n", myOwnIP.String())
+		log.Infof("my_own_ip: %s", myOwnIP.String())
 
-		args = []string{
-			"--ipv4",
-			"-u", user + ":" + password,
-			"https://robot-ws.your-server.de/failover/" + c.VIP.String(),
-			"-d", "active_server_ip=" + myOwnIP.String()}
-
-		log.Debugf("%s %s %s '%s' %s %s %s",
-			"curl",
-			"--ipv4",
-			"-u", user+":XXXXXX",
-			"https://robot-ws.your-server.de/failover/"+c.VIP.String(),
-			"-d", "active_server_ip="+myOwnIP.String())
+		form := url.Values{"active_server_ip": {myOwnIP.String()}}
+		req, err = http.NewRequest(http.MethodPost, endpoint, strings.NewReader(form.Encode()))
+		if err != nil {
+			return "", fmt.Errorf("cannot build the request to %s: %w", endpoint, err)
+		}
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		log.Debugf("POST %s active_server_ip=%s", endpoint, myOwnIP.String())
 	} else {
-		args = []string{
-			"--ipv4",
-			"-u", user + ":" + password,
-			"https://robot-ws.your-server.de/failover/" + c.VIP.String()}
-
-		log.Debugf("%s %s %s %s %s",
-			"curl",
-			"--ipv4",
-			"-u", user+":XXXXXX",
-			"https://robot-ws.your-server.de/failover/"+c.VIP.String())
+		req, err = http.NewRequest(http.MethodGet, endpoint, nil)
+		if err != nil {
+			return "", fmt.Errorf("cannot build the request to %s: %w", endpoint, err)
+		}
+		log.Debugf("GET %s", endpoint)
 	}
+	// the credentials travel in the Authorization header, never in the
+	// command line or the URL
+	req.SetBasicAuth(user, password)
 
-	out, err := c.runCommand("curl", args...)
-
+	resp, err := c.client.Do(req)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("request to the Hetzner API failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("cannot read the answer of the Hetzner API: %w", err)
+	}
+	// the API describes its errors in the body, which getActiveIPFromJSON
+	// reports, so an unexpected status code is only interesting without one
+	if resp.StatusCode >= 300 && len(body) == 0 {
+		return "", fmt.Errorf("the Hetzner API answered with status %s", resp.Status)
 	}
 
-	retStr := string(out[:])
-
-	return retStr, nil
+	return string(body), nil
 }
 
 /**
@@ -164,7 +215,7 @@ func (c *HetznerConfigurer) curlQueryFailover(post bool) (string, error) {
  * curlQueryFailover function and in turn from the curl calls to the API.
  */
 func (c *HetznerConfigurer) getActiveIPFromJSON(str string) (net.IP, error) {
-	var f map[string]interface{}
+	var f map[string]any
 
 	log.Debugf("JSON response: %s\n", str)
 
@@ -174,39 +225,50 @@ func (c *HetznerConfigurer) getActiveIPFromJSON(str string) (net.IP, error) {
 		return nil, err
 	}
 
-	if f["error"] != nil {
-		errormap := f["error"].(map[string]interface{})
+	// every field is read with a checked type assertion: the API describes a
+	// failed request in an "error" object, and an object that does not carry
+	// every field - or a "failover" that is not an object at all - used to
+	// take the whole process down with a type assertion panic, in the middle
+	// of a failover
+	if errormap, ok := f["error"].(map[string]any); ok {
+		status, _ := errormap["status"].(float64)
+		code, _ := errormap["code"].(string)
+		message, _ := errormap["message"].(string)
 
 		log.Errorf("There was an error accessing the Hetzner API!\n"+
-			" status: %f\n code: %s\n message: %s\n",
-			errormap["status"].(float64),
-			errormap["code"].(string),
-			errormap["message"].(string))
-		return nil, errors.New("error response from Hetzner API returned")
+			" status: %.0f\n code: %s\n message: %s\n",
+			status, code, message)
+		return nil, fmt.Errorf("error response from Hetzner API returned: %s", cmp.Or(message, code, "no message"))
 	}
 
-	if f["failover"] != nil {
-		failovermap := f["failover"].(map[string]interface{})
-
-		ip := failovermap["ip"].(string)
-		netmask := failovermap["netmask"].(string)
-		serverIP := failovermap["server_ip"].(string)
-		serverNumber := failovermap["server_number"].(float64)
-		activeServerIP := failovermap["active_server_ip"].(string)
-
-		log.Infoln("Result of the failover query was: ",
-			"failover-ip=", ip,
-			"netmask=", netmask,
-			"server_ip=", serverIP,
-			"server_number=", serverNumber,
-			"active_server_ip=", activeServerIP,
-		)
-
-		return net.ParseIP(activeServerIP), nil
-
+	failovermap, ok := f["failover"].(map[string]any)
+	if !ok {
+		return nil, errors.New("the answer of the Hetzner API describes no failover IP")
 	}
 
-	return nil, errors.New("why did we end up here?")
+	activeServerIP, ok := failovermap["active_server_ip"].(string)
+	if !ok {
+		return nil, errors.New("the answer of the Hetzner API carries no active_server_ip")
+	}
+
+	ip, _ := failovermap["ip"].(string)
+	netmask, _ := failovermap["netmask"].(string)
+	serverIP, _ := failovermap["server_ip"].(string)
+	serverNumber, _ := failovermap["server_number"].(float64)
+
+	log.Infoln("Result of the failover query was: ",
+		"failover-ip=", ip,
+		"netmask=", netmask,
+		"server_ip=", serverIP,
+		"server_number=", serverNumber,
+		"active_server_ip=", activeServerIP,
+	)
+
+	parsed := net.ParseIP(activeServerIP)
+	if parsed == nil {
+		return nil, fmt.Errorf("the Hetzner API reported %q as the active server IP, which is not an address", activeServerIP)
+	}
+	return parsed, nil
 }
 
 func (c *HetznerConfigurer) queryAddress() bool {
@@ -228,7 +290,7 @@ func (c *HetznerConfigurer) queryAddress() bool {
 		}
 	}
 
-	str, err := c.curlQueryFailover(false)
+	str, err := c.queryFailover(false)
 	if err != nil {
 		c.cachedState = unknown
 		return false
@@ -272,7 +334,7 @@ func (c *HetznerConfigurer) deconfigureAddress() bool {
 }
 
 func (c *HetznerConfigurer) runAddressConfiguration() bool {
-	str, err := c.curlQueryFailover(true)
+	str, err := c.queryFailover(true)
 	if err != nil {
 		log.Infof("Error while configuring Hetzner failover-ip! Error message: %s", err)
 		c.cachedState = unknown
