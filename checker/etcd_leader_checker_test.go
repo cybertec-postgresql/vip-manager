@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -192,9 +193,9 @@ func startEtcdContainer(t *testing.T) (endpoints []string, seed *clientv3.Client
 	}
 	t.Cleanup(func() { _ = seed.Close() })
 
-	// Wait for a leader to be elected before returning. WithRequireLeader
-	// cancels watches immediately when no leader is present, so tests that
-	// rely on watch events would race against the initial election otherwise.
+	// Wait for a leader to be elected before returning. Reads fail while no
+	// leader is present, so tests would race against the initial election
+	// otherwise.
 	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
 		st, err := seed.Status(ctx, endpoints[0])
@@ -300,58 +301,6 @@ func TestEtcdLeaderChecker_get_NonMatchingValue(t *testing.T) {
 	}
 }
 
-// TestEtcdLeaderChecker_watch_EmitsOnPut verifies that watch emits the
-// correct bool each time the watched key is written, and stops when the
-// context is cancelled.
-func TestEtcdLeaderChecker_watch_EmitsOnPut(t *testing.T) {
-	endpoints, seed := startEtcdContainer(t)
-	checker := newIntegrationChecker(t, endpoints, "/leader", "primary")
-
-	out := make(chan bool, 4)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	watchDone := make(chan error, 1)
-	go func() { watchDone <- checker.watch(ctx, out) }()
-
-	// Allow the watch to register on the server before writing.
-	time.Sleep(150 * time.Millisecond)
-
-	if _, err := seed.Put(context.Background(), "/leader", "primary"); err != nil {
-		t.Fatalf("Put matching value: %v", err)
-	}
-	select {
-	case got := <-out:
-		if !got {
-			t.Error("expected true for matching put, got false")
-		}
-	case <-time.After(3 * time.Second):
-		t.Fatal("timed out waiting for watch event (matching value)")
-	}
-
-	if _, err := seed.Put(context.Background(), "/leader", "secondary"); err != nil {
-		t.Fatalf("Put non-matching value: %v", err)
-	}
-	select {
-	case got := <-out:
-		if got {
-			t.Error("expected false for non-matching put, got true")
-		}
-	case <-time.After(3 * time.Second):
-		t.Fatal("timed out waiting for watch event (non-matching value)")
-	}
-
-	cancel()
-	select {
-	case err := <-watchDone:
-		if !errors.Is(err, context.Canceled) {
-			t.Errorf("expected context.Canceled from watch, got %v", err)
-		}
-	case <-time.After(3 * time.Second):
-		t.Fatal("timed out waiting for watch goroutine to exit")
-	}
-}
-
 // TestEtcdLeaderChecker_GetChangeNotificationStream_StopsOnCancel verifies
 // the full stream: it emits an initial value via get and stops cleanly when
 // the context is cancelled.
@@ -367,6 +316,7 @@ func TestEtcdLeaderChecker_GetChangeNotificationStream_StopsOnCancel(t *testing.
 		Endpoints:    endpoints,
 		TriggerKey:   "/leader",
 		TriggerValue: "primary",
+		Interval:     100,
 		Logger:       zap.NewNop(),
 	}
 	// GetChangeNotificationStream calls defer elc.Close(), so we must not
@@ -402,54 +352,6 @@ func TestEtcdLeaderChecker_GetChangeNotificationStream_StopsOnCancel(t *testing.
 	}
 }
 
-// TestEtcdLeaderChecker_watch_EmitsOnConnectionLoss verifies that watch emits
-// false when etcd connection is lost, ensuring VIP is removed when etcd becomes unreachable.
-// This test uses a context with a short timeout to simulate watch disconnection.
-func TestEtcdLeaderChecker_watch_EmitsOnConnectionLoss(t *testing.T) {
-	endpoints, seed := startEtcdContainer(t)
-	checker := newIntegrationChecker(t, endpoints, "/leader", "primary")
-
-	// Set initial value
-	if _, err := seed.Put(context.Background(), "/leader", "primary"); err != nil {
-		t.Fatalf("seed Put: %v", err)
-	}
-
-	out := make(chan bool, 10)
-	// Use a context with short timeout to simulate watch error/disconnection
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-	defer cancel()
-
-	watchDone := make(chan error, 1)
-	go func() { watchDone <- checker.watch(ctx, out) }()
-
-	// Allow the watch to register
-	time.Sleep(50 * time.Millisecond)
-
-	// Trigger a change to verify watch is working before timeout
-	if _, err := seed.Put(context.Background(), "/leader", "secondary"); err != nil {
-		t.Fatalf("seed Put secondary: %v", err)
-	}
-
-	select {
-	case got := <-out:
-		if got {
-			t.Error("expected false for secondary value, got true")
-		}
-	case <-time.After(3 * time.Second):
-		t.Fatal("timed out waiting for watch event")
-	}
-
-	// Wait for timeout to trigger the context.Done() error
-	select {
-	case err := <-watchDone:
-		if !errors.Is(err, context.DeadlineExceeded) {
-			t.Errorf("expected context.DeadlineExceeded, got %v", err)
-		}
-	case <-time.After(3 * time.Second):
-		t.Fatal("timed out waiting for watch to exit on timeout")
-	}
-}
-
 // TestEtcdLeaderChecker_GetChangeNotificationStream_EmitsOnConnectionError
 // verifies that GetChangeNotificationStream emits false when connection
 // errors occur, ensuring VIP is removed immediately when etcd is unreachable.
@@ -467,6 +369,7 @@ func TestEtcdLeaderChecker_GetChangeNotificationStream_EmitsOnConnectionError(t 
 		Endpoints:    []string{fmt.Sprintf("http://127.0.0.1:%d", unusedPort)},
 		TriggerKey:   "/leader",
 		TriggerValue: "primary",
+		Interval:     100,
 		Logger:       zap.NewNop(),
 	}
 	checker, err := NewEtcdLeaderChecker(conf)
@@ -481,81 +384,120 @@ func TestEtcdLeaderChecker_GetChangeNotificationStream_EmitsOnConnectionError(t 
 	go func() { _ = checker.GetChangeNotificationStream(ctx, out) }()
 
 	// Should eventually emit false because etcd is unreachable
-	falseReceived := false
 	for {
 		select {
 		case got := <-out:
 			if !got {
-				falseReceived = true
-				t.Logf("correctly received false on unreachable etcd")
-				break
+				return
 			}
 		case <-ctx.Done():
-			break
+			t.Fatal("expected false to be emitted when etcd is unreachable, but no false value was received")
 		}
-		if falseReceived {
-			break
-		}
-	}
-
-	if !falseReceived {
-		t.Error("expected false to be emitted when etcd is unreachable, but no false value was received")
 	}
 }
 
-// TestEtcdLeaderChecker_watch_ResyncsOnCanceledWatch is a regression test
-// for https://github.com/cybertec-postgresql/vip-manager/issues/394: when the
-// watch channel dies (canceled by the server or closed) and the leader
-// changes while the watch is down, the checker must re-sync the state via
-// get() instead of silently re-arming the watch and keeping stale state.
-func TestEtcdLeaderChecker_watch_ResyncsOnCanceledWatch(t *testing.T) {
-	endpoints, seed := startEtcdContainer(t)
-	checker := newIntegrationChecker(t, endpoints, "/leader", "primary")
+// runEtcdStream starts GetChangeNotificationStream polling every 100ms and
+// waits for it to return when the test ends. The stream closes the client
+// itself, so the checker must not be closed by the test as well.
+func runEtcdStream(t *testing.T, endpoints []string, wrapKV func(clientv3.KV) clientv3.KV) <-chan bool {
+	t.Helper()
+	checker, err := NewEtcdLeaderChecker(&vipconfig.Config{
+		Endpoints:    endpoints,
+		TriggerKey:   "/leader",
+		TriggerValue: "primary",
+		Interval:     100,
+		Logger:       zap.NewNop(),
+	})
+	if err != nil {
+		t.Fatalf("NewEtcdLeaderChecker: %v", err)
+	}
+	if wrapKV != nil {
+		checker.KV = wrapKV(checker.KV)
+	}
+	out := make(chan bool, 10)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- checker.GetChangeNotificationStream(ctx, out) }()
+	t.Cleanup(func() {
+		cancel()
+		select {
+		case err := <-done:
+			if !errors.Is(err, context.Canceled) {
+				t.Errorf("expected context.Canceled, got %v", err)
+			}
+		case <-time.After(5 * time.Second):
+			t.Error("timed out waiting for GetChangeNotificationStream to return")
+		}
+	})
+	return out
+}
 
-	// Make this node the leader so a stale state would keep the VIP up.
+// waitForState fails the test unless want is received before the timeout.
+func waitForState(t *testing.T, out <-chan bool, want bool, timeout time.Duration) {
+	t.Helper()
+	deadline := time.After(timeout)
+	for {
+		select {
+		case got := <-out:
+			if got == want {
+				return
+			}
+		case <-deadline:
+			t.Fatalf("timed out waiting for %v", want)
+		}
+	}
+}
+
+// TestEtcdLeaderChecker_GetChangeNotificationStream_FollowsLeaderKey verifies
+// that each write of the leader key is picked up by the next poll.
+func TestEtcdLeaderChecker_GetChangeNotificationStream_FollowsLeaderKey(t *testing.T) {
+	endpoints, seed := startEtcdContainer(t)
+	out := runEtcdStream(t, endpoints, nil)
+
+	// the key is absent at first
+	waitForState(t, out, false, 3*time.Second)
+	for _, step := range []struct {
+		value string
+		want  bool
+	}{{"primary", true}, {"secondary", false}, {"primary", true}} {
+		if _, err := seed.Put(context.Background(), "/leader", step.value); err != nil {
+			t.Fatalf("Put %q: %v", step.value, err)
+		}
+		waitForState(t, out, step.want, 3*time.Second)
+	}
+}
+
+// downKV fails every read while down is set, as an unreachable etcd would.
+type downKV struct {
+	clientv3.KV
+	down atomic.Bool
+}
+
+func (d *downKV) Get(ctx context.Context, key string, opts ...clientv3.OpOption) (*clientv3.GetResponse, error) {
+	if d.down.Load() {
+		return nil, context.DeadlineExceeded
+	}
+	return d.KV.Get(ctx, key, opts...)
+}
+
+// TestEtcdLeaderChecker_GetChangeNotificationStream_Outage is a regression
+// test for https://github.com/cybertec-postgresql/vip-manager/issues/431 and
+// https://github.com/cybertec-postgresql/vip-manager/issues/435: the leader
+// must emit false while etcd is unreachable and true again once etcd answers.
+func TestEtcdLeaderChecker_GetChangeNotificationStream_Outage(t *testing.T) {
+	endpoints, seed := startEtcdContainer(t)
 	if _, err := seed.Put(context.Background(), "/leader", "primary"); err != nil {
 		t.Fatalf("seed Put: %v", err)
 	}
+	kv := &downKV{}
+	out := runEtcdStream(t, endpoints, func(inner clientv3.KV) clientv3.KV {
+		kv.KV = inner
+		return kv
+	})
 
-	out := make(chan bool, 10)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	watchDone := make(chan error, 1)
-	go func() { watchDone <- checker.watch(ctx, out) }()
-
-	// Allow the watch to register on the server.
-	time.Sleep(150 * time.Millisecond)
-
-	// Kill all watch streams: closing the client's Watcher closes the watch
-	// channel, simulating a server-side cancellation / dead watch.
-	if err := checker.Watcher.Close(); err != nil {
-		t.Fatalf("Watcher.Close: %v", err)
-	}
-
-	// While the watch is dead, the leader changes to another node. The old
-	// code lost this event forever; the fix re-fetches the value via get().
-	if _, err := seed.Put(context.Background(), "/leader", "secondary"); err != nil {
-		t.Fatalf("Put leader change: %v", err)
-	}
-
-	// The re-sync must emit false because this node is no longer the leader.
-	select {
-	case got := <-out:
-		if got {
-			t.Error("expected false after leader change during dead watch, got true")
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("timed out waiting for re-synced state after watch channel died")
-	}
-
-	cancel()
-	select {
-	case err := <-watchDone:
-		if !errors.Is(err, context.Canceled) {
-			t.Errorf("expected context.Canceled from watch, got %v", err)
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("timed out waiting for watch goroutine to exit")
-	}
+	waitForState(t, out, true, 3*time.Second)
+	kv.down.Store(true)
+	waitForState(t, out, false, 3*time.Second)
+	kv.down.Store(false)
+	waitForState(t, out, true, 3*time.Second)
 }
