@@ -21,6 +21,15 @@ type ipConfigurer interface {
 
 var log *zap.SugaredLogger
 
+// shutdownGrace bounds the wait for an address (de)configuration that is still
+// running when the shutdown starts. The wait has to be bounded: the Hetzner
+// configurer shells out to curl, and if the cleanup took longer than the
+// TimeoutStopSec of the service unit, systemd would send SIGKILL - in exactly
+// the situation where the address must be released. Keep the TimeoutStopSec of
+// vip-manager.service above this value.
+// (a variable so that tests can shorten it)
+var shutdownGrace = 10 * time.Second
+
 // IPManager implements the main functionality of the VIP manager
 type IPManager struct {
 	configurer ipConfigurer
@@ -77,7 +86,8 @@ func NewIPManager(conf *vipconfig.Config, states <-chan bool) (m *IPManager, err
 		states: states,
 	}
 	log = conf.Logger.Sugar()
-	m.recheckChan = make(chan struct{})
+	// buffered, see triggerRecheck
+	m.recheckChan = make(chan struct{}, 1)
 	switch conf.HostingType {
 	case "hetzner":
 		m.configurer, err = newHetznerConfigurer(ipConf, conf.Verbose)
@@ -121,17 +131,45 @@ func (m *IPManager) applyLoop(ctx context.Context) {
 	}
 }
 
+// triggerRecheck asks applyLoop to reevaluate the state. The send never blocks:
+// the channel is buffered and a signal that is already pending is as good as a
+// new one, because applyLoop reads the current state itself. A blocking send
+// here used to hang forever once applyLoop had returned on a cancelled
+// context, which kept the shutdown below from ever removing the address.
+func (m *IPManager) triggerRecheck() {
+	select {
+	case m.recheckChan <- struct{}{}:
+	default:
+	}
+}
+
 // SyncStates implements states synchronization
 func (m *IPManager) SyncStates(ctx context.Context, states <-chan bool) {
-	go m.applyLoop(ctx)
+	applyDone := make(chan struct{})
+	go func() {
+		defer close(applyDone)
+		m.applyLoop(ctx)
+	}()
 	for {
 		select {
-		case newState := <-states:
+		case newState, ok := <-states:
+			if !ok {
+				// a closed channel is always ready, don't spin on it
+				states = nil
+				continue
+			}
 			if m.shouldSetIPUp.Load() != newState {
 				m.shouldSetIPUp.Store(newState)
-				m.recheckChan <- struct{}{}
+				m.triggerRecheck()
 			}
 		case <-ctx.Done():
+			// wait for a running (de)configuration to finish, so that the
+			// cleanup below does not race applyLoop over the same address
+			select {
+			case <-applyDone:
+			case <-time.After(shutdownGrace):
+				log.Warn("Timed out waiting for the address configuration to finish, removing the address anyway")
+			}
 			m.configurer.deconfigureAddress()
 			return
 		}
