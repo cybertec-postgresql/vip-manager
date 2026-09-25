@@ -91,21 +91,26 @@ func getTransport(conf *vipconfig.Config) (*tls.Config, error) {
 	return tlsClientConfig, nil
 }
 
-// sync reads the current value until etcd answers. A single failed read would
-// leave the state at false, and a healthy watch stays silent as long as the
-// key does not change, so the VIP would never come back.
-func (elc *EtcdLeaderChecker) sync(ctx context.Context, out chan<- bool) {
-	for !elc.get(ctx, out) {
+// sync reads the current value until etcd answers and returns the revision
+// of the read. A single failed read would leave the state at false, and a
+// healthy watch stays silent as long as the key does not change, so the VIP
+// would never come back.
+func (elc *EtcdLeaderChecker) sync(ctx context.Context, out chan<- bool) int64 {
+	for {
+		if rev, ok := elc.get(ctx, out); ok {
+			return rev
+		}
 		select {
 		case <-time.After(time.Second):
 		case <-ctx.Done():
-			return
+			return 0
 		}
 	}
 }
 
-// get gets the current value from etcd and reports whether etcd answered
-func (elc *EtcdLeaderChecker) get(ctx context.Context, out chan<- bool) bool {
+// get gets the current value from etcd, reports whether etcd answered and
+// returns the revision of the read
+func (elc *EtcdLeaderChecker) get(ctx context.Context, out chan<- bool) (int64, bool) {
 	// send guards the channel send with ctx to avoid blocking on shutdown
 	send := func(state bool) {
 		select {
@@ -124,18 +129,18 @@ func (elc *EtcdLeaderChecker) get(ctx context.Context, out chan<- bool) bool {
 			zap.String("key", elc.TriggerKey),
 			zap.Error(err))
 		send(false)
-		return false
+		return 0, false
 	}
 	if resp == nil {
 		elc.getLog.error("Received nil response from etcd", zap.String("key", elc.TriggerKey))
 		send(false)
-		return false
+		return 0, false
 	}
 	if len(resp.Kvs) == 0 {
 		elc.getLog.info("No value found for the key - DCS may not have set it yet",
 			zap.String("key", elc.TriggerKey))
 		send(false)
-		return true
+		return resp.Header.Revision, true
 	}
 	elc.getLog.success("Successfully read the value from etcd again", zap.String("key", elc.TriggerKey))
 	for _, kv := range resp.Kvs {
@@ -144,16 +149,17 @@ func (elc *EtcdLeaderChecker) get(ctx context.Context, out chan<- bool) bool {
 		elc.Logger.Sugar().Info("Current value from DCS:", value)
 		send(matches)
 	}
-	return true
+	return resp.Header.Revision, true
 }
 
-// watch monitors value changes from etcd
-func (elc *EtcdLeaderChecker) watch(ctx context.Context, out chan<- bool) error {
+// watch monitors value changes from etcd starting at revision rev,
+// or at the current revision if rev is 0
+func (elc *EtcdLeaderChecker) watch(ctx context.Context, out chan<- bool, rev int64) error {
 	elc.Logger.Sugar().Info("Setting WATCH on ", elc.TriggerKey)
 	// WithRequireLeader makes the watch fail fast when the etcd server
 	// loses its quorum instead of silently returning no events
 	watchCtx := clientv3.WithRequireLeader(ctx)
-	watchChan := elc.Watch(watchCtx, elc.TriggerKey)
+	watchChan := elc.Watch(watchCtx, elc.TriggerKey, clientv3.WithRev(rev))
 	for {
 		select {
 		case <-ctx.Done():
@@ -201,8 +207,15 @@ func (elc *EtcdLeaderChecker) watch(ctx context.Context, out chan<- bool) error 
 // GetChangeNotificationStream monitors the leader in etcd
 func (elc *EtcdLeaderChecker) GetChangeNotificationStream(ctx context.Context, out chan<- bool) error {
 	defer elc.Close()
-	go elc.sync(ctx, out)
+	// Read the current value first and watch from the next revision, so all
+	// sends come from one goroutine and a stale read can never override a
+	// newer watch event. Watch() blocks while etcd is unreachable, so the
+	// read has to come first to report false during an outage.
+	rev := elc.sync(ctx, out)
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	wctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	return elc.watch(wctx, out)
+	return elc.watch(wctx, out, rev+1)
 }

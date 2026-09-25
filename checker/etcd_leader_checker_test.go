@@ -313,7 +313,7 @@ func TestEtcdLeaderChecker_watch_EmitsOnPut(t *testing.T) {
 	defer cancel()
 
 	watchDone := make(chan error, 1)
-	go func() { watchDone <- checker.watch(ctx, out) }()
+	go func() { watchDone <- checker.watch(ctx, out, 0) }()
 
 	// Allow the watch to register on the server before writing.
 	time.Sleep(150 * time.Millisecond)
@@ -421,7 +421,7 @@ func TestEtcdLeaderChecker_watch_EmitsOnConnectionLoss(t *testing.T) {
 	defer cancel()
 
 	watchDone := make(chan error, 1)
-	go func() { watchDone <- checker.watch(ctx, out) }()
+	go func() { watchDone <- checker.watch(ctx, out, 0) }()
 
 	// Allow the watch to register
 	time.Sleep(50 * time.Millisecond)
@@ -523,7 +523,7 @@ func TestEtcdLeaderChecker_watch_ResyncsOnCanceledWatch(t *testing.T) {
 	defer cancel()
 
 	watchDone := make(chan error, 1)
-	go func() { watchDone <- checker.watch(ctx, out) }()
+	go func() { watchDone <- checker.watch(ctx, out, 0) }()
 
 	// Allow the watch to register on the server.
 	time.Sleep(150 * time.Millisecond)
@@ -624,7 +624,7 @@ func TestEtcdLeaderChecker_watch_RetriesFailedResync(t *testing.T) {
 	out := make(chan bool, 10)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go func() { _ = checker.watch(ctx, out) }()
+	go func() { _ = checker.watch(ctx, out, 0) }()
 
 	waitForTrue(t, out, 10*time.Second)
 }
