@@ -670,3 +670,28 @@ func TestEtcdLeaderChecker_GetChangeNotificationStream_RetriesFailedInitialGet(t
 		t.Fatal("timed out waiting for GetChangeNotificationStream to return")
 	}
 }
+
+// TestEtcdLeaderChecker_sync_StopsOnCancel verifies that the retry loop gives
+// up on a cancelled context instead of retrying forever.
+func TestEtcdLeaderChecker_sync_StopsOnCancel(t *testing.T) {
+	t.Parallel()
+	checker, err := NewEtcdLeaderChecker(etcdConfig())
+	if err != nil {
+		t.Fatalf("NewEtcdLeaderChecker: %v", err)
+	}
+	t.Cleanup(func() { _ = checker.Close() })
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		checker.sync(ctx, make(chan bool, 1))
+	}()
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("sync did not return on a cancelled context")
+	}
+}
