@@ -2,8 +2,9 @@ package ipmanager
 
 import (
 	"errors"
+	"fmt"
 	"net"
-	"strings"
+	"net/netip"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
@@ -40,8 +41,17 @@ func (c *BasicConfigurer) queryAddress() bool {
 	if err != nil {
 		return false
 	}
+	// compare the parsed address, not the text: a substring match answers true
+	// for 10.0.0.1/24 when the interface only carries 110.0.0.1/24, and the
+	// manager would then never configure the virtual IP on that machine
+	want := c.VIP.Unmap()
+	wantBits := netmaskSize(c.Netmask)
 	for _, address := range addresses {
-		if strings.Contains(address.String(), c.getCIDR()) {
+		prefix, err := netip.ParsePrefix(address.String())
+		if err != nil {
+			continue
+		}
+		if prefix.Addr().Unmap() == want && prefix.Bits() == wantBits {
 			return true
 		}
 	}
@@ -101,8 +111,14 @@ func (c *BasicConfigurer) createGratuitousNA(sourceIP net.IP) ([]byte, error) {
 	return buffer.Bytes(), nil
 }
 
-// createGratuitousARP prepares a packet with a gratuitous ARP request
+// createGratuitousARP prepares a packet with a gratuitous ARP request.
+// ARP is IPv4 only - the IPv6 equivalent is an unsolicited neighbour
+// advertisement, which is not implemented, so the caller has to skip this for
+// IPv6 addresses instead of putting a 16 byte address into a 4 byte field.
 func (c *BasicConfigurer) createGratuitousARP() ([]byte, error) {
+	if !c.VIP.Unmap().Is4() {
+		return nil, fmt.Errorf("cannot send a gratuitous ARP message for the IPv6 address %s", c.VIP)
+	}
 	// Unmap so that a ::ffff:a.b.c.d VIP yields the 4 bytes ProtAddressSize promises.
 	vip := c.VIP.Unmap().AsSlice()
 
