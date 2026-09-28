@@ -18,8 +18,8 @@ import (
 type EtcdLeaderChecker struct {
 	*vipconfig.Config
 	*clientv3.Client
-	getLog   *logThrottler // throttles repeated failures to read the key
-	watchLog *logThrottler // throttles repeated failures of the WATCH
+	getLog    *logThrottler // throttles repeated failures to read the key
+	lastValue string        // last value read, to log only changes
 }
 
 // NewEtcdLeaderChecker returns a new instance
@@ -42,10 +42,9 @@ func NewEtcdLeaderChecker(conf *vipconfig.Config) (*EtcdLeaderChecker, error) {
 		return nil, fmt.Errorf("failed to connect to etcd at endpoints %v: %w", conf.Endpoints, err)
 	}
 	return &EtcdLeaderChecker{
-		Config:   conf,
-		Client:   c,
-		getLog:   newLogThrottler(conf.Logger),
-		watchLog: newLogThrottler(conf.Logger),
+		Config: conf,
+		Client: c,
+		getLog: newLogThrottler(conf.Logger),
 	}, nil
 }
 
@@ -91,7 +90,7 @@ func getTransport(conf *vipconfig.Config) (*tls.Config, error) {
 	return tlsClientConfig, nil
 }
 
-// get gets the current value from etcd
+// get reads the current value from etcd and sends whether it matches
 func (elc *EtcdLeaderChecker) get(ctx context.Context, out chan<- bool) {
 	// send guards the channel send with ctx to avoid blocking on shutdown
 	send := func(state bool) {
@@ -127,68 +126,24 @@ func (elc *EtcdLeaderChecker) get(ctx context.Context, out chan<- bool) {
 	elc.getLog.success("Successfully read the value from etcd again", zap.String("key", elc.TriggerKey))
 	for _, kv := range resp.Kvs {
 		value := string(kv.Value)
-		matches := value == elc.TriggerValue
-		elc.Logger.Sugar().Info("Current value from DCS:", value)
-		send(matches)
+		// the value is read once per interval, so only report changes
+		if value != elc.lastValue {
+			elc.Logger.Sugar().Info("Current value from DCS: ", value)
+			elc.lastValue = value
+		}
+		send(value == elc.TriggerValue)
 	}
 }
 
-// watch monitors value changes from etcd
-func (elc *EtcdLeaderChecker) watch(ctx context.Context, out chan<- bool) error {
-	elc.Logger.Sugar().Info("Setting WATCH on ", elc.TriggerKey)
-	// WithRequireLeader makes the watch fail fast when the etcd server
-	// loses its quorum instead of silently returning no events
-	watchCtx := clientv3.WithRequireLeader(ctx)
-	watchChan := elc.Watch(watchCtx, elc.TriggerKey)
+// GetChangeNotificationStream reads the leader key from etcd once per interval
+func (elc *EtcdLeaderChecker) GetChangeNotificationStream(ctx context.Context, out chan<- bool) error {
+	defer elc.Close()
 	for {
+		elc.get(ctx, out)
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case watchResp, ok := <-watchChan:
-			if !ok || watchResp.Canceled || watchResp.Err() != nil {
-				// The watch is dead. Any events that occurred while
-				// the watch was down may have been lost, so after re-arming
-				// the watch we re-fetch the current value via get()
-				var watchErr error
-				if ok {
-					watchErr = watchResp.Err()
-				}
-				elc.watchLog.error("WATCH on key lost, re-establishing and re-syncing state",
-					zap.String("key", elc.TriggerKey),
-					zap.Error(watchErr))
-				// Back off briefly to avoid a busy loop when etcd is unreachable
-				select {
-				case <-time.After(time.Second):
-				case <-ctx.Done():
-					return ctx.Err()
-				}
-				watchChan = elc.Watch(watchCtx, elc.TriggerKey)
-				// re-establishing is already reported above, so this merely
-				// confirms it and stays out of the way during an outage
-				elc.Logger.Sugar().Debug("Resetting cancelled WATCH on ", elc.TriggerKey)
-				// Re-fetch the current value: events may have been missed
-				// while the watch was down (e.g. a leader change)
-				elc.get(ctx, out)
-				continue
-			}
-			elc.watchLog.success("WATCH on key is working again", zap.String("key", elc.TriggerKey))
-			for _, event := range watchResp.Events {
-				select {
-				case out <- string(event.Kv.Value) == elc.TriggerValue:
-					elc.Logger.Sugar().Info("Current value from DCS: ", string(event.Kv.Value))
-				case <-ctx.Done():
-					return ctx.Err()
-				}
-			}
+		case <-time.After(time.Duration(elc.Interval) * time.Millisecond):
 		}
 	}
-}
-
-// GetChangeNotificationStream monitors the leader in etcd
-func (elc *EtcdLeaderChecker) GetChangeNotificationStream(ctx context.Context, out chan<- bool) error {
-	defer elc.Close()
-	go elc.get(ctx, out)
-	wctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	return elc.watch(wctx, out)
 }
