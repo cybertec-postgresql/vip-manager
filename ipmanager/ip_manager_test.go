@@ -118,7 +118,10 @@ func TestGetMask_IPv4_ValidRange(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			m := getMask(tt.addr, tt.mask)
+			m, err := getMask(tt.addr, tt.mask)
+			if err != nil {
+				t.Fatalf("getMask(%v, %d) returned an error: %v", tt.addr, tt.mask, err)
+			}
 			if m.String() != tt.want {
 				t.Errorf("getMask(%v, %d) = %v, want %v", tt.addr, tt.mask, m.String(), tt.want)
 			}
@@ -135,18 +138,64 @@ func TestGetMask_IPv4_OutOfRange(t *testing.T) {
 		desc string
 	}{
 		{"IPv4 negative", netip.MustParseAddr("192.168.1.1"), -1, "negative mask"},
-		{"IPv4 > 32", netip.MustParseAddr("192.168.1.1"), 33, "mask > 32"},
 		{"IPv4 zero", netip.MustParseAddr("192.168.1.1"), 0, "zero mask"},
 		{"IPv4-in-IPv6 zero", netip.MustParseAddr("::ffff:192.0.2.1"), 0, "zero mask falls back to the default mask"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			m := getMask(tt.addr, tt.mask)
+			m, err := getMask(tt.addr, tt.mask)
 			// For out-of-range IPv4, we expect default mask
+			if err != nil {
+				t.Fatalf("getMask(%v, %d) returned an error for %s: %v", tt.addr, tt.mask, tt.desc, err)
+			}
 			if m == nil {
 				t.Errorf("getMask(%v, %d) returned nil for %s", tt.addr, tt.mask, tt.desc)
 			}
 		})
+	}
+}
+
+// TestGetMask_Rejected covers the masks that cannot be turned into a netmask.
+// net.CIDRMask answers nil for them, which used to make getCIDR panic later on,
+// with the manager already running - "--netmask=-1", the documented default,
+// was enough to hit that with an IPv6 address.
+func TestGetMask_Rejected(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name string
+		addr netip.Addr
+		mask int
+	}{
+		{"IPv4 > 32", netip.MustParseAddr("192.168.1.1"), 33},
+		{"IPv6 default mask", netip.MustParseAddr("2001:db8::1"), -1},
+		{"IPv6 zero", netip.MustParseAddr("2001:db8::1"), 0},
+		{"IPv6 > 128", netip.MustParseAddr("2001:db8::1"), 129},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m, err := getMask(tt.addr, tt.mask)
+			if err == nil {
+				t.Fatalf("getMask(%v, %d) = %v, want an error", tt.addr, tt.mask, m)
+			}
+			if !strings.Contains(err.Error(), "out of range") {
+				t.Errorf("unexpected error message: %v", err)
+			}
+		})
+	}
+}
+
+// TestNewIPManager_InvalidNetmask makes sure an unusable netmask is reported
+// when the manager is created instead of panicking once it runs.
+func TestNewIPManager_InvalidNetmask(t *testing.T) {
+	t.Parallel()
+	conf := minimalConfig("2001:db8::1", "lo")
+	conf.Mask = -1
+	_, err := NewIPManager(conf, make(chan bool))
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+	if !strings.Contains(err.Error(), "out of range") {
+		t.Errorf("unexpected error message: %v", err)
 	}
 }
 
