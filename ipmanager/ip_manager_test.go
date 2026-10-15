@@ -4,13 +4,22 @@ import (
 	"context"
 	"net"
 	"net/netip"
+	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/cybertec-postgresql/vip-manager/vipconfig"
 	"go.uber.org/zap"
 )
+
+// TestMain installs the package level logger once. Assigning it from the
+// individual tests races with the goroutines started by SyncStates.
+func TestMain(m *testing.M) {
+	log = zap.NewNop().Sugar()
+	os.Exit(m.Run())
+}
 
 func minimalConfig(vip, iface string) *vipconfig.Config {
 	return &vipconfig.Config{
@@ -154,7 +163,10 @@ func TestGetMask_IPv4_OutOfRange(t *testing.T) {
 // Mock configurer for testing applyLoop and SyncStates
 // ---------------------------------------------------------------------------
 
+// mockConfigurer counters are written by applyLoop and read by the test
+// goroutine, so every access goes through the mutex.
 type mockConfigurer struct {
+	mu                    sync.Mutex
 	queryAddressCount     int
 	configureCount        int
 	deconfigureCount      int
@@ -162,9 +174,14 @@ type mockConfigurer struct {
 	shouldConfigureFail   bool
 	shouldDeconfigureFail bool
 	shouldQueryReturn     bool
+	// onConfigure, when set, is called by configureAddress and can be used to
+	// keep a configuration in flight while the test does something else
+	onConfigure func()
 }
 
 func (m *mockConfigurer) queryAddress() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.queryAddressCount++
 	if m.shouldQueryFail {
 		return false
@@ -173,13 +190,39 @@ func (m *mockConfigurer) queryAddress() bool {
 }
 
 func (m *mockConfigurer) configureAddress() bool {
+	m.mu.Lock()
 	m.configureCount++
+	hook := m.onConfigure
+	m.mu.Unlock()
+	if hook != nil {
+		hook()
+	}
 	return !m.shouldConfigureFail
 }
 
 func (m *mockConfigurer) deconfigureAddress() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.deconfigureCount++
 	return !m.shouldDeconfigureFail
+}
+
+func (m *mockConfigurer) queries() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.queryAddressCount
+}
+
+func (m *mockConfigurer) configures() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.configureCount
+}
+
+func (m *mockConfigurer) deconfigures() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.deconfigureCount
 }
 
 func (m *mockConfigurer) getCIDR() string {
@@ -191,9 +234,6 @@ func TestApplyLoop_DeconfigureWhenNeeded(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
 
-	conf := zap.NewNop()
-	log = conf.Sugar()
-
 	mock := &mockConfigurer{shouldQueryReturn: true}
 	m := &IPManager{
 		configurer:  mock,
@@ -203,7 +243,7 @@ func TestApplyLoop_DeconfigureWhenNeeded(t *testing.T) {
 
 	m.applyLoop(ctx)
 
-	if mock.deconfigureCount == 0 {
+	if mock.deconfigures() == 0 {
 		t.Error("expected deconfigureAddress to be called")
 	}
 }
@@ -217,9 +257,6 @@ func TestApplyLoop_ConfigureWhenNeeded(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
 
-	conf := zap.NewNop()
-	log = conf.Sugar()
-
 	mock := &mockConfigurer{shouldQueryReturn: false}
 	m := &IPManager{
 		configurer:  mock,
@@ -229,7 +266,7 @@ func TestApplyLoop_ConfigureWhenNeeded(t *testing.T) {
 
 	m.applyLoop(ctx)
 
-	if mock.configureCount == 0 {
+	if mock.configures() == 0 {
 		t.Error("expected configureAddress to be called")
 	}
 }
@@ -238,9 +275,6 @@ func TestApplyLoop_ConfigureFailure(t *testing.T) {
 	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
 	defer cancel()
-
-	conf := zap.NewNop()
-	log = conf.Sugar()
 
 	mock := &mockConfigurer{shouldQueryReturn: false, shouldConfigureFail: true}
 	m := &IPManager{
@@ -251,7 +285,7 @@ func TestApplyLoop_ConfigureFailure(t *testing.T) {
 
 	m.applyLoop(ctx)
 
-	if mock.configureCount == 0 {
+	if mock.configures() == 0 {
 		t.Error("expected configureAddress to be called even if it fails")
 	}
 }
@@ -260,9 +294,6 @@ func TestApplyLoop_QueryFails(t *testing.T) {
 	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
 	defer cancel()
-
-	conf := zap.NewNop()
-	log = conf.Sugar()
 
 	mock := &mockConfigurer{shouldQueryFail: true}
 	m := &IPManager{
@@ -274,7 +305,7 @@ func TestApplyLoop_QueryFails(t *testing.T) {
 	m.applyLoop(ctx)
 
 	// queryAddress should be called despite failure
-	if mock.queryAddressCount == 0 {
+	if mock.queries() == 0 {
 		t.Error("expected queryAddress to be called")
 	}
 }
@@ -283,9 +314,6 @@ func TestApplyLoop_NoChangeNeeded(t *testing.T) {
 	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
 	defer cancel()
-
-	conf := zap.NewNop()
-	log = conf.Sugar()
 
 	mock := &mockConfigurer{shouldQueryReturn: true}
 	m := &IPManager{
@@ -297,7 +325,7 @@ func TestApplyLoop_NoChangeNeeded(t *testing.T) {
 	m.applyLoop(ctx)
 
 	// Neither configure nor deconfigure should be called
-	if mock.configureCount > 0 || mock.deconfigureCount > 0 {
+	if mock.configures() > 0 || mock.deconfigures() > 0 {
 		t.Error("expected no configuration changes when state matches")
 	}
 }
@@ -310,9 +338,6 @@ func TestSyncStates_StateChange(t *testing.T) {
 	t.Parallel()
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
-
-	conf := zap.NewNop()
-	log = conf.Sugar()
 
 	mock := &mockConfigurer{shouldQueryReturn: false}
 	m := &IPManager{
@@ -335,7 +360,7 @@ func TestSyncStates_StateChange(t *testing.T) {
 	if m.shouldSetIPUp.Load() {
 		t.Error("expected shouldSetIPUp to be false after state false was processed")
 	}
-	if mock.deconfigureCount == 0 {
+	if mock.deconfigures() == 0 {
 		t.Error("expected deconfigureAddress to be called on context done")
 	}
 }
@@ -371,5 +396,108 @@ func TestNewIPManager_Hetzner(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "failed to get interface") {
 		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+// TestSyncStates_WaitsForApplyLoopBeforeRemovingTheAddress covers the shutdown
+// path: applyLoop is in the middle of configuring the address when the context
+// is cancelled. SyncStates must let that finish before it removes the address,
+// otherwise both goroutines work on the same address at the same time.
+func TestSyncStates_WaitsForApplyLoopBeforeRemovingTheAddress(t *testing.T) {
+	t.Parallel()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	configuring := make(chan struct{})
+	release := make(chan struct{})
+	mock := &mockConfigurer{}
+	var once sync.Once
+	mock.onConfigure = func() {
+		once.Do(func() {
+			close(configuring) // tell the test we are in the middle of it
+			<-release          // and stay here until it says otherwise
+		})
+	}
+
+	m := &IPManager{configurer: mock, recheckChan: make(chan struct{}, 1)}
+	states := make(chan bool, 1)
+	states <- true
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		m.SyncStates(ctx, states)
+	}()
+
+	<-configuring // applyLoop is now inside configureAddress
+	cancel()
+	time.Sleep(100 * time.Millisecond)
+	if n := mock.deconfigures(); n != 0 {
+		t.Fatalf("address was removed while a configuration was still running (%d calls)", n)
+	}
+
+	close(release)
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("SyncStates did not return after the context was cancelled")
+	}
+	if mock.deconfigures() == 0 {
+		t.Error("expected the address to be removed on shutdown")
+	}
+}
+
+// TestSyncStates_GivesUpOnAStuckConfigurer verifies that a configuration that
+// never finishes cannot keep the shutdown from removing the address.
+func TestSyncStates_GivesUpOnAStuckConfigurer(t *testing.T) {
+	stuck := make(chan struct{})
+	defer close(stuck)
+
+	previous := shutdownGrace
+	shutdownGrace = 200 * time.Millisecond
+	defer func() { shutdownGrace = previous }()
+
+	mock := &mockConfigurer{onConfigure: func() { <-stuck }}
+	m := &IPManager{configurer: mock, recheckChan: make(chan struct{}, 1)}
+	ctx, cancel := context.WithCancel(context.Background())
+	states := make(chan bool, 1)
+	states <- true
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		m.SyncStates(ctx, states)
+	}()
+
+	time.Sleep(100 * time.Millisecond) // let applyLoop reach configureAddress
+	cancel()
+
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("SyncStates did not give up on the stuck configurer")
+	}
+	if mock.deconfigures() == 0 {
+		t.Error("expected the address to be removed even though applyLoop was stuck")
+	}
+}
+
+// TestTriggerRecheck_NeverBlocks pins down the root cause of the shutdown
+// deadlock: the signal to applyLoop must not block when nobody is listening,
+// which is the case as soon as applyLoop has returned on a cancelled context.
+func TestTriggerRecheck_NeverBlocks(t *testing.T) {
+	t.Parallel()
+	m := &IPManager{recheckChan: make(chan struct{}, 1)}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for range 10 {
+			m.triggerRecheck()
+		}
+	}()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("triggerRecheck blocked although nobody was listening")
 	}
 }
