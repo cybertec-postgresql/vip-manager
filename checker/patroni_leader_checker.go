@@ -37,6 +37,15 @@ func NewPatroniLeaderChecker(conf *vipconfig.Config) (*PatroniLeaderChecker, err
 		Timeout:   time.Second,
 	}
 
+	// Unlike a DCS cluster, whose members all answer for the same key, every
+	// Patroni instance answers for its own node: asking another one whether it
+	// is the leader would make this node take the virtual IP for a leader that
+	// runs elsewhere. So the additional endpoints are deliberately unused, and
+	// saying so beats silently ignoring them.
+	if len(conf.Endpoints) > 1 {
+		conf.Logger.Sugar().Warnf("Only the first of the %d configured endpoints is used with dcs-type=patroni, it has to be the Patroni REST API of this very node", len(conf.Endpoints))
+	}
+
 	return &PatroniLeaderChecker{
 		Config:     conf,
 		Client:     client,
