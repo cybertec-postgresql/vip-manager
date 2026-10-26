@@ -13,6 +13,12 @@ Type=simple
 
 ExecStart=/usr/bin/vip-manager --config=/etc/default/vip-manager.yml
 
+# On SIGTERM vip-manager removes the virtual IP before it exits. Give it the
+# time to do so: it waits up to ten seconds for an address configuration that
+# is still running, and with manager-type=hetzner an API call happens in
+# between. A SIGKILL here would leave the address assigned to this machine.
+TimeoutStopSec=30
+
 Restart=on-failure
 
 [Install]
