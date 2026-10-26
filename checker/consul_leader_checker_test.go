@@ -279,3 +279,79 @@ func TestConsulLeaderChecker_GetChangeNotificationStream_ErrorPath(t *testing.T)
 		t.Errorf("expected context.Canceled, got %v", err)
 	}
 }
+
+// TestNewConsulLeaderChecker_ChecksEveryEndpoint makes sure a broken endpoint
+// is reported at startup, not only when the checker fails over to it.
+func TestNewConsulLeaderChecker_ChecksEveryEndpoint(t *testing.T) {
+	t.Parallel()
+	conf := newTestConfig("http://127.0.0.1:8500")
+	conf.Endpoints = append(conf.Endpoints, "localhost")
+	_, err := NewConsulLeaderChecker(conf)
+	if err == nil {
+		t.Fatal("expected the second endpoint to be rejected, got nil")
+	}
+	if !strings.Contains(err.Error(), "hostname is empty") {
+		t.Errorf("unexpected error message: %v", err)
+	}
+}
+
+// TestConsulLeaderChecker_NextEndpoint verifies that the checker walks through
+// the configured endpoints and wraps around. Before this, every endpoint but
+// the first one was configured in vain.
+func TestConsulLeaderChecker_NextEndpoint(t *testing.T) {
+	t.Parallel()
+	conf := newTestConfig("http://127.0.0.1:8500")
+	conf.Endpoints = append(conf.Endpoints, "http://127.0.0.2:8500")
+	lc, err := NewConsulLeaderChecker(conf)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	first := lc.Client
+	lc.nextEndpoint()
+	if lc.current != 1 {
+		t.Errorf("expected to be on endpoint 1, got %d", lc.current)
+	}
+	if lc.Client == first {
+		t.Error("expected a new client for the new endpoint")
+	}
+	lc.nextEndpoint()
+	if lc.current != 0 {
+		t.Errorf("expected to wrap around to endpoint 0, got %d", lc.current)
+	}
+}
+
+// TestConsulLeaderChecker_NextEndpoint_Single verifies that a single endpoint
+// is kept as it is, there is nowhere to switch to.
+func TestConsulLeaderChecker_NextEndpoint_Single(t *testing.T) {
+	t.Parallel()
+	lc, err := NewConsulLeaderChecker(newTestConfig("http://127.0.0.1:8500"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	client := lc.Client
+	lc.nextEndpoint()
+	if lc.current != 0 || lc.Client != client {
+		t.Error("expected the only endpoint to be kept")
+	}
+}
+
+// TestConsulLeaderChecker_WaitHonoursContext pins down that the scan interval
+// does not delay the shutdown: the wait used to be a plain time.Sleep.
+func TestConsulLeaderChecker_WaitHonoursContext(t *testing.T) {
+	t.Parallel()
+	conf := newTestConfig("http://127.0.0.1:8500")
+	conf.Interval = 60000 // a minute, so a plain sleep would be obvious
+	lc, err := NewConsulLeaderChecker(conf)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	start := time.Now()
+	if lc.wait(ctx) {
+		t.Error("expected wait() to report that the checker should stop")
+	}
+	if elapsed := time.Since(start); elapsed > time.Second {
+		t.Errorf("wait() ignored the cancelled context for %s", elapsed)
+	}
+}
