@@ -221,7 +221,7 @@ func newIntegrationChecker(t *testing.T, endpoints []string, key, value string) 
 	if err != nil {
 		t.Fatalf("NewEtcdLeaderChecker: %v", err)
 	}
-	t.Cleanup(func() { _ = checker.Close() })
+	t.Cleanup(func() { _ = checker.client.Close() })
 	return checker
 }
 
@@ -319,7 +319,7 @@ func TestEtcdLeaderChecker_GetChangeNotificationStream_StopsOnCancel(t *testing.
 		Interval:     100,
 		Logger:       zap.NewNop(),
 	}
-	// GetChangeNotificationStream calls defer elc.Close(), so we must not
+	// GetChangeNotificationStream closes the client on return, so we must not
 	// register a second cleanup here.
 	checker, err := NewEtcdLeaderChecker(conf)
 	if err != nil {
@@ -412,7 +412,7 @@ func runEtcdStream(t *testing.T, endpoints []string, wrapKV func(clientv3.KV) cl
 		t.Fatalf("NewEtcdLeaderChecker: %v", err)
 	}
 	if wrapKV != nil {
-		checker.KV = wrapKV(checker.KV)
+		checker.client.KV = wrapKV(checker.client.KV)
 	}
 	out := make(chan bool, 10)
 	ctx, cancel := context.WithCancel(context.Background())
