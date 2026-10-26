@@ -15,9 +15,15 @@ import (
 )
 
 // EtcdLeaderChecker is used to check state of the leader key in Etcd
+//
+// The configuration and the client are named fields on purpose. Embedding both
+// put their methods and fields into one namespace, where Get() and Close()
+// belonged to the client and Logger to the configuration, and any name the two
+// come to share in a future release of either would break the build far away
+// from the cause.
 type EtcdLeaderChecker struct {
-	*vipconfig.Config
-	*clientv3.Client
+	conf      *vipconfig.Config
+	client    *clientv3.Client
 	getLog    *logThrottler // throttles repeated failures to read the key
 	lastValue string        // last value read, to log only changes
 }
@@ -42,8 +48,8 @@ func NewEtcdLeaderChecker(conf *vipconfig.Config) (*EtcdLeaderChecker, error) {
 		return nil, fmt.Errorf("failed to connect to etcd at endpoints %v: %w", conf.Endpoints, err)
 	}
 	return &EtcdLeaderChecker{
-		Config: conf,
-		Client: c,
+		conf:   conf,
+		client: c,
 		getLog: newLogThrottler(conf.Logger),
 	}, nil
 }
@@ -102,48 +108,48 @@ func (elc *EtcdLeaderChecker) get(ctx context.Context, out chan<- bool) {
 	// Bound the request: the etcd client retries until the context expires,
 	// so without a timeout this would block forever while etcd is unreachable
 	// and never report the failure
-	getCtx, cancel := context.WithTimeout(ctx, time.Duration(max(elc.Interval, 1000))*time.Millisecond)
+	getCtx, cancel := context.WithTimeout(ctx, time.Duration(max(elc.conf.Interval, 1000))*time.Millisecond)
 	defer cancel()
-	resp, err := elc.Get(getCtx, elc.TriggerKey)
+	resp, err := elc.client.Get(getCtx, elc.conf.TriggerKey)
 	if err != nil {
 		elc.getLog.error("Failed to get value from etcd",
-			zap.String("key", elc.TriggerKey),
+			zap.String("key", elc.conf.TriggerKey),
 			zap.Error(err))
 		send(false)
 		return
 	}
 	if resp == nil {
-		elc.getLog.error("Received nil response from etcd", zap.String("key", elc.TriggerKey))
+		elc.getLog.error("Received nil response from etcd", zap.String("key", elc.conf.TriggerKey))
 		send(false)
 		return
 	}
 	if len(resp.Kvs) == 0 {
 		elc.getLog.info("No value found for the key - DCS may not have set it yet",
-			zap.String("key", elc.TriggerKey))
+			zap.String("key", elc.conf.TriggerKey))
 		send(false)
 		return
 	}
-	elc.getLog.success("Successfully read the value from etcd again", zap.String("key", elc.TriggerKey))
+	elc.getLog.success("Successfully read the value from etcd again", zap.String("key", elc.conf.TriggerKey))
 	for _, kv := range resp.Kvs {
 		value := string(kv.Value)
 		// the value is read once per interval, so only report changes
 		if value != elc.lastValue {
-			elc.Logger.Sugar().Info("Current value from DCS: ", value)
+			elc.conf.Logger.Sugar().Info("Current value from DCS: ", value)
 			elc.lastValue = value
 		}
-		send(value == elc.TriggerValue)
+		send(value == elc.conf.TriggerValue)
 	}
 }
 
 // GetChangeNotificationStream reads the leader key from etcd once per interval
 func (elc *EtcdLeaderChecker) GetChangeNotificationStream(ctx context.Context, out chan<- bool) error {
-	defer elc.Close()
+	defer func() { _ = elc.client.Close() }()
 	for {
 		elc.get(ctx, out)
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(time.Duration(elc.Interval) * time.Millisecond):
+		case <-time.After(time.Duration(elc.conf.Interval) * time.Millisecond):
 		}
 	}
 }
