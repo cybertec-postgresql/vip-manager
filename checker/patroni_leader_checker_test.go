@@ -1,14 +1,18 @@
 package checker
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/cybertec-postgresql/vip-manager/vipconfig"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 func patroniConfig(endpoint, triggerKey, triggerValue string) *vipconfig.Config {
@@ -129,5 +133,90 @@ func TestGetChangeNotificationStream_Timeout(t *testing.T) {
 	result := runStream(t, conf)
 	if result != false {
 		t.Error("expected false on timeout")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Status code logging
+// ---------------------------------------------------------------------------
+
+// streamLogs serves the given status codes in order, repeating the last one,
+// and returns the log entries written while the checker polls the server
+// for twice as many intervals as there are codes.
+func streamLogs(t *testing.T, triggerValue string, codes ...int) []observer.LoggedEntry {
+	t.Helper()
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		i := min(int(calls.Add(1))-1, len(codes)-1)
+		w.WriteHeader(codes[i])
+	}))
+	defer srv.Close()
+
+	core, logs := observer.New(zapcore.DebugLevel)
+	conf := patroniConfig(srv.URL, "/leader", triggerValue)
+	conf.Logger = zap.New(core)
+	checker, err := NewPatroniLeaderChecker(conf)
+	if err != nil {
+		t.Fatalf("NewPatroniLeaderChecker: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(t.Context())
+	out := make(chan bool)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_ = checker.GetChangeNotificationStream(ctx, out)
+	}()
+	for range 2 * len(codes) {
+		select {
+		case <-out:
+		case <-time.After(2 * time.Second):
+			t.Fatal("timed out waiting for stream value")
+		}
+	}
+	cancel()
+	<-done
+	return logs.All()
+}
+
+// countLevel returns how many entries were logged at the given level.
+func countLevel(entries []observer.LoggedEntry, level zapcore.Level) int {
+	n := 0
+	for _, e := range entries {
+		if e.Level == level {
+			n++
+		}
+	}
+	return n
+}
+
+// TestPatroniStatusLogging checks that the answers Patroni gives to a role
+// check are logged once per change at the info level, and that any other
+// status code produces a warning.
+func TestPatroniStatusLogging(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name      string
+		codes     []int
+		wantInfo  int
+		wantWarns int
+	}{
+		{"replica gets 503", []int{503}, 1, 0},
+		{"leader gets 200", []int{200}, 1, 0},
+		{"replica becomes leader", []int{503, 200}, 2, 0},
+		{"server error", []int{500}, 0, 1},
+		{"server error recovers", []int{503, 500, 503}, 2, 1}, // status line, recovery line
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			entries := streamLogs(t, "200", tt.codes...)
+			if got := countLevel(entries, zapcore.InfoLevel); got != tt.wantInfo {
+				t.Errorf("expected %d info entries, got %d: %v", tt.wantInfo, got, entries)
+			}
+			if got := countLevel(entries, zapcore.WarnLevel); got != tt.wantWarns {
+				t.Errorf("expected %d warnings, got %d: %v", tt.wantWarns, got, entries)
+			}
+		})
 	}
 }
