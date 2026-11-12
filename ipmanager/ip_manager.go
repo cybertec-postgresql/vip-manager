@@ -30,15 +30,27 @@ type IPManager struct {
 	recheckChan   chan struct{}
 }
 
-func getMask(vip netip.Addr, mask int) net.IPMask {
+// getMask returns the netmask for the given address. A mask of zero or less
+// selects the default mask of the address class, which is what --netmask=-1
+// documents. An out of range mask is rejected instead of being passed on to
+// net.CIDRMask, which answers nil for it - a nil mask used to make getCIDR
+// panic later on, when the manager was already running.
+func getMask(vip netip.Addr, mask int) (net.IPMask, error) {
 	if vip.Is4() || vip.Is4In6() { //IPv4
-		if mask > 0 && mask < 33 {
-			return net.CIDRMask(mask, 32)
+		if mask > 32 {
+			return nil, fmt.Errorf("netmask /%d is out of range for the IPv4 address %s", mask, vip)
+		}
+		if mask > 0 {
+			return net.CIDRMask(mask, 32), nil
 		}
 		var ip net.IP = vip.Unmap().AsSlice()
-		return ip.DefaultMask()
+		return ip.DefaultMask(), nil
 	}
-	return net.CIDRMask(mask, 128) //IPv6
+	//IPv6, there is no class based default mask to fall back to
+	if mask <= 0 || mask > 128 {
+		return nil, fmt.Errorf("netmask /%d is out of range for the IPv6 address %s, specify one between 1 and 128", mask, vip)
+	}
+	return net.CIDRMask(mask, 128), nil
 }
 
 func getNetIface(iface string) (*net.Interface, error) {
@@ -61,7 +73,10 @@ func NewIPManager(conf *vipconfig.Config, states <-chan bool) (m *IPManager, err
 	// Normalise ::ffff:a.b.c.d to a.b.c.d so that the rest of the code can rely
 	// on Is4/Is6 to pick the ARP or the Neighbor Advertisement path.
 	vip = vip.Unmap()
-	vipMask := getMask(vip, conf.Mask)
+	vipMask, err := getMask(vip, conf.Mask)
+	if err != nil {
+		return nil, err
+	}
 	netIface, err := getNetIface(conf.Iface)
 	if err != nil {
 		return nil, err

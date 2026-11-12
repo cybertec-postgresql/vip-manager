@@ -457,3 +457,65 @@ func TestBasicConfigurer_createGratuitousARP_IPv4In6(t *testing.T) {
 		t.Errorf("ARP DstProtAddress = %v, want %v", arp.DstProtAddress, want)
 	}
 }
+
+// TestBasicConfigurer_queryAddress_NoSubstringMatch pins down the address
+// comparison. The addresses were compared as text before, so an interface
+// carrying 127.0.0.1/8 answered "yes, 27.0.0.1/8 is assigned here" - and the
+// manager, believing the virtual IP was already up, never configured it.
+func TestBasicConfigurer_queryAddress_NoSubstringMatch(t *testing.T) {
+	t.Parallel()
+
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		t.Skipf("cannot list interfaces: %v", err)
+	}
+	for _, iface := range ifaces {
+		addresses, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+		for _, address := range addresses {
+			assigned, err := netip.ParsePrefix(address.String())
+			if err != nil || !assigned.Addr().Is4() {
+				continue
+			}
+			// dropping the first character keeps a valid prefix whenever the
+			// first octet has more than one digit, and that prefix is a
+			// substring of the assigned one - 127.0.0.1/8 -> 27.0.0.1/8
+			other, err := netip.ParsePrefix(assigned.String()[1:])
+			if err != nil || other.Addr() == assigned.Addr() {
+				continue
+			}
+			c := &BasicConfigurer{IPConfiguration: &IPConfiguration{
+				VIP:     other.Addr(),
+				Netmask: net.CIDRMask(other.Bits(), 32),
+				Iface:   iface,
+			}}
+			if c.queryAddress() {
+				t.Errorf("queryAddress() reported %s as assigned to %s, which only carries %s",
+					other, iface.Name, assigned)
+			}
+			return
+		}
+	}
+	t.Skip("no interface with a suitable IPv4 address found")
+}
+
+// TestBasicConfigurer_createGratuitousARP_IPv6 verifies that an IPv6 address is
+// refused instead of being squeezed into the four byte address fields of an
+// ARP packet.
+func TestBasicConfigurer_createGratuitousARP_IPv6(t *testing.T) {
+	t.Parallel()
+
+	c := &BasicConfigurer{IPConfiguration: &IPConfiguration{
+		VIP:     netip.MustParseAddr("2001:db8::1"),
+		Netmask: net.CIDRMask(64, 128),
+		Iface: net.Interface{
+			Name:         "test0",
+			HardwareAddr: net.HardwareAddr{0x00, 0x11, 0x22, 0x33, 0x44, 0x55},
+		},
+	}}
+	if _, err := c.createGratuitousARP(); err == nil {
+		t.Fatal("expected an error for an IPv6 virtual IP, got nil")
+	}
+}

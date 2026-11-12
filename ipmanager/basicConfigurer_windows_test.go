@@ -165,7 +165,11 @@ func TestBasicConfigurer_configureAddress_Windows_IPv4In6(t *testing.T) {
 		return nil
 	})
 
-	c := windowsConfigurer("::ffff:192.0.2.1", getMask(netip.MustParseAddr("::ffff:192.0.2.1"), 24))
+	mask, err := getMask(netip.MustParseAddr("::ffff:192.0.2.1"), 24)
+	if err != nil {
+		t.Fatalf("getMask() returned an error: %v", err)
+	}
+	c := windowsConfigurer("::ffff:192.0.2.1", mask)
 	if got := c.configureAddress(); !got {
 		t.Fatal("configureAddress() = false, want true")
 	}
