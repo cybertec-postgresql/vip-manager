@@ -2,6 +2,7 @@ package vipconfig
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -9,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
 
@@ -551,6 +553,14 @@ func TestNewConfig_InvalidFlag(t *testing.T) {
 	_, err := newConfig([]string{"--nonexistent-flag=value"})
 	if err == nil {
 		t.Error("expected error for unknown flag")
+	}
+}
+
+func TestNewConfig_Help(t *testing.T) {
+	for _, arg := range []string{"--help", "-h"} {
+		if _, err := newConfig([]string{arg}); !errors.Is(err, pflag.ErrHelp) {
+			t.Errorf("%s: got %v, want pflag.ErrHelp", arg, err)
+		}
 	}
 }
 

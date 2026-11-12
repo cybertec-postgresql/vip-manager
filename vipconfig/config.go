@@ -52,6 +52,7 @@ func defineFlags() *pflag.FlagSet {
 
 	flags.String("config", "", "Location of the configuration file.")
 	flags.Bool("version", false, "Show the version number.")
+	flags.BoolP("help", "h", false, "Show this help message.")
 
 	flags.String("ip", "", "Virtual IP address to configure.")
 	flags.String("netmask", "", "The netmask used for the IP address. Defaults to -1 which assigns ipv4 default mask.")
@@ -238,6 +239,10 @@ func newConfig(args []string) (*Config, error) {
 	flags := defineFlags()
 	if err = flags.Parse(args); err != nil {
 		return nil, fmt.Errorf("error parsing flags: %w", err)
+	}
+	if help, _ := flags.GetBool("help"); help {
+		fmt.Fprintf(os.Stderr, "Usage of %s:\n%s", flags.Name(), flags.FlagUsages())
+		return nil, pflag.ErrHelp
 	}
 	// import pflags into viper
 	_ = v.BindPFlags(flags)
