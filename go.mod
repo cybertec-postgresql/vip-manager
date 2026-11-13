@@ -8,8 +8,8 @@ require (
 	github.com/spf13/pflag v1.1.0
 	github.com/spf13/viper v1.21.0
 	github.com/testcontainers/testcontainers-go v0.45.0
-	github.com/testcontainers/testcontainers-go/modules/consul v0.44.0
-	github.com/testcontainers/testcontainers-go/modules/etcd v0.44.0
+	github.com/testcontainers/testcontainers-go/modules/consul v0.45.0
+	github.com/testcontainers/testcontainers-go/modules/etcd v0.45.0
 	go.etcd.io/etcd/client/v3 v3.7.3
 	go.uber.org/zap v1.28.0
 	golang.org/x/sys v0.50.0
