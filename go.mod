@@ -5,7 +5,7 @@ go 1.27.0
 require (
 	github.com/google/gopacket v1.1.19
 	github.com/hashicorp/consul/api v1.35.0
-	github.com/spf13/pflag v1.0.10
+	github.com/spf13/pflag v1.1.0
 	github.com/spf13/viper v1.21.0
 	github.com/testcontainers/testcontainers-go v0.44.0
 	github.com/testcontainers/testcontainers-go/modules/consul v0.44.0
