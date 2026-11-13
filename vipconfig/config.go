@@ -126,9 +126,9 @@ func setDefaults(v *viper.Viper) {
 			triggerValue, err = os.Hostname()
 		}
 		if err != nil {
-			fmt.Printf("No trigger-value specified, hostname could not be retrieved: %s", err)
+			fmt.Printf("No trigger-value specified, hostname could not be retrieved: %s\n", err)
 		} else {
-			fmt.Printf("No trigger-value specified, instead using: %v", triggerValue)
+			fmt.Printf("No trigger-value specified, instead using: %v\n", triggerValue)
 			v.Set("trigger-value", triggerValue)
 		}
 	}
@@ -141,7 +141,7 @@ func setDefaults(v *viper.Viper) {
 
 func checkSetting(v *viper.Viper, name string) bool {
 	if !v.IsSet(name) {
-		fmt.Printf("Setting %s is mandatory", name)
+		fmt.Printf("Setting %s is mandatory\n", name)
 		return false
 	}
 	return true
@@ -169,7 +169,7 @@ func checkMandatory(v *viper.Viper) error {
 // if reason is set, but implied is not set, return false.
 func checkImpliedSetting(v *viper.Viper, implied string, reason string) bool {
 	if v.IsSet(reason) && !v.IsSet(implied) {
-		fmt.Printf("Setting %s is mandatory when setting %s is specified.", implied, reason)
+		fmt.Printf("Setting %s is mandatory when setting %s is specified.\n", implied, reason)
 		return false
 	}
 	return true
