@@ -10,15 +10,12 @@ import (
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
-	"go.uber.org/zap"
 )
 
-// mockLogger silences the package logger for the duration of a test.
-func mockLogger(t *testing.T) {
-	old := log
-	log = zap.NewNop().Sugar()
-	t.Cleanup(func() { log = old })
-}
+// mockLogger is a no-op: a configurer built without a Logger already discards
+// its log messages instead of dereferencing a nil package-level logger, so
+// tests no longer need to install one. Kept so existing call sites compile.
+func mockLogger(*testing.T) {}
 
 // mockSerialize replaces the packet serializer, so tests can force a failure.
 func mockSerialize(t *testing.T, fn func(gopacket.SerializeBuffer, gopacket.SerializeOptions, ...gopacket.SerializableLayer) error) {
