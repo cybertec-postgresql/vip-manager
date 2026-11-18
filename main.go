@@ -60,7 +60,7 @@ func run() int {
 	// SIGTERM is what systemd sends on "systemctl stop|restart" and what a
 	// container runtime sends on stop. Without it the process is terminated
 	// right away and the virtual IP stays assigned to this machine, while
-	// Patroni promotes another node - two hosts answering on the same address.
+	// Patroni promotes another node. Two hosts then answer on the same address.
 	mainCtx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
@@ -83,7 +83,14 @@ func run() int {
 		// context instead and let the manager shut down in an orderly fashion.
 		defer cancel()
 		err := lc.GetChangeNotificationStream(mainCtx, states)
-		if err != nil && !errors.Is(err, context.Canceled) {
+		switch {
+		case err == nil && mainCtx.Err() == nil:
+			// Exit with 1 here as well: Restart=on-failure does not restart
+			// a service that exits with 0, and the node would stay without
+			// vip-manager.
+			checkerErr = errors.New("leader checker stopped before the shutdown")
+			log.Errorw("Leader checker failed", zap.Error(checkerErr))
+		case err != nil && !errors.Is(err, context.Canceled):
 			checkerErr = err
 			log.Errorw("Leader checker failed", zap.Error(err))
 		}

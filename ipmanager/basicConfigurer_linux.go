@@ -1,13 +1,14 @@
 package ipmanager
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"os/exec"
 	"syscall"
 )
 
-var execCommand = exec.Command
+var execCommand = exec.CommandContext
 var linuxSendPacketWithProtocolFn = sendPacketLinuxWithProtocol
 var interfaceAddrsFn = defaultInterfaceAddrs
 
@@ -87,16 +88,16 @@ func (c *BasicConfigurer) linkLocalAddress() (net.IP, error) {
 func (c *BasicConfigurer) sendNeighborAdvertisement() {
 	sourceIP, err := c.linkLocalAddress()
 	if err != nil {
-		log.Warn("Failed to find IPv6 link-local address for Neighbor Advertisement: ", err)
+		c.log().Warn("Failed to find IPv6 link-local address for Neighbor Advertisement: ", err)
 		return
 	}
 	buff, err := c.createGratuitousNA(sourceIP)
 	if err != nil {
-		log.Warn("Failed to compose unsolicited Neighbor Advertisement: ", err)
+		c.log().Warn("Failed to compose unsolicited Neighbor Advertisement: ", err)
 		return
 	}
 	if err := linuxSendPacketWithProtocolFn(c.Iface, buff, syscall.ETH_P_IPV6); err != nil {
-		log.Warn("Failed to send unsolicited Neighbor Advertisement: ", err)
+		c.log().Warn("Failed to send unsolicited Neighbor Advertisement: ", err)
 	}
 }
 
@@ -104,18 +105,18 @@ func (c *BasicConfigurer) sendNeighborAdvertisement() {
 func (c *BasicConfigurer) sendGratuitousARP() {
 	buff, err := c.createGratuitousARP()
 	if err != nil {
-		log.Warn("Failed to compose gratuitous ARP request: ", err)
+		c.log().Warn("Failed to compose gratuitous ARP request: ", err)
 		return
 	}
 	if err := linuxSendPacketWithProtocolFn(c.Iface, buff, syscall.ETH_P_ARP); err != nil {
-		log.Warn("Failed to send gratuitous ARP request: ", err)
+		c.log().Warn("Failed to send gratuitous ARP request: ", err)
 	}
 }
 
 // configureAddress assigns virtual IP address
-func (c *BasicConfigurer) configureAddress() bool {
-	log.Infof("Configuring address %s on %s", c.getCIDR(), c.Iface.Name)
-	if !c.runAddressConfiguration("add") {
+func (c *BasicConfigurer) configureAddress(ctx context.Context) bool {
+	c.log().Infof("Configuring address %s on %s", c.getCIDR(), c.Iface.Name)
+	if !c.runAddressConfiguration(ctx, "add") {
 		return false
 	}
 	// Is6 alone is not enough: it is also true for IPv4-in-IPv6 addresses such
@@ -129,25 +130,27 @@ func (c *BasicConfigurer) configureAddress() bool {
 }
 
 // deconfigureAddress drops virtual IP address
-func (c *BasicConfigurer) deconfigureAddress() bool {
-	log.Infof("Removing address %s on %s", c.getCIDR(), c.Iface.Name)
-	return c.runAddressConfiguration("delete")
+func (c *BasicConfigurer) deconfigureAddress(ctx context.Context) bool {
+	c.log().Infof("Removing address %s on %s", c.getCIDR(), c.Iface.Name)
+	return c.runAddressConfiguration(ctx, "delete")
 }
 
-func (c *BasicConfigurer) runAddressConfiguration(action string) bool {
-	cmd := execCommand("ip", "addr", action,
+// runAddressConfiguration runs `ip addr`. A cancelled ctx kills the command, so
+// a hung `ip` cannot hold up the shutdown.
+func (c *BasicConfigurer) runAddressConfiguration(ctx context.Context, action string) bool {
+	cmd := execCommand(ctx, "ip", "addr", action,
 		c.getCIDR(),
 		"dev", c.Iface.Name)
 	output, err := cmd.CombinedOutput()
 
 	switch err.(type) {
 	case *exec.ExitError:
-		log.Infof("Got error %s", output)
+		c.log().Infof("Got error %s", output)
 
 		return false
 	}
 	if err != nil {
-		log.Infof("Error running ip address %s %s on %s: %s",
+		c.log().Infof("Error running ip address %s %s on %s: %s",
 			action, c.VIP, c.Iface.Name, err)
 		return false
 	}

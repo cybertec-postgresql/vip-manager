@@ -1,6 +1,7 @@
 package ipmanager
 
 import (
+	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -28,12 +29,13 @@ var (
 // Unlike on Linux, no gratuitous ARP or Neighbor Advertisement is composed
 // here: Windows runs Duplicate Address Detection and announces the new address
 // to the link itself when it is added through the iphlpapi calls below.
-func (c *BasicConfigurer) configureAddress() bool {
-	log.Infof("Configuring address %s on %s", c.getCIDR(), c.Iface.Name)
+// The Win32 calls take no context, so ctx is unused.
+func (c *BasicConfigurer) configureAddress(context.Context) bool {
+	c.log().Infof("Configuring address %s on %s", c.getCIDR(), c.Iface.Name)
 
 	iface, err := interfaceByNameFn(c.Iface.Name)
 	if err != nil {
-		log.Error("Failed to access interface: ", err)
+		c.log().Error("Failed to access interface: ", err)
 		return false
 	}
 
@@ -44,11 +46,11 @@ func (c *BasicConfigurer) configureAddress() bool {
 		err = c.addIPv6Address(iface)
 	}
 	if err != nil {
-		log.Error("Failed to add address: ", err)
+		c.log().Error("Failed to add address: ", err)
 		return false
 	}
 
-	log.Debug("Windows announces the new address to the link itself, " +
+	c.log().Debug("Windows announces the new address to the link itself, " +
 		"no gratuitous ARP or Neighbor Advertisement is sent by vip-manager")
 	return true
 }
@@ -90,8 +92,8 @@ func (c *BasicConfigurer) addIPv6Address(iface *net.Interface) error {
 }
 
 // deconfigureAddress drops virtual IP address
-func (c *BasicConfigurer) deconfigureAddress() bool {
-	log.Infof("Removing address %s on %s", c.getCIDR(), c.Iface.Name)
+func (c *BasicConfigurer) deconfigureAddress(context.Context) bool {
+	c.log().Infof("Removing address %s on %s", c.getCIDR(), c.Iface.Name)
 
 	var err error
 	switch {
@@ -110,7 +112,7 @@ func (c *BasicConfigurer) deconfigureAddress() bool {
 	}
 
 	if err != nil {
-		log.Errorf("Failed to remove address %s: %v", c.getCIDR(), err)
+		c.log().Errorf("Failed to remove address %s: %v", c.getCIDR(), err)
 		return false
 	}
 	return true

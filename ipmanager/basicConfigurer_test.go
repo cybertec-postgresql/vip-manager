@@ -10,15 +10,7 @@ import (
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
-	"go.uber.org/zap"
 )
-
-// mockLogger silences the package logger for the duration of a test.
-func mockLogger(t *testing.T) {
-	old := log
-	log = zap.NewNop().Sugar()
-	t.Cleanup(func() { log = old })
-}
 
 // mockSerialize replaces the packet serializer, so tests can force a failure.
 func mockSerialize(t *testing.T, fn func(gopacket.SerializeBuffer, gopacket.SerializeOptions, ...gopacket.SerializableLayer) error) {
@@ -110,7 +102,7 @@ func TestBasicConfigurer_queryAddress_MissingInterface(t *testing.T) {
 
 	// The interface name is fake, so the lookup fails and queryAddress must
 	// report that the address is not assigned.
-	if got := c.queryAddress(); got {
+	if got := c.queryAddress(t.Context()); got {
 		t.Errorf("queryAddress() = %v, want false for non-existent interface", got)
 	}
 }
@@ -137,7 +129,7 @@ func TestBasicConfigurer_queryAddress_RealInterface_NotAssigned(t *testing.T) {
 	}
 
 	// Should return false since this address is not assigned
-	if got := c.queryAddress(); got {
+	if got := c.queryAddress(t.Context()); got {
 		t.Errorf("queryAddress() = %v, want false for unassigned address", got)
 	}
 }
@@ -189,7 +181,7 @@ func TestBasicConfigurer_queryAddress_RealInterface_Assigned(t *testing.T) {
 	}
 
 	// Should return true since this address is actually assigned to loopback
-	if got := c.queryAddress(); !got {
+	if got := c.queryAddress(t.Context()); !got {
 		t.Errorf("queryAddress() = %v, want true for assigned address %s", got, testAddr)
 	}
 }
