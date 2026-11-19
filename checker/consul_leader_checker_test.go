@@ -428,20 +428,79 @@ func TestConsulLeaderChecker_AllEndpointsDown(t *testing.T) {
 	}
 }
 
-// TestConsulLeaderChecker_CancelAbortsBlockingQuery verifies that a blocking
-// query does not hold up the shutdown.
-func TestConsulLeaderChecker_CancelAbortsBlockingQuery(t *testing.T) {
-	t.Parallel()
+// hungConsul accepts a query and never answers it, like an endpoint behind a
+// network that drops packets.
+func hungConsul(t *testing.T) *httptest.Server {
+	t.Helper()
 	release := make(chan struct{})
 	srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
-		select { // hang like a blocking query that has nothing to report
+		select {
 		case <-r.Context().Done():
 		case <-release:
 		}
 	}))
 	t.Cleanup(srv.Close)
 	t.Cleanup(func() { close(release) })
-	checker := consulCheckerFor(t, srv.URL, consulTestKey, "primary")
+	return srv
+}
+
+// TestConsulLeaderChecker_HungEndpoint verifies that an endpoint which never
+// answers costs one query timeout: the checker moves on to the next endpoint,
+// and reports false when there is none that answers.
+func TestConsulLeaderChecker_HungEndpoint(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name      string
+		endpoints []string
+		want      bool
+	}{
+		{"another endpoint answers", []string{hungConsul(t).URL, fakeConsul(t, "primary").URL}, true},
+		{"no endpoint answers", []string{hungConsul(t).URL, hungConsul(t).URL}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			checker, err := NewConsulLeaderChecker(&vipconfig.Config{
+				Endpoints:    tt.endpoints,
+				TriggerKey:   consulTestKey,
+				TriggerValue: "primary",
+				Interval:     1,
+				Logger:       zap.NewNop(),
+			})
+			if err != nil {
+				t.Fatalf("NewConsulLeaderChecker: %v", err)
+			}
+			checker.queryTimeout = 100 * time.Millisecond
+
+			ctx, cancel := context.WithCancel(context.Background())
+			out, done := runConsulStream(ctx, checker)
+			// receiveOne allows 3 seconds, the dial timeout of the client is 30
+			if got := receiveOne(t, out); got != tt.want {
+				t.Errorf("expected %t, got %t", tt.want, got)
+			}
+			cancel()
+			if err := waitDone(t, done); !errors.Is(err, context.Canceled) {
+				t.Errorf("expected context.Canceled, got %v", err)
+			}
+		})
+	}
+}
+
+// TestNewConsulLeaderChecker_NoEndpoints verifies that a configuration without
+// an endpoint is rejected, it used to panic.
+func TestNewConsulLeaderChecker_NoEndpoints(t *testing.T) {
+	t.Parallel()
+	_, err := NewConsulLeaderChecker(&vipconfig.Config{Logger: zap.NewNop()})
+	if err == nil || !strings.Contains(err.Error(), "no consul endpoint") {
+		t.Errorf("expected the missing endpoint to be reported, got %v", err)
+	}
+}
+
+// TestConsulLeaderChecker_CancelAbortsBlockingQuery verifies that a blocking
+// query does not hold up the shutdown.
+func TestConsulLeaderChecker_CancelAbortsBlockingQuery(t *testing.T) {
+	t.Parallel()
+	checker := consulCheckerFor(t, hungConsul(t).URL, consulTestKey, "primary")
 
 	ctx, cancel := context.WithCancel(context.Background())
 	_, done := runConsulStream(ctx, checker)

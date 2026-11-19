@@ -12,6 +12,18 @@ import (
 	"go.uber.org/zap"
 )
 
+// consulWaitTime is how long consul holds a blocking query that has nothing
+// new to report.
+const consulWaitTime = time.Second
+
+// consulQueryGrace is what a query may take on top of consulWaitTime. Without
+// a deadline a query to an endpoint that accepts no connection waits for the
+// 30 seconds dial timeout of the client, and one to an endpoint that never
+// answers waits forever. A leader that is cut off from the network would keep
+// the virtual IP that long, times the number of endpoints, while Patroni
+// promotes another node after its ttl of 30 seconds.
+const consulQueryGrace = 2 * time.Second
+
 // ConsulLeaderChecker is used to check state of the leader key in Consul
 type ConsulLeaderChecker struct {
 	*vipconfig.Config
@@ -19,6 +31,8 @@ type ConsulLeaderChecker struct {
 	clients     []*api.Client // one client per endpoint, in the order of Endpoints
 	current     int           // index into Endpoints of the endpoint in use
 	queryLog    *logThrottler // throttles repeated failures to read the key
+	// queryTimeout is the deadline of one query to one endpoint
+	queryTimeout time.Duration
 }
 
 // consulClientConfig turns one endpoint of the configuration into a client
@@ -37,14 +51,18 @@ func consulClientConfig(con *vipconfig.Config, endpoint string) (*api.Config, er
 		// Host keeps the brackets of an IPv6 address, Hostname() drops them
 		Address:  u.Host,
 		Scheme:   u.Scheme,
-		WaitTime: time.Second,
+		WaitTime: consulWaitTime,
 		Token:    cmp.Or(con.ConsulToken, ""),
 	}, nil
 }
 
 // NewConsulLeaderChecker returns a new instance
 func NewConsulLeaderChecker(con *vipconfig.Config) (lc *ConsulLeaderChecker, err error) {
-	lc = &ConsulLeaderChecker{Config: con, queryLog: newLogThrottler(con.Logger)}
+	lc = &ConsulLeaderChecker{
+		Config:       con,
+		queryLog:     newLogThrottler(con.Logger),
+		queryTimeout: consulWaitTime + consulQueryGrace,
+	}
 
 	// The client of every endpoint is built here, so that a typo in the second
 	// endpoint is reported at startup and not hours later, when the first one
@@ -79,12 +97,17 @@ func (c *ConsulLeaderChecker) nextEndpoint() {
 // the same key, so when the endpoint in use fails, getKey asks the remaining
 // endpoints in the same pass. It returns an error only when all of them
 // failed, and the checker then keeps the endpoint it started the pass with.
+// Every query has a deadline of queryTimeout, so an endpoint that does not
+// answer delays the pass by that much and no more.
 func (c *ConsulLeaderChecker) getKey(ctx context.Context, queryOptions *api.QueryOptions) (*api.KVPair, error) {
 	started := c.current
 	var firstErr error
 	for range c.clients {
-		// the context aborts a blocking query when the shutdown starts
-		resp, _, err := c.KV().Get(c.TriggerKey, queryOptions.WithContext(ctx))
+		// the context aborts the query when the shutdown starts or the
+		// endpoint takes longer than queryTimeout
+		queryCtx, cancel := context.WithTimeout(ctx, c.queryTimeout)
+		resp, _, err := c.KV().Get(c.TriggerKey, queryOptions.WithContext(queryCtx))
+		cancel()
 		if err == nil {
 			if c.current != started {
 				c.Logger.Sugar().Warnf("Consul endpoint %s failed, using %s now: %v",
