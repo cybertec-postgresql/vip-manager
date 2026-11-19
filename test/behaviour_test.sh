@@ -67,7 +67,7 @@ echo $! > .ncatPid
 etcdctl del service/pgcluster/leader || true
 
 touch .failed
-./vip-manager --interval 3000 --interface $dev --ip $vip --netmask 32 --trigger-key service/pgcluster/leader --trigger-value $HOSTNAME & #2>&1 &
+./vip-manager --interface $dev --ip $vip --netmask 32 --trigger-key service/pgcluster/leader --trigger-value $HOSTNAME & #2>&1 &
 echo $! > .vipPid
 sleep 2
 

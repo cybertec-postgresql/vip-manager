@@ -18,7 +18,8 @@ type PatroniLeaderChecker struct {
 	*vipconfig.Config
 	*http.Client
 	requestLog *logThrottler // throttles repeated request failures
-	statusLog  *logThrottler // throttles repeated non-success status codes
+	statusLog  *logThrottler // throttles repeated unexpected status codes
+	lastStatus int           // last expected status code, to log only changes
 }
 
 // NewPatroniLeaderChecker returns a new instance
@@ -45,6 +46,23 @@ func NewPatroniLeaderChecker(conf *vipconfig.Config) (*PatroniLeaderChecker, err
 	}, nil
 }
 
+// logStatus reports the status code returned by Patroni. The trigger value and
+// 503 are the two answers Patroni gives to a role check, e.g. every replica
+// gets 503 from /leader, so they are logged once per change at the info level.
+// Any other code points to a problem and is reported as a throttled warning.
+func (c *PatroniLeaderChecker) logStatus(url string, code int) {
+	if strconv.Itoa(code) != c.TriggerValue && code != http.StatusServiceUnavailable {
+		c.statusLog.warn(fmt.Sprintf("REST API returned unexpected status code %d for %s (expected %s or %d)",
+			code, url, c.TriggerValue, http.StatusServiceUnavailable))
+		return
+	}
+	c.statusLog.success(fmt.Sprintf("REST API at %s returned expected status code %d again", url, code))
+	if code != c.lastStatus {
+		c.Logger.Sugar().Info("Current status code from Patroni: ", code)
+		c.lastStatus = code
+	}
+}
+
 // GetChangeNotificationStream checks the status in the loop
 func (c *PatroniLeaderChecker) GetChangeNotificationStream(ctx context.Context, out chan<- bool) error {
 	for {
@@ -67,11 +85,7 @@ func (c *PatroniLeaderChecker) GetChangeNotificationStream(ctx context.Context, 
 			}
 			r.Body.Close() // throw away the body
 			c.requestLog.success(fmt.Sprintf("REST API at %s is reachable again", url))
-			if r.StatusCode < 200 || r.StatusCode >= 300 {
-				c.statusLog.warn(fmt.Sprintf("REST API returned non-success status code %d for %s (expected %s)", r.StatusCode, url, c.TriggerValue))
-			} else {
-				c.statusLog.success(fmt.Sprintf("REST API at %s returned success status code %d again", url, r.StatusCode))
-			}
+			c.logStatus(url, r.StatusCode)
 			select {
 			case out <- strconv.Itoa(r.StatusCode) == c.TriggerValue:
 			case <-ctx.Done():

@@ -52,6 +52,7 @@ func defineFlags() *pflag.FlagSet {
 
 	flags.String("config", "", "Location of the configuration file.")
 	flags.Bool("version", false, "Show the version number.")
+	flags.BoolP("help", "h", false, "Show this help message.")
 
 	flags.String("ip", "", "Virtual IP address to configure.")
 	flags.String("netmask", "", "The netmask used for the IP address. Defaults to -1 which assigns ipv4 default mask.")
@@ -125,9 +126,9 @@ func setDefaults(v *viper.Viper) {
 			triggerValue, err = os.Hostname()
 		}
 		if err != nil {
-			fmt.Printf("No trigger-value specified, hostname could not be retrieved: %s", err)
+			fmt.Printf("No trigger-value specified, hostname could not be retrieved: %s\n", err)
 		} else {
-			fmt.Printf("No trigger-value specified, instead using: %v", triggerValue)
+			fmt.Printf("No trigger-value specified, instead using: %v\n", triggerValue)
 			v.Set("trigger-value", triggerValue)
 		}
 	}
@@ -140,7 +141,7 @@ func setDefaults(v *viper.Viper) {
 
 func checkSetting(v *viper.Viper, name string) bool {
 	if !v.IsSet(name) {
-		fmt.Printf("Setting %s is mandatory", name)
+		fmt.Printf("Setting %s is mandatory\n", name)
 		return false
 	}
 	return true
@@ -168,7 +169,7 @@ func checkMandatory(v *viper.Viper) error {
 // if reason is set, but implied is not set, return false.
 func checkImpliedSetting(v *viper.Viper, implied string, reason string) bool {
 	if v.IsSet(reason) && !v.IsSet(implied) {
-		fmt.Printf("Setting %s is mandatory when setting %s is specified.", implied, reason)
+		fmt.Printf("Setting %s is mandatory when setting %s is specified.\n", implied, reason)
 		return false
 	}
 	return true
@@ -238,6 +239,10 @@ func newConfig(args []string) (*Config, error) {
 	flags := defineFlags()
 	if err = flags.Parse(args); err != nil {
 		return nil, fmt.Errorf("error parsing flags: %w", err)
+	}
+	if help, _ := flags.GetBool("help"); help {
+		fmt.Fprintf(os.Stderr, "Usage of %s:\n%s", flags.Name(), flags.FlagUsages())
+		return nil, pflag.ErrHelp
 	}
 	// import pflags into viper
 	_ = v.BindPFlags(flags)

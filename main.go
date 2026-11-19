@@ -13,6 +13,7 @@ import (
 	"github.com/cybertec-postgresql/vip-manager/checker"
 	"github.com/cybertec-postgresql/vip-manager/ipmanager"
 	"github.com/cybertec-postgresql/vip-manager/vipconfig"
+	"github.com/spf13/pflag"
 	"go.uber.org/zap"
 )
 
@@ -37,6 +38,9 @@ func main() {
 
 func run() int {
 	conf, err := vipconfig.NewConfig()
+	if errors.Is(err, pflag.ErrHelp) {
+		return 0
+	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1

@@ -2,6 +2,7 @@ package vipconfig
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -9,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
 
@@ -554,6 +556,14 @@ func TestNewConfig_InvalidFlag(t *testing.T) {
 	}
 }
 
+func TestNewConfig_Help(t *testing.T) {
+	for _, arg := range []string{"--help", "-h"} {
+		if _, err := newConfig([]string{arg}); !errors.Is(err, pflag.ErrHelp) {
+			t.Errorf("%s: got %v, want pflag.ErrHelp", arg, err)
+		}
+	}
+}
+
 // ---------------------------------------------------------------------------
 // NewConfig (public API)
 // ---------------------------------------------------------------------------
@@ -566,7 +576,7 @@ func TestNewConfig_CreatesConfig(t *testing.T) {
 
 	path := minimalConfigFile(t)
 	os.Args = []string{oldArgs[0], fmt.Sprintf("--config=%s", path)}
-	
+
 	conf, err := NewConfig()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
