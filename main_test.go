@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"os"
 	"testing"
@@ -63,5 +65,36 @@ func TestVersionFlagOutput(t *testing.T) {
 	// For simplicity, just verify the format is correct
 	if version != "master" || commit != "none" || date != "unknown" {
 		t.Error("version output format incorrect")
+	}
+}
+
+// TestCheckerFailure verifies that the state of the main context, not the
+// content of the error, decides whether a return of the leader checker is a
+// failure.
+func TestCheckerFailure(t *testing.T) {
+	grpcCanceled := errors.New("rpc error: code = Canceled desc = context canceled")
+	tests := []struct {
+		name     string
+		ctxErr   error
+		err      error
+		wantFail bool
+	}{
+		{"shutdown, no error", context.Canceled, nil, false},
+		{"shutdown, context.Canceled", context.Canceled, context.Canceled, false},
+		{"shutdown, error that does not wrap context.Canceled", context.Canceled, grpcCanceled, false},
+		{"live context, no error", nil, nil, true},
+		{"live context, context.Canceled from the checker", nil, context.Canceled, true},
+		{"live context, other error", nil, errors.New("connection refused"), true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := checkerFailure(tt.ctxErr, tt.err)
+			if (got != nil) != tt.wantFail {
+				t.Errorf("checkerFailure(%v, %v) = %v, want failure: %v", tt.ctxErr, tt.err, got, tt.wantFail)
+			}
+			if tt.err != nil && tt.wantFail && !errors.Is(got, tt.err) {
+				t.Errorf("checkerFailure(%v, %v) = %v, want the checker's error", tt.ctxErr, tt.err, got)
+			}
+		})
 	}
 }

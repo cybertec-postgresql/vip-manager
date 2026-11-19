@@ -87,16 +87,9 @@ func run() int {
 		// context instead and let the manager shut down in an orderly fashion.
 		defer cancel()
 		err := lc.GetChangeNotificationStream(mainCtx, states)
-		switch {
-		case err == nil && mainCtx.Err() == nil:
-			// Exit with 1 here as well: Restart=on-failure does not restart
-			// a service that exits with 0, and the node would stay without
-			// vip-manager.
-			checkerErr = errors.New("leader checker stopped before the shutdown")
+		checkerErr = checkerFailure(mainCtx.Err(), err)
+		if checkerErr != nil {
 			log.Errorw("Leader checker failed", zap.Error(checkerErr))
-		case err != nil && !errors.Is(err, context.Canceled):
-			checkerErr = err
-			log.Errorw("Leader checker failed", zap.Error(err))
 		}
 	}()
 
@@ -111,4 +104,22 @@ func run() int {
 		return 1
 	}
 	return 0
+}
+
+// checkerFailure returns the error to exit with after the leader checker
+// returned err, or nil when the return was part of a shutdown. ctxErr is the
+// error of the main context at that moment. The context decides whether the
+// return is a failure, not err: a cancelled gRPC call does not wrap
+// context.Canceled, and a checker can return context.Canceled from a timeout of
+// its own.
+func checkerFailure(ctxErr, err error) error {
+	if ctxErr != nil {
+		return nil
+	}
+	// A nil error is a failure as well: Restart=on-failure does not restart a
+	// service that exits with 0, and the node would stay without vip-manager.
+	if err == nil {
+		return errors.New("leader checker stopped before the shutdown")
+	}
+	return err
 }
