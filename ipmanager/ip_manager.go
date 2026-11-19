@@ -167,7 +167,11 @@ func (m *IPManager) removeAddressOnShutdown(ctx context.Context, applyDone <-cha
 	// ctx is cancelled and would kill the removal, so run it on a fresh deadline
 	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), m.shutdownGrace)
 	defer cancel()
-	if !m.configurer.deconfigureAddress(cleanupCtx) {
+	// The removal is always attempted, also when the last query said the
+	// address is absent, because a stale answer must not leave it assigned.
+	// `ip addr delete` fails on a node that does not hold the address, so a
+	// failure is only an error while the address is still there.
+	if !m.configurer.deconfigureAddress(cleanupCtx) && m.configurer.queryAddress(cleanupCtx) {
 		m.log.Errorf("Failed to remove address %s on shutdown", m.configurer.getCIDR())
 	}
 }

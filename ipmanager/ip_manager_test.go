@@ -11,6 +11,8 @@ import (
 
 	"github.com/cybertec-postgresql/vip-manager/vipconfig"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 // newTestManager returns a manager with the defaults NewIPManager sets, around
@@ -515,5 +517,48 @@ func TestTriggerRecheck_NeverBlocks(t *testing.T) {
 	case <-done:
 	case <-time.After(time.Second):
 		t.Fatal("triggerRecheck blocked although nobody was listening")
+	}
+}
+
+// TestRemoveAddressOnShutdown_ReportsOnlyAnAddressThatStays verifies that a
+// failed removal is an error only while the address is still assigned.
+// `ip addr delete` fails on a node that does not hold the address, and that
+// must not log an error on every stop of a replica.
+func TestRemoveAddressOnShutdown_ReportsOnlyAnAddressThatStays(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name          string
+		removalFails  bool
+		stillAssigned bool
+		wantErrors    int
+	}{
+		{"removal fails, address absent", true, false, 0},
+		{"removal fails, address still assigned", true, true, 1},
+		{"removal succeeds", false, false, 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			core, logs := observer.New(zapcore.ErrorLevel)
+			mock := &mockConfigurer{
+				shouldDeconfigureFail: tt.removalFails,
+				shouldQueryReturn:     tt.stillAssigned,
+			}
+			m := newTestManager(mock)
+			m.log = zap.New(core).Sugar()
+
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+			applyDone := make(chan struct{})
+			close(applyDone)
+			m.removeAddressOnShutdown(ctx, applyDone)
+
+			if mock.deconfigures() != 1 {
+				t.Errorf("expected one removal, got %d", mock.deconfigures())
+			}
+			if logs.Len() != tt.wantErrors {
+				t.Errorf("expected %d error log entries, got %d: %v", tt.wantErrors, logs.Len(), logs.All())
+			}
+		})
 	}
 }
