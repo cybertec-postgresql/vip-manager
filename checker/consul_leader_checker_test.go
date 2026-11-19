@@ -2,7 +2,10 @@ package checker
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -12,6 +15,8 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	tcconsul "github.com/testcontainers/testcontainers-go/modules/consul"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 func newTestConfig(endpoint string) *vipconfig.Config {
@@ -332,6 +337,122 @@ func TestConsulLeaderChecker_NextEndpoint_Single(t *testing.T) {
 	lc.nextEndpoint()
 	if lc.current != 0 || lc.Client != client {
 		t.Error("expected the only endpoint to be kept")
+	}
+}
+
+// TestConsulClientConfig_IPv6 verifies that the brackets of an IPv6 endpoint
+// survive, "::1:8500" is not an address a client can dial.
+func TestConsulClientConfig_IPv6(t *testing.T) {
+	t.Parallel()
+	config, err := consulClientConfig(newTestConfig(""), "http://[::1]:8500")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if config.Address != "[::1]:8500" {
+		t.Errorf("expected address [::1]:8500, got %s", config.Address)
+	}
+}
+
+// fakeConsul serves the test key with the given value the way the KV endpoint
+// of consul does.
+func fakeConsul(t *testing.T, value string) *httptest.Server {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("X-Consul-Index", "1")
+		_ = json.NewEncoder(w).Encode([]capi.KVPair{{Key: consulTestKey, Value: []byte(value), ModifyIndex: 1}})
+	}))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+// TestConsulLeaderChecker_FailsOverWithinOnePass verifies that an unreachable
+// endpoint costs the leader nothing: the stream reports true from the second
+// endpoint without reporting false first.
+func TestConsulLeaderChecker_FailsOverWithinOnePass(t *testing.T) {
+	t.Parallel()
+	// Port 1 is closed on loopback; the TCP dial fails immediately.
+	checker := consulCheckerFor(t, "http://127.0.0.1:1", consulTestKey, "primary")
+	checker.Endpoints = append(checker.Endpoints, fakeConsul(t, "primary").URL)
+	checker, err := NewConsulLeaderChecker(checker.Config)
+	if err != nil {
+		t.Fatalf("NewConsulLeaderChecker: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	out, done := runConsulStream(ctx, checker)
+	for range 3 {
+		if !receiveOne(t, out) {
+			t.Fatal("expected true from the second endpoint, got false")
+		}
+	}
+	cancel()
+	if err := waitDone(t, done); !errors.Is(err, context.Canceled) {
+		t.Errorf("expected context.Canceled, got %v", err)
+	}
+	if checker.current != 1 {
+		t.Errorf("expected the checker to stay on endpoint 1, got %d", checker.current)
+	}
+}
+
+// TestConsulLeaderChecker_AllEndpointsDown verifies that the stream reports
+// false when no endpoint answers, and that the error is logged once and not on
+// every pass, although every endpoint fails with a different error text.
+func TestConsulLeaderChecker_AllEndpointsDown(t *testing.T) {
+	t.Parallel()
+	core, logs := observer.New(zapcore.InfoLevel)
+	conf := &vipconfig.Config{
+		Endpoints:    []string{"http://127.0.0.1:1", "http://127.0.0.2:1"},
+		TriggerKey:   consulTestKey,
+		TriggerValue: "primary",
+		Interval:     1,
+		Logger:       zap.New(core),
+	}
+	checker, err := NewConsulLeaderChecker(conf)
+	if err != nil {
+		t.Fatalf("NewConsulLeaderChecker: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	out, done := runConsulStream(ctx, checker)
+	for range 5 {
+		if receiveOne(t, out) {
+			t.Fatal("expected false while no endpoint answers, got true")
+		}
+	}
+	cancel()
+	if err := waitDone(t, done); !errors.Is(err, context.Canceled) {
+		t.Errorf("expected context.Canceled, got %v", err)
+	}
+	if n := logs.Len(); n != 1 {
+		t.Errorf("expected one log entry for five failed passes, got %d: %v", n, logs.All())
+	}
+}
+
+// TestConsulLeaderChecker_CancelAbortsBlockingQuery verifies that a blocking
+// query does not hold up the shutdown.
+func TestConsulLeaderChecker_CancelAbortsBlockingQuery(t *testing.T) {
+	t.Parallel()
+	release := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		select { // hang like a blocking query that has nothing to report
+		case <-r.Context().Done():
+		case <-release:
+		}
+	}))
+	t.Cleanup(srv.Close)
+	t.Cleanup(func() { close(release) })
+	checker := consulCheckerFor(t, srv.URL, consulTestKey, "primary")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	_, done := runConsulStream(ctx, checker)
+	time.Sleep(50 * time.Millisecond) // let the query reach the server
+	start := time.Now()
+	cancel()
+	if err := waitDone(t, done); !errors.Is(err, context.Canceled) {
+		t.Errorf("expected context.Canceled, got %v", err)
+	}
+	if elapsed := time.Since(start); elapsed > time.Second {
+		t.Errorf("the query ignored the cancelled context for %s", elapsed)
 	}
 }
 
