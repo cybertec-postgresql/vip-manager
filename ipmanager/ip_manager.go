@@ -109,6 +109,7 @@ func NewIPManager(conf *vipconfig.Config, states <-chan bool) (m *IPManager, err
 
 func (m *IPManager) applyLoop(ctx context.Context) {
 	strUpDown := map[bool]string{true: "up", false: "down"}
+	var lastIsUp, lastShouldBeUp, reported bool
 	for {
 		// select picks a ready case at random, so a pending recheck or an
 		// expired timer can win over ctx.Done(). Without this check the loop
@@ -118,7 +119,15 @@ func (m *IPManager) applyLoop(ctx context.Context) {
 		}
 		isIPUp := m.configurer.queryAddress(ctx)
 		shouldSetIPUp := m.shouldSetIPUp.Load()
-		m.log.Infof("IP address %s is %s, must be %s",
+		// The address is rechecked every ten seconds and hardly ever changes,
+		// so it is reported at info level on the first pass and when the state
+		// changed, and at debug level otherwise.
+		report := m.log.Debugf
+		if !reported || isIPUp != lastIsUp || shouldSetIPUp != lastShouldBeUp {
+			report = m.log.Infof
+			reported, lastIsUp, lastShouldBeUp = true, isIPUp, shouldSetIPUp
+		}
+		report("IP address %s is %s, must be %s",
 			m.configurer.getCIDR(),
 			strUpDown[isIPUp],
 			strUpDown[shouldSetIPUp])
