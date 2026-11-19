@@ -102,7 +102,6 @@ func mockIfaceLookupOK(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestBasicConfigurer_configureAddress_Windows_IPv4(t *testing.T) {
-	mockLogger(t)
 	mockIfaceLookupOK(t)
 	failUnicast(t)
 
@@ -127,7 +126,7 @@ func TestBasicConfigurer_configureAddress_Windows_IPv4(t *testing.T) {
 	})
 
 	c := windowsConfigurer("192.168.1.100", net.CIDRMask(24, 32))
-	if got := c.configureAddress(); !got {
+	if got := c.configureAddress(t.Context()); !got {
 		t.Fatal("configureAddress() = false, want true")
 	}
 	if !addCalled {
@@ -147,7 +146,6 @@ func TestBasicConfigurer_configureAddress_Windows_IPv4(t *testing.T) {
 // getMask() hands such a VIP a 16 byte mask, so the mask must be rebuilt from
 // its prefix length as well.
 func TestBasicConfigurer_configureAddress_Windows_IPv4In6(t *testing.T) {
-	mockLogger(t)
 	mockIfaceLookupOK(t)
 	failUnicast(t)
 
@@ -166,7 +164,7 @@ func TestBasicConfigurer_configureAddress_Windows_IPv4In6(t *testing.T) {
 	})
 
 	c := windowsConfigurer("::ffff:192.0.2.1", getMask(netip.MustParseAddr("::ffff:192.0.2.1"), 24))
-	if got := c.configureAddress(); !got {
+	if got := c.configureAddress(t.Context()); !got {
 		t.Fatal("configureAddress() = false, want true")
 	}
 	if !addCalled {
@@ -175,7 +173,6 @@ func TestBasicConfigurer_configureAddress_Windows_IPv4In6(t *testing.T) {
 }
 
 func TestBasicConfigurer_configureAddress_Windows_IPv6(t *testing.T) {
-	mockLogger(t)
 	mockIfaceLookupOK(t)
 	failAddIPAddress(t)
 
@@ -211,7 +208,7 @@ func TestBasicConfigurer_configureAddress_Windows_IPv6(t *testing.T) {
 	)
 
 	c := windowsConfigurer("2001:db8::10", net.CIDRMask(64, 128))
-	if got := c.configureAddress(); !got {
+	if got := c.configureAddress(t.Context()); !got {
 		t.Fatal("configureAddress() = false, want true")
 	}
 	if !createCalled {
@@ -287,11 +284,10 @@ func TestBasicConfigurer_configureAddress_Windows_Failures(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockLogger(t)
 			tt.setup(t)
 
 			c := windowsConfigurer(tt.vip, tt.mask)
-			if got := c.configureAddress(); got {
+			if got := c.configureAddress(t.Context()); got {
 				t.Error("configureAddress() = true, want false")
 			}
 			if c.ipv6row != nil {
@@ -306,7 +302,6 @@ func TestBasicConfigurer_configureAddress_Windows_Failures(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestBasicConfigurer_deconfigureAddress_Windows_IPv4(t *testing.T) {
-	mockLogger(t)
 
 	deleteCalled := false
 	mockDeleteIPAddress(t, func(nteContext uint32) error {
@@ -320,7 +315,7 @@ func TestBasicConfigurer_deconfigureAddress_Windows_IPv4(t *testing.T) {
 	c := windowsConfigurer("192.168.1.100", net.CIDRMask(24, 32))
 	c.ntecontext = 7
 
-	if got := c.deconfigureAddress(); !got {
+	if got := c.deconfigureAddress(t.Context()); !got {
 		t.Fatal("deconfigureAddress() = false, want true")
 	}
 	if !deleteCalled {
@@ -332,7 +327,6 @@ func TestBasicConfigurer_deconfigureAddress_Windows_IPv4(t *testing.T) {
 }
 
 func TestBasicConfigurer_deconfigureAddress_Windows_IPv6(t *testing.T) {
-	mockLogger(t)
 
 	row := &windows.MibUnicastIpAddressRow{InterfaceIndex: testIfaceIndex}
 	deleteCalled := false
@@ -351,7 +345,7 @@ func TestBasicConfigurer_deconfigureAddress_Windows_IPv6(t *testing.T) {
 	c := windowsConfigurer("2001:db8::10", net.CIDRMask(64, 128))
 	c.ipv6row = row
 
-	if got := c.deconfigureAddress(); !got {
+	if got := c.deconfigureAddress(t.Context()); !got {
 		t.Fatal("deconfigureAddress() = false, want true")
 	}
 	if !deleteCalled {
@@ -398,12 +392,11 @@ func TestBasicConfigurer_deconfigureAddress_Windows_Failures(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockLogger(t)
 
 			c := windowsConfigurer("192.168.1.100", net.CIDRMask(24, 32))
 			tt.setup(t, c)
 
-			if got := c.deconfigureAddress(); got {
+			if got := c.deconfigureAddress(t.Context()); got {
 				t.Error("deconfigureAddress() = true, want false")
 			}
 		})

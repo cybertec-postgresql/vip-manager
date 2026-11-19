@@ -17,6 +17,14 @@ Type=simple
 
 ExecStart=/usr/bin/vip-manager --config=/etc/default/vip-manager.yml
 
+# On SIGTERM vip-manager removes the virtual IP before it exits. It cancels a
+# running `ip addr` command, waits up to 10 seconds for it to stop and then
+# gives `ip addr delete` up to 10 more seconds. A SIGKILL before that would
+# leave the address assigned to this machine, so keep this above 20 seconds.
+# With manager-type=hetzner nothing is removed: the failover IP keeps pointing
+# at this host until another node claims it.
+TimeoutStopSec=30
+
 Restart=on-failure
 
 [Install]

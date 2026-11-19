@@ -1,6 +1,7 @@
 package ipmanager
 
 import (
+	"context"
 	"errors"
 	"net"
 	"strings"
@@ -30,8 +31,9 @@ which prohibits sending of gratuitous ARP messages and IPv6 Neighbor Advertiseme
 	return c, nil
 }
 
-// queryAddress returns if the address is assigned
-func (c *BasicConfigurer) queryAddress() bool {
+// queryAddress returns if the address is assigned. It runs no command, so it
+// has no use for ctx.
+func (c *BasicConfigurer) queryAddress(context.Context) bool {
 	iface, err := net.InterfaceByName(c.Iface.Name)
 	if err != nil {
 		return false

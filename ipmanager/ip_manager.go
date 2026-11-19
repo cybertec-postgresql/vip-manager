@@ -12,22 +12,33 @@ import (
 	"go.uber.org/zap"
 )
 
+// ipConfigurer adds, removes and queries the virtual IP. A cancelled ctx aborts
+// the command or API call that is running.
 type ipConfigurer interface {
-	queryAddress() bool
-	configureAddress() bool
-	deconfigureAddress() bool
+	queryAddress(ctx context.Context) bool
+	configureAddress(ctx context.Context) bool
+	deconfigureAddress(ctx context.Context) bool
 	getCIDR() string
 }
 
-var log *zap.SugaredLogger
+// defaultShutdownGrace bounds two steps of the shutdown: the wait for applyLoop
+// to return after its context is cancelled, and the removal of the address
+// that follows. A cancelled context kills the `ip` or curl command applyLoop
+// runs, so the first wait is normally short. It only reaches the limit when a
+// configurer ignores the cancellation. The TimeoutStopSec of
+// vip-manager.service must stay above twice this value, or systemd sends
+// SIGKILL before the address is removed.
+const defaultShutdownGrace = 10 * time.Second
 
 // IPManager implements the main functionality of the VIP manager
 type IPManager struct {
 	configurer ipConfigurer
+	log        *zap.SugaredLogger
 
 	states        <-chan bool
 	shouldSetIPUp atomic.Bool
 	recheckChan   chan struct{}
+	shutdownGrace time.Duration
 }
 
 func getMask(vip netip.Addr, mask int) net.IPMask {
@@ -66,18 +77,22 @@ func NewIPManager(conf *vipconfig.Config, states <-chan bool) (m *IPManager, err
 	if err != nil {
 		return nil, err
 	}
+	log := conf.Logger.Sugar()
 	ipConf := &IPConfiguration{
 		VIP:        vip,
 		Netmask:    vipMask,
 		Iface:      *netIface,
 		RetryNum:   conf.RetryNum,
 		RetryAfter: conf.RetryAfter,
+		Log:        log,
 	}
 	m = &IPManager{
-		states: states,
+		log:           log,
+		states:        states,
+		shutdownGrace: defaultShutdownGrace,
+		// buffered, see triggerRecheck
+		recheckChan: make(chan struct{}, 1),
 	}
-	log = conf.Logger.Sugar()
-	m.recheckChan = make(chan struct{})
 	switch conf.HostingType {
 	case "hetzner":
 		m.configurer, err = newHetznerConfigurer(ipConf, conf.Verbose)
@@ -95,21 +110,27 @@ func NewIPManager(conf *vipconfig.Config, states <-chan bool) (m *IPManager, err
 func (m *IPManager) applyLoop(ctx context.Context) {
 	strUpDown := map[bool]string{true: "up", false: "down"}
 	for {
-		isIPUp := m.configurer.queryAddress()
+		// select picks a ready case at random, so a pending recheck or an
+		// expired timer can win over ctx.Done(). Without this check the loop
+		// could configure the address again after the shutdown has started.
+		if ctx.Err() != nil {
+			return
+		}
+		isIPUp := m.configurer.queryAddress(ctx)
 		shouldSetIPUp := m.shouldSetIPUp.Load()
-		log.Infof("IP address %s is %s, must be %s",
+		m.log.Infof("IP address %s is %s, must be %s",
 			m.configurer.getCIDR(),
 			strUpDown[isIPUp],
 			strUpDown[shouldSetIPUp])
 		if isIPUp != shouldSetIPUp {
 			var isOk bool
 			if shouldSetIPUp {
-				isOk = m.configurer.configureAddress()
+				isOk = m.configurer.configureAddress(ctx)
 			} else {
-				isOk = m.configurer.deconfigureAddress()
+				isOk = m.configurer.deconfigureAddress(ctx)
 			}
 			if !isOk {
-				log.Error("Failed to configure virtual ip for this machine")
+				m.log.Error("Failed to configure virtual ip for this machine")
 			}
 		}
 		select {
@@ -121,18 +142,56 @@ func (m *IPManager) applyLoop(ctx context.Context) {
 	}
 }
 
+// triggerRecheck asks applyLoop to reevaluate the state. The send never blocks:
+// the channel is buffered and a signal that is already pending is as good as a
+// new one, because applyLoop reads the current state itself. A blocking send
+// here used to hang forever once applyLoop had returned on a cancelled
+// context, which kept the shutdown below from ever removing the address.
+func (m *IPManager) triggerRecheck() {
+	select {
+	case m.recheckChan <- struct{}{}:
+	default:
+	}
+}
+
+// removeAddressOnShutdown waits for applyLoop to return and then removes the
+// address. ctx is already cancelled, which kills the command applyLoop runs,
+// so the configure cannot land after the removal. The wait is bounded in case a
+// configurer ignores the cancellation.
+func (m *IPManager) removeAddressOnShutdown(ctx context.Context, applyDone <-chan struct{}) {
+	select {
+	case <-applyDone:
+	case <-time.After(m.shutdownGrace):
+		m.log.Warn("applyLoop did not return after the cancellation, removing the address anyway")
+	}
+	// ctx is cancelled and would kill the removal, so run it on a fresh deadline
+	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), m.shutdownGrace)
+	defer cancel()
+	// The removal is always attempted, also when the last query said the
+	// address is absent, because a stale answer must not leave it assigned.
+	// `ip addr delete` fails on a node that does not hold the address, so a
+	// failure is only an error while the address is still there.
+	if !m.configurer.deconfigureAddress(cleanupCtx) && m.configurer.queryAddress(cleanupCtx) {
+		m.log.Errorf("Failed to remove address %s on shutdown", m.configurer.getCIDR())
+	}
+}
+
 // SyncStates implements states synchronization
 func (m *IPManager) SyncStates(ctx context.Context, states <-chan bool) {
-	go m.applyLoop(ctx)
+	applyDone := make(chan struct{})
+	go func() {
+		defer close(applyDone)
+		m.applyLoop(ctx)
+	}()
 	for {
 		select {
 		case newState := <-states:
 			if m.shouldSetIPUp.Load() != newState {
 				m.shouldSetIPUp.Store(newState)
-				m.recheckChan <- struct{}{}
+				m.triggerRecheck()
 			}
 		case <-ctx.Done():
-			m.configurer.deconfigureAddress()
+			m.removeAddressOnShutdown(ctx, applyDone)
 			return
 		}
 	}

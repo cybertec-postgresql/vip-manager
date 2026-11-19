@@ -4,6 +4,7 @@ package ipmanager
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"net"
 	"net/netip"
@@ -20,7 +21,7 @@ import (
 // test helpers
 // ---------------------------------------------------------------------------
 
-func mockExecCommand(t *testing.T, fn func(string, ...string) *exec.Cmd) {
+func mockExecCommand(t *testing.T, fn func(context.Context, string, ...string) *exec.Cmd) {
 	old := execCommand
 	execCommand = fn
 	t.Cleanup(func() { execCommand = old })
@@ -39,8 +40,10 @@ func mockInterfaceAddrs(t *testing.T, fn func(string) ([]net.Addr, error)) {
 }
 
 // execOK and execFail stand in for the `ip` command.
-func execOK(string, ...string) *exec.Cmd   { return exec.Command("true") }
-func execFail(string, ...string) *exec.Cmd { return exec.Command("sh", "-c", "exit 1") }
+func execOK(context.Context, string, ...string) *exec.Cmd { return exec.Command("true") }
+func execFail(context.Context, string, ...string) *exec.Cmd {
+	return exec.Command("sh", "-c", "exit 1")
+}
 
 func mustCIDR(t *testing.T, s string) net.Addr {
 	t.Helper()
@@ -352,7 +355,6 @@ func assertNAMessage(t *testing.T, parsed gopacket.Packet, wantTarget netip.Addr
 // content of the unsolicited Neighbor Advertisement that is sent after a new
 // IPv6 address is bound to the interface.
 func TestBasicConfigurer_configureAddress_IPv6_NAPacketContent(t *testing.T) {
-	mockLogger(t)
 	mockExecCommand(t, execOK)
 	mockInterfaceAddrs(t, func(string) ([]net.Addr, error) { return linkLocalAddrs(t), nil })
 
@@ -376,7 +378,7 @@ func TestBasicConfigurer_configureAddress_IPv6_NAPacketContent(t *testing.T) {
 		return nil
 	})
 
-	if got := c.configureAddress(); !got {
+	if got := c.configureAddress(t.Context()); !got {
 		t.Fatal("configureAddress() = false, want true")
 	}
 	if !sendCalled {
@@ -388,7 +390,6 @@ func TestBasicConfigurer_configureAddress_IPv6_NAPacketContent(t *testing.T) {
 // interface without an IPv6 link-local address produces a warning and no send,
 // while the address itself stays configured.
 func TestBasicConfigurer_configureAddress_IPv6_NoLinkLocal(t *testing.T) {
-	mockLogger(t)
 	mockExecCommand(t, execOK)
 	// Exactly what Linux loopback carries: no fe80::/10 address.
 	mockInterfaceAddrs(t, func(string) ([]net.Addr, error) { return loopbackAddrs(t), nil })
@@ -398,7 +399,7 @@ func TestBasicConfigurer_configureAddress_IPv6_NoLinkLocal(t *testing.T) {
 	})
 
 	c := testConfigurer("2001:db8::10", net.CIDRMask(64, 128))
-	if got := c.configureAddress(); !got {
+	if got := c.configureAddress(t.Context()); !got {
 		t.Fatal("configureAddress() = false, want true, the address was still added")
 	}
 }
@@ -407,7 +408,6 @@ func TestBasicConfigurer_configureAddress_IPv6_NoLinkLocal(t *testing.T) {
 // when runAddressConfiguration fails for an IPv6 VIP, configureAddress returns
 // false and never attempts to send a Neighbor Advertisement.
 func TestBasicConfigurer_configureAddress_IPv6_RunAddrConfigFails(t *testing.T) {
-	mockLogger(t)
 	mockExecCommand(t, execFail)
 	mockInterfaceAddrs(t, func(string) ([]net.Addr, error) { return linkLocalAddrs(t), nil })
 	mockSend(t, func(net.Interface, []byte, uint16) error {
@@ -416,7 +416,7 @@ func TestBasicConfigurer_configureAddress_IPv6_RunAddrConfigFails(t *testing.T) 
 	})
 
 	c := testConfigurer("2001:db8::10", net.CIDRMask(64, 128))
-	if got := c.configureAddress(); got {
+	if got := c.configureAddress(t.Context()); got {
 		t.Fatal("configureAddress() = true, want false when runAddressConfiguration fails")
 	}
 }
@@ -425,7 +425,6 @@ func TestBasicConfigurer_configureAddress_IPv6_RunAddrConfigFails(t *testing.T) 
 // NA send fails, configureAddress still returns true (the address was added)
 // and handles the error gracefully.
 func TestBasicConfigurer_configureAddress_IPv6_SendNAFails(t *testing.T) {
-	mockLogger(t)
 	mockExecCommand(t, execOK)
 	mockInterfaceAddrs(t, func(string) ([]net.Addr, error) { return linkLocalAddrs(t), nil })
 
@@ -439,7 +438,7 @@ func TestBasicConfigurer_configureAddress_IPv6_SendNAFails(t *testing.T) {
 	})
 
 	c := testConfigurer("2001:db8::10", net.CIDRMask(64, 128))
-	if got := c.configureAddress(); !got {
+	if got := c.configureAddress(t.Context()); !got {
 		t.Fatal("configureAddress() = false, want true even when the NA send fails")
 	}
 	if !sendCalled {
@@ -451,7 +450,6 @@ func TestBasicConfigurer_configureAddress_IPv6_SendNAFails(t *testing.T) {
 // where building the NA packet fails: the address stays configured and nothing
 // is put on the wire.
 func TestBasicConfigurer_configureAddress_IPv6_ComposeNAFails(t *testing.T) {
-	mockLogger(t)
 	mockExecCommand(t, execOK)
 	mockInterfaceAddrs(t, func(string) ([]net.Addr, error) { return linkLocalAddrs(t), nil })
 	mockSerialize(t, func(gopacket.SerializeBuffer, gopacket.SerializeOptions, ...gopacket.SerializableLayer) error {
@@ -463,7 +461,7 @@ func TestBasicConfigurer_configureAddress_IPv6_ComposeNAFails(t *testing.T) {
 	})
 
 	c := testConfigurer("2001:db8::10", net.CIDRMask(64, 128))
-	if got := c.configureAddress(); !got {
+	if got := c.configureAddress(t.Context()); !got {
 		t.Fatal("configureAddress() = false, want true, the address was still added")
 	}
 }
@@ -476,7 +474,6 @@ func TestBasicConfigurer_configureAddress_IPv6_ComposeNAFails(t *testing.T) {
 // successful address add, a gratuitous ARP is composed and sent on the
 // interface with the ARP ethertype.
 func TestBasicConfigurer_configureAddress_IPv4(t *testing.T) {
-	mockLogger(t)
 	mockExecCommand(t, execOK)
 	mockInterfaceAddrs(t, func(string) ([]net.Addr, error) {
 		t.Error("the IPv4 path must not look up link-local addresses")
@@ -514,7 +511,7 @@ func TestBasicConfigurer_configureAddress_IPv4(t *testing.T) {
 		return nil
 	})
 
-	if got := c.configureAddress(); !got {
+	if got := c.configureAddress(t.Context()); !got {
 		t.Fatal("configureAddress() = false, want true")
 	}
 	if !sendCalled {
@@ -526,7 +523,6 @@ func TestBasicConfigurer_configureAddress_IPv4(t *testing.T) {
 // VIP takes the ARP path, not the Neighbor Advertisement path, even though
 // netip.Addr.Is6 reports true for it.
 func TestBasicConfigurer_configureAddress_IPv4In6(t *testing.T) {
-	mockLogger(t)
 	mockExecCommand(t, execOK)
 	mockInterfaceAddrs(t, func(string) ([]net.Addr, error) {
 		t.Error("an IPv4-in-IPv6 VIP must not take the Neighbor Advertisement path")
@@ -554,7 +550,7 @@ func TestBasicConfigurer_configureAddress_IPv4In6(t *testing.T) {
 		return nil
 	})
 
-	if got := c.configureAddress(); !got {
+	if got := c.configureAddress(t.Context()); !got {
 		t.Fatal("configureAddress() = false, want true")
 	}
 	if !sendCalled {
@@ -566,7 +562,6 @@ func TestBasicConfigurer_configureAddress_IPv4In6(t *testing.T) {
 // gratuitous ARP send fails, configureAddress still returns true and handles
 // the error gracefully via a warning log.
 func TestBasicConfigurer_configureAddress_IPv4_SendARPFails(t *testing.T) {
-	mockLogger(t)
 	mockExecCommand(t, execOK)
 
 	sendCalled := false
@@ -576,7 +571,7 @@ func TestBasicConfigurer_configureAddress_IPv4_SendARPFails(t *testing.T) {
 	})
 
 	c := testConfigurer("192.168.1.100", net.CIDRMask(24, 32))
-	if got := c.configureAddress(); !got {
+	if got := c.configureAddress(t.Context()); !got {
 		t.Fatal("configureAddress() = false, want true even when the ARP send fails")
 	}
 	if !sendCalled {
@@ -587,7 +582,6 @@ func TestBasicConfigurer_configureAddress_IPv4_SendARPFails(t *testing.T) {
 // TestBasicConfigurer_configureAddress_IPv4_ComposeARPFails covers the branch
 // where building the ARP packet fails.
 func TestBasicConfigurer_configureAddress_IPv4_ComposeARPFails(t *testing.T) {
-	mockLogger(t)
 	mockExecCommand(t, execOK)
 	mockSerialize(t, func(gopacket.SerializeBuffer, gopacket.SerializeOptions, ...gopacket.SerializableLayer) error {
 		return errors.New("mock serialize error")
@@ -598,7 +592,7 @@ func TestBasicConfigurer_configureAddress_IPv4_ComposeARPFails(t *testing.T) {
 	})
 
 	c := testConfigurer("192.168.1.100", net.CIDRMask(24, 32))
-	if got := c.configureAddress(); !got {
+	if got := c.configureAddress(t.Context()); !got {
 		t.Fatal("configureAddress() = false, want true, the address was still added")
 	}
 }
@@ -612,7 +606,7 @@ func TestBasicConfigurer_deconfigureAddress_Mocked(t *testing.T) {
 		name string
 		vip  string
 		mask net.IPMask
-		cmd  func(string, ...string) *exec.Cmd
+		cmd  func(context.Context, string, ...string) *exec.Cmd
 		want bool
 	}{
 		{name: "IPv4 success", vip: "192.168.1.100", mask: net.CIDRMask(24, 32), cmd: execOK, want: true},
@@ -623,16 +617,15 @@ func TestBasicConfigurer_deconfigureAddress_Mocked(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockLogger(t)
 
 			var gotArgs []string
-			mockExecCommand(t, func(name string, args ...string) *exec.Cmd {
+			mockExecCommand(t, func(_ context.Context, name string, args ...string) *exec.Cmd {
 				gotArgs = append([]string{name}, args...)
-				return tt.cmd(name, args...)
+				return tt.cmd(t.Context(), name, args...)
 			})
 
 			c := testConfigurer(tt.vip, tt.mask)
-			if got := c.deconfigureAddress(); got != tt.want {
+			if got := c.deconfigureAddress(t.Context()); got != tt.want {
 				t.Errorf("deconfigureAddress() = %v, want %v", got, tt.want)
 			}
 
@@ -654,11 +647,10 @@ func TestBasicConfigurer_deconfigureAddress_Mocked(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestBasicConfigurer_runAddressConfiguration_ErrorExit(t *testing.T) {
-	mockLogger(t)
 	mockExecCommand(t, execFail)
 
 	c := testConfigurer("2001:db8::10", net.CIDRMask(64, 128))
-	if c.runAddressConfiguration("add") {
+	if c.runAddressConfiguration(t.Context(), "add") {
 		t.Fatal("runAddressConfiguration() = true, want false")
 	}
 }
@@ -666,13 +658,12 @@ func TestBasicConfigurer_runAddressConfiguration_ErrorExit(t *testing.T) {
 // TestBasicConfigurer_runAddressConfiguration_CommandMissing covers the
 // non-ExitError branch, where the `ip` binary itself cannot be started.
 func TestBasicConfigurer_runAddressConfiguration_CommandMissing(t *testing.T) {
-	mockLogger(t)
-	mockExecCommand(t, func(string, ...string) *exec.Cmd {
+	mockExecCommand(t, func(context.Context, string, ...string) *exec.Cmd {
 		return exec.Command("definitely-not-a-real-binary-zzz")
 	})
 
 	c := testConfigurer("192.168.1.100", net.CIDRMask(24, 32))
-	if c.runAddressConfiguration("add") {
+	if c.runAddressConfiguration(t.Context(), "add") {
 		t.Fatal("runAddressConfiguration() = true, want false when the command cannot be started")
 	}
 }
@@ -785,7 +776,6 @@ func TestBasicConfigurer_configureAddress_RequiresRoot(t *testing.T) {
 	if os.Getuid() == 0 {
 		t.Skip("test must run as non-root to verify permission checks")
 	}
-	mockLogger(t)
 
 	c := &BasicConfigurer{
 		IPConfiguration: &IPConfiguration{
@@ -798,7 +788,7 @@ func TestBasicConfigurer_configureAddress_RequiresRoot(t *testing.T) {
 		},
 	}
 
-	if c.configureAddress() {
+	if c.configureAddress(t.Context()) {
 		t.Error("configureAddress() should fail without root privileges")
 	}
 }
@@ -807,7 +797,6 @@ func TestBasicConfigurer_deconfigureAddress_RequiresRoot(t *testing.T) {
 	if os.Getuid() == 0 {
 		t.Skip("test must run as non-root to verify permission checks")
 	}
-	mockLogger(t)
 
 	c := &BasicConfigurer{
 		IPConfiguration: &IPConfiguration{
@@ -820,7 +809,7 @@ func TestBasicConfigurer_deconfigureAddress_RequiresRoot(t *testing.T) {
 		},
 	}
 
-	if c.deconfigureAddress() {
+	if c.deconfigureAddress(t.Context()) {
 		t.Error("deconfigureAddress() should fail without root privileges")
 	}
 }
@@ -838,7 +827,6 @@ func TestBasicConfigurer_runAddressConfiguration_NonexistentInterface(t *testing
 	if os.Getuid() != 0 {
 		t.Skip("runAddressConfiguration tests require root privileges")
 	}
-	mockLogger(t)
 	requireIPCommand(t)
 
 	c := &BasicConfigurer{
@@ -853,7 +841,7 @@ func TestBasicConfigurer_runAddressConfiguration_NonexistentInterface(t *testing
 	}
 
 	for _, action := range []string{"add", "delete"} {
-		if c.runAddressConfiguration(action) {
+		if c.runAddressConfiguration(t.Context(), action) {
 			t.Errorf("runAddressConfiguration(%s) should fail for a non-existent interface", action)
 		}
 	}
@@ -865,7 +853,6 @@ func TestBasicConfigurer_Integration_LoopbackAddRemove(t *testing.T) {
 	if os.Getuid() != 0 {
 		t.Skip("integration test requires root privileges")
 	}
-	mockLogger(t)
 	requireIPCommand(t)
 
 	lo, err := net.InterfaceByName("lo")
@@ -897,20 +884,20 @@ func TestBasicConfigurer_Integration_LoopbackAddRemove(t *testing.T) {
 					},
 				},
 			}
-			defer c.deconfigureAddress()
+			defer c.deconfigureAddress(t.Context())
 
 			// Announcing on loopback cannot work, but the address must still be
 			// added and the failure must be swallowed.
-			if !c.configureAddress() {
+			if !c.configureAddress(t.Context()) {
 				t.Fatal("configureAddress() = false, want true")
 			}
-			if !c.queryAddress() {
+			if !c.queryAddress(t.Context()) {
 				t.Error("queryAddress() = false after a successful configureAddress()")
 			}
-			if !c.deconfigureAddress() {
+			if !c.deconfigureAddress(t.Context()) {
 				t.Fatal("deconfigureAddress() = false, want true")
 			}
-			if c.queryAddress() {
+			if c.queryAddress(t.Context()) {
 				t.Error("queryAddress() = true after a successful deconfigureAddress()")
 			}
 		})
@@ -923,7 +910,6 @@ func TestBasicConfigurer_Integration_RealInterfaceAddRemove(t *testing.T) {
 	if os.Getuid() != 0 {
 		t.Skip("integration test requires root privileges")
 	}
-	mockLogger(t)
 	requireIPCommand(t)
 
 	testIface := firstEthernetInterface(t)
@@ -938,18 +924,18 @@ func TestBasicConfigurer_Integration_RealInterfaceAddRemove(t *testing.T) {
 			Iface:   *testIface,
 		},
 	}
-	defer c.deconfigureAddress()
+	defer c.deconfigureAddress(t.Context())
 
-	if !c.configureAddress() {
+	if !c.configureAddress(t.Context()) {
 		t.Fatal("configureAddress() = false, want true")
 	}
-	if !c.queryAddress() {
+	if !c.queryAddress(t.Context()) {
 		t.Error("queryAddress() = false after a successful configureAddress()")
 	}
-	if !c.deconfigureAddress() {
+	if !c.deconfigureAddress(t.Context()) {
 		t.Fatal("deconfigureAddress() = false, want true")
 	}
-	if c.queryAddress() {
+	if c.queryAddress(t.Context()) {
 		t.Error("queryAddress() = true after a successful deconfigureAddress()")
 	}
 }
