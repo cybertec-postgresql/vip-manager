@@ -2,7 +2,10 @@ package checker
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -12,6 +15,8 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	tcconsul "github.com/testcontainers/testcontainers-go/modules/consul"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 func newTestConfig(endpoint string) *vipconfig.Config {
@@ -277,5 +282,256 @@ func TestConsulLeaderChecker_GetChangeNotificationStream_ErrorPath(t *testing.T)
 	cancel()
 	if err := waitDone(t, done); !errors.Is(err, context.Canceled) {
 		t.Errorf("expected context.Canceled, got %v", err)
+	}
+}
+
+// TestNewConsulLeaderChecker_ChecksEveryEndpoint makes sure a broken endpoint
+// is reported at startup, not only when the checker fails over to it.
+func TestNewConsulLeaderChecker_ChecksEveryEndpoint(t *testing.T) {
+	t.Parallel()
+	conf := newTestConfig("http://127.0.0.1:8500")
+	conf.Endpoints = append(conf.Endpoints, "localhost")
+	_, err := NewConsulLeaderChecker(conf)
+	if err == nil {
+		t.Fatal("expected the second endpoint to be rejected, got nil")
+	}
+	if !strings.Contains(err.Error(), "hostname is empty") {
+		t.Errorf("unexpected error message: %v", err)
+	}
+}
+
+// TestConsulLeaderChecker_NextEndpoint verifies that the checker walks through
+// the configured endpoints and wraps around. Before this, every endpoint but
+// the first one was configured in vain.
+func TestConsulLeaderChecker_NextEndpoint(t *testing.T) {
+	t.Parallel()
+	conf := newTestConfig("http://127.0.0.1:8500")
+	conf.Endpoints = append(conf.Endpoints, "http://127.0.0.2:8500")
+	lc, err := NewConsulLeaderChecker(conf)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	first := lc.Client
+	lc.nextEndpoint()
+	if lc.current != 1 {
+		t.Errorf("expected to be on endpoint 1, got %d", lc.current)
+	}
+	if lc.Client == first {
+		t.Error("expected a new client for the new endpoint")
+	}
+	lc.nextEndpoint()
+	if lc.current != 0 {
+		t.Errorf("expected to wrap around to endpoint 0, got %d", lc.current)
+	}
+}
+
+// TestConsulLeaderChecker_NextEndpoint_Single verifies that a single endpoint
+// is kept as it is, there is nowhere to switch to.
+func TestConsulLeaderChecker_NextEndpoint_Single(t *testing.T) {
+	t.Parallel()
+	lc, err := NewConsulLeaderChecker(newTestConfig("http://127.0.0.1:8500"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	client := lc.Client
+	lc.nextEndpoint()
+	if lc.current != 0 || lc.Client != client {
+		t.Error("expected the only endpoint to be kept")
+	}
+}
+
+// TestConsulClientConfig_IPv6 verifies that the brackets of an IPv6 endpoint
+// survive, "::1:8500" is not an address a client can dial.
+func TestConsulClientConfig_IPv6(t *testing.T) {
+	t.Parallel()
+	config, err := consulClientConfig(newTestConfig(""), "http://[::1]:8500")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if config.Address != "[::1]:8500" {
+		t.Errorf("expected address [::1]:8500, got %s", config.Address)
+	}
+}
+
+// fakeConsul serves the test key with the given value the way the KV endpoint
+// of consul does.
+func fakeConsul(t *testing.T, value string) *httptest.Server {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("X-Consul-Index", "1")
+		_ = json.NewEncoder(w).Encode([]capi.KVPair{{Key: consulTestKey, Value: []byte(value), ModifyIndex: 1}})
+	}))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+// TestConsulLeaderChecker_FailsOverWithinOnePass verifies that an unreachable
+// endpoint costs the leader nothing: the stream reports true from the second
+// endpoint without reporting false first.
+func TestConsulLeaderChecker_FailsOverWithinOnePass(t *testing.T) {
+	t.Parallel()
+	// Port 1 is closed on loopback; the TCP dial fails immediately.
+	checker := consulCheckerFor(t, "http://127.0.0.1:1", consulTestKey, "primary")
+	checker.Endpoints = append(checker.Endpoints, fakeConsul(t, "primary").URL)
+	checker, err := NewConsulLeaderChecker(checker.Config)
+	if err != nil {
+		t.Fatalf("NewConsulLeaderChecker: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	out, done := runConsulStream(ctx, checker)
+	for range 3 {
+		if !receiveOne(t, out) {
+			t.Fatal("expected true from the second endpoint, got false")
+		}
+	}
+	cancel()
+	if err := waitDone(t, done); !errors.Is(err, context.Canceled) {
+		t.Errorf("expected context.Canceled, got %v", err)
+	}
+	if checker.current != 1 {
+		t.Errorf("expected the checker to stay on endpoint 1, got %d", checker.current)
+	}
+}
+
+// TestConsulLeaderChecker_AllEndpointsDown verifies that the stream reports
+// false when no endpoint answers, and that the error is logged once and not on
+// every pass, although every endpoint fails with a different error text.
+func TestConsulLeaderChecker_AllEndpointsDown(t *testing.T) {
+	t.Parallel()
+	core, logs := observer.New(zapcore.InfoLevel)
+	conf := &vipconfig.Config{
+		Endpoints:    []string{"http://127.0.0.1:1", "http://127.0.0.2:1"},
+		TriggerKey:   consulTestKey,
+		TriggerValue: "primary",
+		Interval:     1,
+		Logger:       zap.New(core),
+	}
+	checker, err := NewConsulLeaderChecker(conf)
+	if err != nil {
+		t.Fatalf("NewConsulLeaderChecker: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	out, done := runConsulStream(ctx, checker)
+	for range 5 {
+		if receiveOne(t, out) {
+			t.Fatal("expected false while no endpoint answers, got true")
+		}
+	}
+	cancel()
+	if err := waitDone(t, done); !errors.Is(err, context.Canceled) {
+		t.Errorf("expected context.Canceled, got %v", err)
+	}
+	if n := logs.Len(); n != 1 {
+		t.Errorf("expected one log entry for five failed passes, got %d: %v", n, logs.All())
+	}
+}
+
+// hungConsul accepts a query and never answers it, like an endpoint behind a
+// network that drops packets.
+func hungConsul(t *testing.T) *httptest.Server {
+	t.Helper()
+	release := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		select {
+		case <-r.Context().Done():
+		case <-release:
+		}
+	}))
+	t.Cleanup(srv.Close)
+	t.Cleanup(func() { close(release) })
+	return srv
+}
+
+// TestConsulLeaderChecker_HungEndpoint verifies that an endpoint which never
+// answers costs one query timeout: the checker moves on to the next endpoint,
+// and reports false when there is none that answers.
+func TestConsulLeaderChecker_HungEndpoint(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name      string
+		endpoints []string
+		want      bool
+	}{
+		{"another endpoint answers", []string{hungConsul(t).URL, fakeConsul(t, "primary").URL}, true},
+		{"no endpoint answers", []string{hungConsul(t).URL, hungConsul(t).URL}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			checker, err := NewConsulLeaderChecker(&vipconfig.Config{
+				Endpoints:    tt.endpoints,
+				TriggerKey:   consulTestKey,
+				TriggerValue: "primary",
+				Interval:     1,
+				Logger:       zap.NewNop(),
+			})
+			if err != nil {
+				t.Fatalf("NewConsulLeaderChecker: %v", err)
+			}
+			checker.queryTimeout = 100 * time.Millisecond
+
+			ctx, cancel := context.WithCancel(context.Background())
+			out, done := runConsulStream(ctx, checker)
+			// receiveOne allows 3 seconds, the dial timeout of the client is 30
+			if got := receiveOne(t, out); got != tt.want {
+				t.Errorf("expected %t, got %t", tt.want, got)
+			}
+			cancel()
+			if err := waitDone(t, done); !errors.Is(err, context.Canceled) {
+				t.Errorf("expected context.Canceled, got %v", err)
+			}
+		})
+	}
+}
+
+// TestNewConsulLeaderChecker_NoEndpoints verifies that a configuration without
+// an endpoint is rejected, it used to panic.
+func TestNewConsulLeaderChecker_NoEndpoints(t *testing.T) {
+	t.Parallel()
+	_, err := NewConsulLeaderChecker(&vipconfig.Config{Logger: zap.NewNop()})
+	if err == nil || !strings.Contains(err.Error(), "no consul endpoint") {
+		t.Errorf("expected the missing endpoint to be reported, got %v", err)
+	}
+}
+
+// TestConsulLeaderChecker_CancelAbortsBlockingQuery verifies that a blocking
+// query does not hold up the shutdown.
+func TestConsulLeaderChecker_CancelAbortsBlockingQuery(t *testing.T) {
+	t.Parallel()
+	checker := consulCheckerFor(t, hungConsul(t).URL, consulTestKey, "primary")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	_, done := runConsulStream(ctx, checker)
+	time.Sleep(50 * time.Millisecond) // let the query reach the server
+	start := time.Now()
+	cancel()
+	if err := waitDone(t, done); !errors.Is(err, context.Canceled) {
+		t.Errorf("expected context.Canceled, got %v", err)
+	}
+	if elapsed := time.Since(start); elapsed > time.Second {
+		t.Errorf("the query ignored the cancelled context for %s", elapsed)
+	}
+}
+
+// TestConsulLeaderChecker_WaitHonoursContext pins down that the scan interval
+// does not delay the shutdown: the wait used to be a plain time.Sleep.
+func TestConsulLeaderChecker_WaitHonoursContext(t *testing.T) {
+	t.Parallel()
+	conf := newTestConfig("http://127.0.0.1:8500")
+	conf.Interval = 60000 // a minute, so a plain sleep would be obvious
+	lc, err := NewConsulLeaderChecker(conf)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	start := time.Now()
+	if lc.wait(ctx) {
+		t.Error("expected wait() to report that the checker should stop")
+	}
+	if elapsed := time.Since(start); elapsed > time.Second {
+		t.Errorf("wait() ignored the cancelled context for %s", elapsed)
 	}
 }

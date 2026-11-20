@@ -220,3 +220,27 @@ func TestPatroniStatusLogging(t *testing.T) {
 		})
 	}
 }
+
+// TestNewPatroniLeaderChecker_WarnsAboutUnusedEndpoints verifies that the
+// endpoints after the first one are not ignored in silence.
+func TestNewPatroniLeaderChecker_WarnsAboutUnusedEndpoints(t *testing.T) {
+	t.Parallel()
+	for _, tt := range []struct {
+		endpoints []string
+		warnings  int
+	}{
+		{[]string{"http://127.0.0.1:8008"}, 0},
+		{[]string{"http://127.0.0.1:8008", "http://127.0.0.2:8008"}, 1},
+	} {
+		core, logs := observer.New(zapcore.DebugLevel)
+		conf := patroniConfig(tt.endpoints[0], "/leader", "200")
+		conf.Endpoints = tt.endpoints
+		conf.Logger = zap.New(core)
+		if _, err := NewPatroniLeaderChecker(conf); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if n := countLevel(logs.All(), zapcore.WarnLevel); n != tt.warnings {
+			t.Errorf("expected %d warnings for %d endpoints, got %d", tt.warnings, len(tt.endpoints), n)
+		}
+	}
+}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"net"
 	"net/netip"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -334,6 +335,60 @@ func TestApplyLoop_NoChangeNeeded(t *testing.T) {
 	// Neither configure nor deconfigure should be called
 	if mock.configures() > 0 || mock.deconfigures() > 0 {
 		t.Error("expected no configuration changes when state matches")
+	}
+}
+
+// TestApplyLoop_ReportsTheStateOnlyWhenItChanges verifies that the state of
+// the address is written at info level on the first pass and after a change,
+// and at debug level on the passes in between.
+func TestApplyLoop_ReportsTheStateOnlyWhenItChanges(t *testing.T) {
+	t.Parallel()
+	core, logs := observer.New(zapcore.DebugLevel)
+	mock := &mockConfigurer{shouldQueryReturn: true}
+	m := newTestManager(mock)
+	m.log = zap.New(core).Sugar()
+	m.shouldSetIPUp.Store(true) // IP is up and should be up
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { defer close(done); m.applyLoop(ctx) }()
+	reports := func() []observer.LoggedEntry {
+		return logs.FilterMessageSnippet("must be").All()
+	}
+	// waitForReport waits until the loop has written its n-th report, after
+	// which it is idle until the next recheck
+	waitForReport := func(n int) {
+		t.Helper()
+		for deadline := time.Now().Add(3 * time.Second); len(reports()) < n; {
+			if time.Now().After(deadline) {
+				t.Fatalf("the apply loop did not write report %d", n)
+			}
+			time.Sleep(time.Millisecond)
+		}
+	}
+	// pass drives the loop through its n-th pass, the first one needs no trigger
+	pass := func(n int) {
+		t.Helper()
+		if n > 1 {
+			m.triggerRecheck()
+		}
+		waitForReport(n)
+	}
+	pass(1)
+	pass(2)
+	pass(3)
+	m.shouldSetIPUp.Store(false) // the state changes, so pass 4 reports it
+	pass(4)
+	cancel()
+	<-done
+
+	var levels []zapcore.Level
+	for _, entry := range reports() {
+		levels = append(levels, entry.Level)
+	}
+	want := []zapcore.Level{zapcore.InfoLevel, zapcore.DebugLevel, zapcore.DebugLevel, zapcore.InfoLevel}
+	if !slices.Equal(levels, want) {
+		t.Errorf("expected the report levels %v, got %v", want, levels)
 	}
 }
 
